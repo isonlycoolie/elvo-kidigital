@@ -29,10 +29,16 @@ public class WalletEventPublisher {
         Map<String, Object> event = new HashMap<>();
         event.put("eventType", eventType);
         event.put("version", version);
+        event.put("requestId", resolveRequestId());
         event.put("correlationId", resolveCorrelationId());
         event.put("occurredAt", Instant.now().toString());
         event.put("payload", payload == null ? Map.of() : payload);
         rabbitTemplate.convertAndSend(exchange, eventType, event);
+    }
+
+    private String resolveRequestId() {
+        String requestId = MDC.get("requestId");
+        return requestId == null || requestId.isBlank() ? UUID.randomUUID().toString() : requestId;
     }
 
     private String resolveCorrelationId() {
