@@ -130,6 +130,9 @@ public class EacManagementServiceImpl implements EacManagementService {
         if (device.isRevoked() || !device.getUser().getId().equals(user.getId())) {
             throw new IllegalStateException("Device is not valid for this user");
         }
+        if (!device.isTrusted() || device.isSuspicious()) {
+            throw new IllegalStateException("Device trust verification failed");
+        }
 
         if (!session.getDevice().getId().equals(device.getId())) {
             throw new IllegalStateException("Session and device do not match");

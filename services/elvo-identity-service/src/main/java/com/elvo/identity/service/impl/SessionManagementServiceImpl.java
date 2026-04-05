@@ -51,25 +51,18 @@ public class SessionManagementServiceImpl implements SessionManagementService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         Device device = deviceRepository.findByDeviceId(request.getDeviceId())
-                .map(existing -> {
-                    existing.setUser(user);
-                    existing.setDeviceType(request.getDeviceType());
-                    existing.setRevoked(false);
-                    existing.setSuspicious(false);
-                    existing.setLastUsedAt(Instant.now());
-                    return existing;
-                })
-                .orElseGet(() -> {
-                    Device created = new Device();
-                    created.setUser(user);
-                    created.setDeviceId(request.getDeviceId());
-                    created.setDeviceType(request.getDeviceType());
-                    created.setTrusted(false);
-                    created.setRevoked(false);
-                    created.setSuspicious(false);
-                    created.setLastUsedAt(Instant.now());
-                    return created;
-                });
+                .orElseThrow(() -> new IllegalStateException("Device must be registered before session creation"));
+
+        if (!device.getUser().getId().equals(user.getId())) {
+            throw new IllegalStateException("Device does not belong to the requesting user");
+        }
+
+        if (device.isRevoked() || device.isSuspicious() || !device.isTrusted()) {
+            throw new IllegalStateException("Device trust verification failed");
+        }
+
+        device.setDeviceType(request.getDeviceType());
+        device.setLastUsedAt(Instant.now());
         Device savedDevice = deviceRepository.save(device);
 
         TokenService.TokenPayload accessToken = tokenService.generateAccessToken(user.getId(), user.getEan());

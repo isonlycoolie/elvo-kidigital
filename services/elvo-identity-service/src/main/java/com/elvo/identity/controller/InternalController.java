@@ -67,12 +67,17 @@ public class InternalController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> verifySession(@Valid @RequestBody InternalVerifySessionRequest request) {
         Session session = sessionRepository.findById(request.getSessionId())
                 .orElseThrow(() -> new IllegalArgumentException("Session not found"));
-        boolean valid = session.isActive() && !session.isRevoked() && session.getExpiresAt().isAfter(java.time.Instant.now());
+        boolean trustedDevice = session.getDevice().isTrusted() && !session.getDevice().isRevoked() && !session.getDevice().isSuspicious();
+        boolean valid = session.isActive()
+            && !session.isRevoked()
+            && session.getExpiresAt().isAfter(java.time.Instant.now())
+            && trustedDevice;
         return ResponseEntity.ok(ApiResponse.ok("Session verification completed", Map.of(
                 "verified", valid,
                 "sessionId", session.getId(),
                 "userId", session.getUser().getId(),
                 "deviceId", session.getDevice().getId(),
+            "trustedDevice", trustedDevice,
                 "status", session.getSessionStatus().name())));
     }
 
