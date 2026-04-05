@@ -12,6 +12,7 @@ import com.elvo.wallet.client.AgentServiceClient;
 import com.elvo.wallet.client.IdentityServiceClient;
 import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.Wallet;
+import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.service.DepositFlowService;
@@ -34,6 +35,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
     private final MobileCallbackReconciliationService callbackReconciliationService;
     private final WalletLimitEnforcementService limitEnforcementService;
     private final WalletSagaOrchestrator sagaOrchestrator;
+    private final WalletEventPublisher eventPublisher;
 
     public DefaultDepositFlowService(WalletRepository walletRepository,
                                      TransactionRepository transactionRepository,
@@ -43,7 +45,8 @@ public class DefaultDepositFlowService implements DepositFlowService {
                                      WalletLedgerIntegrationService ledgerIntegrationService,
                                      MobileCallbackReconciliationService callbackReconciliationService,
                                      WalletLimitEnforcementService limitEnforcementService,
-                                     WalletSagaOrchestrator sagaOrchestrator) {
+                                     WalletSagaOrchestrator sagaOrchestrator,
+                                     WalletEventPublisher eventPublisher) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
@@ -52,6 +55,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
         this.ledgerIntegrationService = ledgerIntegrationService;
         this.callbackReconciliationService = callbackReconciliationService;
         this.sagaOrchestrator = sagaOrchestrator;
+        this.eventPublisher = eventPublisher;
         this.limitEnforcementService = limitEnforcementService;
     }
 
@@ -154,9 +158,17 @@ public class DefaultDepositFlowService implements DepositFlowService {
     private void emitDepositEvent(boolean success, UUID walletId, String reference, BigDecimal amount, String reason) {
         if (success) {
             AUDIT_LOG.info("event=wallet.deposit.completed walletId={} reference={} amount={}", walletId, reference, amount);
+            eventPublisher.publish("wallet.deposit.completed", java.util.Map.of(
+                    "walletId", walletId,
+                    "reference", reference,
+                    "amount", amount));
             return;
         }
         AUDIT_LOG.warn("event=wallet.deposit.failed walletId={} reference={} reason={}", walletId, reference, reason);
+        eventPublisher.publish("wallet.deposit.failed", java.util.Map.of(
+                "walletId", walletId,
+                "reference", reference,
+                "reason", reason == null ? "unknown" : reason));
     }
 
     private String resolveReference(String reference, String idempotencyKey) {

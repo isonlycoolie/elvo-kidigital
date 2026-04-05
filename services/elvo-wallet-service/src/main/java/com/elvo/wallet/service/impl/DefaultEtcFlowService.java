@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.Wallet;
+import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
@@ -28,18 +29,21 @@ public class DefaultEtcFlowService implements EtcFlowService {
     private final WalletIdempotencyService idempotencyService;
     private final WalletLedgerIntegrationService ledgerIntegrationService;
     private final WalletLimitEnforcementService limitEnforcementService;
+    private final WalletEventPublisher eventPublisher;
 
     public DefaultEtcFlowService(EtcRepository etcRepository,
                                  WalletRepository walletRepository,
                                  TransactionRepository transactionRepository,
                                  WalletIdempotencyService idempotencyService,
                                  WalletLedgerIntegrationService ledgerIntegrationService,
-                                 WalletLimitEnforcementService limitEnforcementService) {
+                                 WalletLimitEnforcementService limitEnforcementService,
+                                 WalletEventPublisher eventPublisher) {
         this.etcRepository = etcRepository;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
+        this.eventPublisher = eventPublisher;
         this.limitEnforcementService = limitEnforcementService;
     }
 
@@ -60,6 +64,10 @@ public class DefaultEtcFlowService implements EtcFlowService {
                 command.walletId(),
                 command.code(),
                 command.expiresAt());
+        eventPublisher.publish("wallet.etc.generated", java.util.Map.of(
+                "walletId", command.walletId(),
+                "code", command.code(),
+                "expiresAt", command.expiresAt()));
 
         WalletFlowResult result = WalletFlowResult.success(
                 "ETC generated",
@@ -80,6 +88,9 @@ public class DefaultEtcFlowService implements EtcFlowService {
 
         var etc = etcRepository.findByCodeForUpdate(code).orElse(null);
         if (etc == null) {
+            eventPublisher.publish("wallet.etc.failed", java.util.Map.of(
+                    "reason", "ETC code not found",
+                    "code", code));
             WalletFlowResult result = WalletFlowResult.failure("ETC code not found", null, "wallet.etc.failed");
             idempotencyService.put(idempotencyKey, result);
             return result;
@@ -126,6 +137,10 @@ public class DefaultEtcFlowService implements EtcFlowService {
         ledgerIntegrationService.recordDoubleEntry("etc.redeem", wallet.getId(), redeemAmount, code);
 
         AUDIT_LOG.info("event=wallet.etc.redeemed walletId={} code={} amount={}", wallet.getId(), code, redeemAmount);
+        eventPublisher.publish("wallet.etc.redeemed", java.util.Map.of(
+                "walletId", wallet.getId(),
+                "code", code,
+                "amount", redeemAmount));
 
         limitEnforcementService.record(wallet.getId(), WalletLimitEnforcementService.FlowType.ETC_REDEEM, redeemAmount);
 

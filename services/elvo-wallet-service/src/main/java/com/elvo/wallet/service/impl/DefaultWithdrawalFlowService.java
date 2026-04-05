@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.elvo.wallet.client.IdentityServiceClient;
 import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.Wallet;
+import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.service.WithdrawalFlowService;
@@ -31,6 +32,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     private final WalletLedgerIntegrationService ledgerIntegrationService;
     private final WalletLimitEnforcementService limitEnforcementService;
     private final WalletSagaOrchestrator sagaOrchestrator;
+    private final WalletEventPublisher eventPublisher;
 
     public DefaultWithdrawalFlowService(WalletRepository walletRepository,
                                         TransactionRepository transactionRepository,
@@ -38,13 +40,15 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
                                         WalletIdempotencyService idempotencyService,
                                         WalletLedgerIntegrationService ledgerIntegrationService,
                                         WalletLimitEnforcementService limitEnforcementService,
-                                        WalletSagaOrchestrator sagaOrchestrator) {
+                                        WalletSagaOrchestrator sagaOrchestrator,
+                                        WalletEventPublisher eventPublisher) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
         this.limitEnforcementService = limitEnforcementService;
+        this.eventPublisher = eventPublisher;
         this.sagaOrchestrator = sagaOrchestrator;
     }
 
@@ -145,9 +149,17 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     private void emitWithdrawalEvent(boolean success, UUID walletId, String reference, BigDecimal amount, String reason) {
         if (success) {
             AUDIT_LOG.info("event=wallet.withdrawal.completed walletId={} reference={} amount={}", walletId, reference, amount);
+            eventPublisher.publish("wallet.withdrawal.completed", java.util.Map.of(
+                    "walletId", walletId,
+                    "reference", reference,
+                    "amount", amount));
             return;
         }
         AUDIT_LOG.warn("event=wallet.withdrawal.failed walletId={} reference={} reason={}", walletId, reference, reason);
+        eventPublisher.publish("wallet.withdrawal.failed", java.util.Map.of(
+                "walletId", walletId,
+                "reference", reference,
+                "reason", reason == null ? "unknown" : reason));
     }
 
     private String resolveReference(String reference, String idempotencyKey) {

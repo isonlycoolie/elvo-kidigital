@@ -4,12 +4,12 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.entity.Reservation;
+import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.service.ReservationFlowService;
 import com.elvo.wallet.service.model.ReservationCommand;
@@ -23,15 +23,18 @@ public class DefaultReservationFlowService implements ReservationFlowService {
     private final ReservationRepository reservationRepository;
     private final WalletIdempotencyService idempotencyService;
     private final WalletLedgerIntegrationService ledgerIntegrationService;
+    private final WalletEventPublisher eventPublisher;
     private final WalletLimitEnforcementService limitEnforcementService;
 
     public DefaultReservationFlowService(ReservationRepository reservationRepository,
                                          WalletIdempotencyService idempotencyService,
-                                         WalletLedgerIntegrationService ledgerIntegrationService,
+                                         WalletLedgerIntegrationService ledgerIntegrationServi,
+                                         WalletEventPublisher eventPublisherce,
                                          WalletLimitEnforcementService limitEnforcementService) {
         this.reservationRepository = reservationRepository;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
+        this.eventPublisher = eventPublisher;
         this.limitEnforcementService = limitEnforcementService;
     }
 
@@ -59,6 +62,10 @@ public class DefaultReservationFlowService implements ReservationFlowService {
                 command.walletId(),
                 reservation.getId(),
                 command.amount());
+        eventPublisher.publish("wallet.reservation.created", java.util.Map.of(
+                "walletId", command.walletId(),
+                "reservationId", reservation.getId(),
+                "amount", command.amount()));
 
         limitEnforcementService.record(command.walletId(), WalletLimitEnforcementService.FlowType.RESERVATION, command.amount());
 
@@ -94,6 +101,9 @@ public class DefaultReservationFlowService implements ReservationFlowService {
         }
 
         AUDIT_LOG.info("event=wallet.reservation.released reservationId={} walletId={}", reservationId, walletId);
+        eventPublisher.publish("wallet.reservation.released", java.util.Map.of(
+                "walletId", walletId,
+                "reservationId", reservationId));
 
         WalletFlowResult result = WalletFlowResult.success(
                 "Reservation released",
@@ -126,6 +136,9 @@ public class DefaultReservationFlowService implements ReservationFlowService {
         }
 
         AUDIT_LOG.info("event=wallet.reservation.confirmed reservationId={} walletId={}", reservationId, walletId);
+        eventPublisher.publish("wallet.reservation.confirmed", java.util.Map.of(
+                "walletId", walletId,
+                "reservationId", reservationId));
 
         WalletFlowResult result = WalletFlowResult.success(
                 "Reservation confirmed",

@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.Wallet;
+import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.service.TransferFlowService;
@@ -28,19 +29,22 @@ public class DefaultTransferFlowService implements TransferFlowService {
     private final WalletLedgerIntegrationService ledgerIntegrationService;
     private final WalletLimitEnforcementService limitEnforcementService;
     private final WalletSagaOrchestrator sagaOrchestrator;
+    private final WalletEventPublisher eventPublisher;
 
     public DefaultTransferFlowService(WalletRepository walletRepository,
                                       TransactionRepository transactionRepository,
                                       WalletIdempotencyService idempotencyService,
                                       WalletLedgerIntegrationService ledgerIntegrationService,
                                       WalletLimitEnforcementService limitEnforcementService,
-                                      WalletSagaOrchestrator sagaOrchestrator) {
+                                      WalletSagaOrchestrator sagaOrchestrator,
+                                      WalletEventPublisher eventPublisher) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
         this.limitEnforcementService = limitEnforcementService;
         this.sagaOrchestrator = sagaOrchestrator;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -129,6 +133,11 @@ public class DefaultTransferFlowService implements TransferFlowService {
                 target.getId(),
                 command.amount(),
                 transferReference);
+        eventPublisher.publish("wallet.transfer.completed", java.util.Map.of(
+                "sourceWalletId", source.getId(),
+                "targetWalletId", target.getId(),
+                "amount", command.amount(),
+                "reference", transferReference));
 
         limitEnforcementService.record(source.getId(), WalletLimitEnforcementService.FlowType.TRANSFER, command.amount());
 
@@ -145,6 +154,9 @@ public class DefaultTransferFlowService implements TransferFlowService {
 
     private WalletFlowResult failed(UUID walletId, String idempotencyKey, String message) {
         AUDIT_LOG.warn("event=wallet.transfer.failed sourceWalletId={} reason={}", walletId, message);
+        eventPublisher.publish("wallet.transfer.failed", java.util.Map.of(
+                "sourceWalletId", walletId,
+                "reason", message));
         WalletFlowResult result = WalletFlowResult.failure(message, walletId, "wallet.transfer.failed");
         sagaOrchestrator.compensate("transfer", walletId, null, idempotencyKey, new IllegalStateException(message));
         idempotencyService.put(idempotencyKey, result);
