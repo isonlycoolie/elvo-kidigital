@@ -12,10 +12,19 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.elvo.identity.monitoring.SentryExceptionReporter;
+
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private final SentryExceptionReporter sentryExceptionReporter;
+
+    public GlobalExceptionHandler(SentryExceptionReporter sentryExceptionReporter) {
+        this.sentryExceptionReporter = sentryExceptionReporter;
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException ex) {
@@ -49,19 +58,22 @@ public class GlobalExceptionHandler {
         }
 
         @ExceptionHandler(AuthenticationException.class)
-        public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException ex) {
+        public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException ex, HttpServletRequest request) {
+            sentryExceptionReporter.captureCriticalException(ex, request, Map.of("exceptionType", ex.getClass().getSimpleName()));
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
             .body(ApiResponse.error("AUTHENTICATION_FAILED", "Authentication failed"));
         }
 
         @ExceptionHandler(AccessDeniedException.class)
-        public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+            public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+            sentryExceptionReporter.captureCriticalException(ex, request, Map.of("exceptionType", ex.getClass().getSimpleName()));
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
             .body(ApiResponse.error("ACCESS_DENIED", "Access is denied"));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex) {
+        public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex, HttpServletRequest request) {
+            sentryExceptionReporter.captureCriticalException(ex, request, Map.of("exceptionType", ex.getClass().getSimpleName()));
         Map<String, Object> details = Map.of("exception", ex.getClass().getSimpleName());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(ApiResponse.error("INTERNAL_ERROR", "Unexpected server error", details));
