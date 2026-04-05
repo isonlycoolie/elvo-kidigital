@@ -55,6 +55,8 @@ import com.elvo.wallet.service.model.WithdrawalCommand;
 import com.elvo.wallet.service.model.WithdrawalMode;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 
 @RestController
 @RequestMapping("/wallets")
@@ -116,12 +118,8 @@ public class WalletController {
      */
     @GetMapping("/me/transactions")
     public ResponseEntity<List<TransactionResponseDto>> getTransactions(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        
-        if (size > 100) {
-            size = 100; // Cap page size
-        }
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be zero or greater") int page,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "Size must be at least 1") @Max(value = 100, message = "Size must not exceed 100") int size) {
 
         UUID userId = getCurrentUserId();
         AUDIT_LOG.info("wallet_controller_get_transactions userId={} page={} size={}", userId, page, size);
@@ -387,7 +385,7 @@ public class WalletController {
      * Freeze wallet
      */
     @PostMapping("/me/freeze")
-    public ResponseEntity<FlowResultResponseDto> freezeWallet(@RequestBody FreezeUnfreezeRequestDto request) {
+    public ResponseEntity<FlowResultResponseDto> freezeWallet(@Valid @RequestBody FreezeUnfreezeRequestDto request) {
         UUID userId = getCurrentUserId();
         String reason = request.getReason() != null ? request.getReason() : "User action";
 
@@ -412,7 +410,7 @@ public class WalletController {
      * Unfreeze wallet
      */
     @PostMapping("/me/unfreeze")
-    public ResponseEntity<FlowResultResponseDto> unfreezeWallet(@RequestBody FreezeUnfreezeRequestDto request) {
+    public ResponseEntity<FlowResultResponseDto> unfreezeWallet(@Valid @RequestBody FreezeUnfreezeRequestDto request) {
         UUID userId = getCurrentUserId();
         String reason = request.getReason() != null ? request.getReason() : "User action";
 
@@ -557,13 +555,21 @@ public class WalletController {
             throw new UnauthorizedException("User not authenticated");
         }
 
-        // Extract user ID from principal (assumes JWT or similar has userId as principal)
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof String) {
+        String authenticatedName = authentication.getName();
+        if (authenticatedName != null && !authenticatedName.isBlank()) {
             try {
-                return UUID.fromString((String) principal);
+                return UUID.fromString(authenticatedName);
+            } catch (IllegalArgumentException ex) {
+                LOGGER.error("Invalid user ID format in authentication name: {}", authenticatedName);
+            }
+        }
+
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof String principalName) {
+            try {
+                return UUID.fromString(principalName);
             } catch (IllegalArgumentException e) {
-                LOGGER.error("Invalid user ID format in principal: {}", principal);
+                LOGGER.error("Invalid user ID format in principal: {}", principalName);
                 throw new UnauthorizedException("Invalid user ID format");
             }
         }
