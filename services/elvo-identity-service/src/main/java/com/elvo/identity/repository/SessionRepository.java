@@ -19,6 +19,8 @@ public interface SessionRepository extends JpaRepository<Session, UUID> {
 
         java.util.Optional<Session> findByRefreshToken(String refreshToken);
 
+        List<Session> findByDeviceIdAndActiveTrueAndRevokedFalse(UUID deviceId);
+
     List<Session> findByUserIdAndActiveTrueAndRevokedFalseOrderByCreatedAtDesc(UUID userId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
