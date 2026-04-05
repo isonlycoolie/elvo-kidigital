@@ -44,6 +44,9 @@ public class User {
     @Column(name = "phone", nullable = false, length = 32)
     private String phone;
 
+    @Column(name = "display_name", length = 128)
+    private String displayName;
+
     @Column(name = "hashed_password", nullable = false, length = 255)
     private String hashedPassword;
 
@@ -123,6 +126,14 @@ public class User {
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
     }
 
     public String getHashedPassword() {
