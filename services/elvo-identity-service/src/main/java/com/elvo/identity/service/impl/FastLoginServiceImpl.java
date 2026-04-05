@@ -4,8 +4,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +19,7 @@ import com.elvo.identity.entity.User;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.DeviceRepository;
 import com.elvo.identity.repository.UserRepository;
+import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.service.FastLoginService;
 import com.elvo.identity.service.SessionManagementService;
 
@@ -36,17 +35,19 @@ public class FastLoginServiceImpl implements FastLoginService {
     private final DeviceRepository deviceRepository;
     private final AuditRepository auditRepository;
     private final SessionManagementService sessionManagementService;
-    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final SecurityHashingService hashingService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public FastLoginServiceImpl(UserRepository userRepository,
                                 DeviceRepository deviceRepository,
                                 AuditRepository auditRepository,
-                                SessionManagementService sessionManagementService) {
+                                SessionManagementService sessionManagementService,
+                                SecurityHashingService hashingService) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.auditRepository = auditRepository;
         this.sessionManagementService = sessionManagementService;
+        this.hashingService = hashingService;
     }
 
     @Override
@@ -56,7 +57,7 @@ public class FastLoginServiceImpl implements FastLoginService {
         enforceRateLimit(user);
 
         String pin = generatePin();
-        user.setFastLoginPinHash(passwordEncoder.encode(pin));
+        user.setFastLoginPinHash(hashingService.hashOneTimeCode(pin));
         user.setFastLoginExpiresAt(Instant.now().plus(PIN_TTL));
         user.setFastLoginFailedAttempts(0);
         user.setFastLoginLastRequestedAt(Instant.now());
@@ -80,7 +81,7 @@ public class FastLoginServiceImpl implements FastLoginService {
                 && user.getFastLoginPinHash() != null
                 && user.getFastLoginExpiresAt() != null
                 && Instant.now().isBefore(user.getFastLoginExpiresAt())
-                && passwordEncoder.matches(request.getPin(), user.getFastLoginPinHash());
+                && hashingService.verifyOneTimeCode(request.getPin(), user.getFastLoginPinHash());
 
         if (!biometricSuccess && !pinSuccess) {
             user.setFastLoginFailedAttempts(user.getFastLoginFailedAttempts() + 1);

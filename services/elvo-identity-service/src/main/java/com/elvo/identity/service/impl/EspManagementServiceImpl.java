@@ -4,8 +4,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +14,7 @@ import com.elvo.identity.entity.Audit;
 import com.elvo.identity.entity.User;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.UserRepository;
+import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.service.EspManagementService;
 
 @Service
@@ -27,12 +26,15 @@ public class EspManagementServiceImpl implements EspManagementService {
 
     private final UserRepository userRepository;
     private final AuditRepository auditRepository;
-    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final SecurityHashingService hashingService;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public EspManagementServiceImpl(UserRepository userRepository, AuditRepository auditRepository) {
+    public EspManagementServiceImpl(UserRepository userRepository,
+                                    AuditRepository auditRepository,
+                                    SecurityHashingService hashingService) {
         this.userRepository = userRepository;
         this.auditRepository = auditRepository;
+        this.hashingService = hashingService;
     }
 
     @Override
@@ -66,7 +68,7 @@ public class EspManagementServiceImpl implements EspManagementService {
             return false;
         }
 
-        boolean match = passwordEncoder.matches(request.getEspCode(), user.getEspHash());
+        boolean match = hashingService.verifyEsp(request.getEspCode(), user.getEspHash());
         if (!match) {
             user.setEspFailedAttempts(user.getEspFailedAttempts() + 1);
             userRepository.save(user);
@@ -83,7 +85,7 @@ public class EspManagementServiceImpl implements EspManagementService {
 
     private EspGenerateResponse issueEsp(User user, EspGenerateRequest request, String description) {
         String rawCode = generateCode();
-        user.setEspHash(passwordEncoder.encode(rawCode));
+        user.setEspHash(hashingService.hashEsp(rawCode));
         user.setEspExpiresAt(Instant.now().plus(ESP_TTL));
         user.setEspFailedAttempts(0);
         user.setEspLastRequestedAt(Instant.now());

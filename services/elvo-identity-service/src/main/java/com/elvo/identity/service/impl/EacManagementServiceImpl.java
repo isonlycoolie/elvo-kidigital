@@ -5,8 +5,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +19,7 @@ import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.DeviceRepository;
 import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
+import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.service.EacManagementService;
 
 @Service
@@ -36,17 +35,19 @@ public class EacManagementServiceImpl implements EacManagementService {
     private final SessionRepository sessionRepository;
     private final DeviceRepository deviceRepository;
     private final AuditRepository auditRepository;
-    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final SecurityHashingService hashingService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public EacManagementServiceImpl(UserRepository userRepository,
                                     SessionRepository sessionRepository,
                                     DeviceRepository deviceRepository,
-                                    AuditRepository auditRepository) {
+                                    AuditRepository auditRepository,
+                                    SecurityHashingService hashingService) {
         this.userRepository = userRepository;
         this.sessionRepository = sessionRepository;
         this.deviceRepository = deviceRepository;
         this.auditRepository = auditRepository;
+        this.hashingService = hashingService;
     }
 
     @Override
@@ -57,7 +58,7 @@ public class EacManagementServiceImpl implements EacManagementService {
         enforceRateLimit(user);
 
         String eacCode = generateCode();
-        user.setEacHash(passwordEncoder.encode(eacCode));
+        user.setEacHash(hashingService.hashOneTimeCode(eacCode));
         user.setEacExpiresAt(Instant.now().plus(EAC_TTL));
         user.setEacFailedAttempts(0);
         user.setEacLastRequestedAt(Instant.now());
@@ -83,7 +84,7 @@ public class EacManagementServiceImpl implements EacManagementService {
             return false;
         }
 
-        boolean matched = passwordEncoder.matches(request.getEacCode().toUpperCase(Locale.ROOT), user.getEacHash());
+        boolean matched = hashingService.verifyOneTimeCode(request.getEacCode().toUpperCase(Locale.ROOT), user.getEacHash());
         if (!matched) {
             user.setEacFailedAttempts(user.getEacFailedAttempts() + 1);
             userRepository.save(user);

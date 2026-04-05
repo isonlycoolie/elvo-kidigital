@@ -3,8 +3,6 @@ package com.elvo.identity.service.impl;
 import java.time.Instant;
 import java.util.Locale;
 
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +16,7 @@ import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.DeviceRepository;
 import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
+import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.service.LoginService;
 import com.elvo.identity.service.SecurityProtectionService;
 import com.elvo.identity.util.TokenService;
@@ -31,20 +30,22 @@ public class LoginServiceImpl implements LoginService {
     private final AuditRepository auditRepository;
     private final TokenService tokenService;
     private final SecurityProtectionService securityProtectionService;
-    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final SecurityHashingService hashingService;
 
     public LoginServiceImpl(UserRepository userRepository,
                             DeviceRepository deviceRepository,
                             SessionRepository sessionRepository,
                             AuditRepository auditRepository,
                             TokenService tokenService,
-                            SecurityProtectionService securityProtectionService) {
+                            SecurityProtectionService securityProtectionService,
+                            SecurityHashingService hashingService) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.sessionRepository = sessionRepository;
         this.auditRepository = auditRepository;
         this.tokenService = tokenService;
         this.securityProtectionService = securityProtectionService;
+        this.hashingService = hashingService;
     }
 
     @Override
@@ -112,7 +113,7 @@ public class LoginServiceImpl implements LoginService {
     }
 
     private void validatePassword(User user, String rawPassword, LoginRequest request) {
-        if (!passwordEncoder.matches(rawPassword, user.getHashedPassword())) {
+        if (!hashingService.verifyPassword(rawPassword, user.getHashedPassword())) {
             securityProtectionService.recordFailedAuthentication(
                     user,
                     request.getSourceIp(),

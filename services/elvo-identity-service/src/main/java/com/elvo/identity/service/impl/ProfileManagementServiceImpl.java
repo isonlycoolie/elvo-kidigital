@@ -2,8 +2,6 @@ package com.elvo.identity.service.impl;
 
 import java.util.Locale;
 
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +11,7 @@ import com.elvo.identity.entity.Audit;
 import com.elvo.identity.entity.User;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.UserRepository;
+import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.service.ProfileManagementService;
 
 @Service
@@ -20,11 +19,14 @@ public class ProfileManagementServiceImpl implements ProfileManagementService {
 
     private final UserRepository userRepository;
     private final AuditRepository auditRepository;
-    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final SecurityHashingService hashingService;
 
-    public ProfileManagementServiceImpl(UserRepository userRepository, AuditRepository auditRepository) {
+    public ProfileManagementServiceImpl(UserRepository userRepository,
+                                        AuditRepository auditRepository,
+                                        SecurityHashingService hashingService) {
         this.userRepository = userRepository;
         this.auditRepository = auditRepository;
+        this.hashingService = hashingService;
     }
 
     @Override
@@ -58,10 +60,10 @@ public class ProfileManagementServiceImpl implements ProfileManagementService {
         }
 
         if (request.getNewPassword() != null && !request.getNewPassword().isBlank()) {
-            if (request.getCurrentPassword() == null || !passwordEncoder.matches(request.getCurrentPassword(), user.getHashedPassword())) {
+            if (request.getCurrentPassword() == null || !hashingService.verifyPassword(request.getCurrentPassword(), user.getHashedPassword())) {
                 throw new IllegalArgumentException("Current password is invalid");
             }
-            user.setHashedPassword(passwordEncoder.encode(request.getNewPassword()));
+            user.setHashedPassword(hashingService.hashPassword(request.getNewPassword()));
         }
 
         User savedUser = userRepository.save(user);

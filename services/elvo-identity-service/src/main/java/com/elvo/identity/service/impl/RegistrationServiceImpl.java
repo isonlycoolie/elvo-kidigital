@@ -2,8 +2,6 @@ package com.elvo.identity.service.impl;
 
 import java.util.Locale;
 
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +12,7 @@ import com.elvo.identity.entity.User;
 import com.elvo.identity.exception.ApiResponse;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.UserRepository;
+import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.service.RegistrationService;
 import com.elvo.identity.util.EanGenerator;
 
@@ -23,14 +22,16 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final UserRepository userRepository;
     private final AuditRepository auditRepository;
     private final EanGenerator eanGenerator;
-    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final SecurityHashingService hashingService;
 
     public RegistrationServiceImpl(UserRepository userRepository,
                                    AuditRepository auditRepository,
-                                   EanGenerator eanGenerator) {
+                                   EanGenerator eanGenerator,
+                                   SecurityHashingService hashingService) {
         this.userRepository = userRepository;
         this.auditRepository = auditRepository;
         this.eanGenerator = eanGenerator;
+        this.hashingService = hashingService;
     }
 
     @Override
@@ -41,7 +42,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         User user = new User();
         user.setEmail(request.getEmail().trim().toLowerCase(Locale.ROOT));
         user.setPhone(request.getPhone().trim());
-        user.setHashedPassword(passwordEncoder.encode(request.getPassword()));
+        user.setHashedPassword(hashingService.hashPassword(request.getPassword()));
         user.setMfaEnabled(request.isEnableMfa());
         user.setEspEnabled(false);
         user.setAccountStatus(User.AccountStatus.ACTIVE);
