@@ -85,8 +85,13 @@ public class AuthController {
 
     @PostMapping("/refresh-token")
     public ResponseEntity<ApiResponse<LoginResponse>> refreshToken(@Valid @RequestBody AuthRefreshTokenRequest request) {
+        TokenService.RefreshTokenClaims claims = tokenService.validateRefreshToken(request.getRefreshToken());
         Session session = sessionRepository.findByRefreshToken(request.getRefreshToken())
                 .orElseThrow(() -> new IllegalArgumentException("Refresh token is invalid"));
+
+        if (!session.getUser().getId().equals(claims.userId())) {
+            throw new IllegalArgumentException("Refresh token is invalid");
+        }
 
         if (session.isRevoked() || !session.isActive() || Instant.now().isAfter(session.getExpiresAt())) {
             throw new IllegalStateException("Session is expired or revoked");
@@ -121,8 +126,12 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<AuthActionResponse>> logout(@Valid @RequestBody AuthLogoutRequest request) {
+        TokenService.RefreshTokenClaims claims = tokenService.validateRefreshToken(request.getRefreshToken());
         int updated = sessionRepository.findByRefreshToken(request.getRefreshToken())
                 .map(session -> {
+                    if (!session.getUser().getId().equals(claims.userId())) {
+                        throw new IllegalArgumentException("Refresh token is invalid");
+                    }
                     auditSessionEvent(session, "Logout completed", request.getSourceIp(), request.getSourceUserAgent());
                     return sessionRepository.revokeSession(session.getId());
                 })

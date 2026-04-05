@@ -54,6 +54,13 @@ logging:
   pattern:
     level: "%5p [corr:%X{correlationId}] [req:%X{requestId}]"
 
+elvo:
+  security:
+    jwt:
+      secret: ${ELVO_JWT_SECRET:elvo-identity-service-jwt-secret-must-be-at-least-32-bytes}
+      access-token-ttl-minutes: ${ELVO_JWT_ACCESS_TTL_MINUTES:15}
+      refresh-token-ttl-days: ${ELVO_JWT_REFRESH_TTL_DAYS:7}
+
 ---
 spring:
   config:
