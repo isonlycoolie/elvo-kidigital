@@ -27,17 +27,20 @@ public class DefaultEtcFlowService implements EtcFlowService {
     private final TransactionRepository transactionRepository;
     private final WalletIdempotencyService idempotencyService;
     private final WalletLedgerIntegrationService ledgerIntegrationService;
+    private final WalletLimitEnforcementService limitEnforcementService;
 
     public DefaultEtcFlowService(EtcRepository etcRepository,
                                  WalletRepository walletRepository,
                                  TransactionRepository transactionRepository,
                                  WalletIdempotencyService idempotencyService,
-                                 WalletLedgerIntegrationService ledgerIntegrationService) {
+                                 WalletLedgerIntegrationService ledgerIntegrationService,
+                                 WalletLimitEnforcementService limitEnforcementService) {
         this.etcRepository = etcRepository;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
+        this.limitEnforcementService = limitEnforcementService;
     }
 
     @Override
@@ -104,6 +107,12 @@ public class DefaultEtcFlowService implements EtcFlowService {
         }
 
         BigDecimal redeemAmount = resolveRedeemAmount(code);
+        if (!limitEnforcementService.validate(wallet.getId(), WalletLimitEnforcementService.FlowType.ETC_REDEEM, redeemAmount)) {
+            WalletFlowResult result = WalletFlowResult.failure("ETC redeem limits exceeded", wallet.getId(), "wallet.etc.failed");
+            idempotencyService.put(idempotencyKey, result);
+            return result;
+        }
+
         wallet.setBalance(wallet.getBalance().add(redeemAmount));
 
         Transaction transaction = new Transaction();
@@ -117,6 +126,8 @@ public class DefaultEtcFlowService implements EtcFlowService {
         ledgerIntegrationService.recordDoubleEntry("etc.redeem", wallet.getId(), redeemAmount, code);
 
         AUDIT_LOG.info("event=wallet.etc.redeemed walletId={} code={} amount={}", wallet.getId(), code, redeemAmount);
+
+        limitEnforcementService.record(wallet.getId(), WalletLimitEnforcementService.FlowType.ETC_REDEEM, redeemAmount);
 
         WalletFlowResult result = WalletFlowResult.success(
                 "ETC redeemed",

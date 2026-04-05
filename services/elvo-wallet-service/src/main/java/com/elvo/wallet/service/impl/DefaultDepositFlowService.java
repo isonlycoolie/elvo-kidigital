@@ -31,6 +31,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
     private final WalletIdempotencyService idempotencyService;
     private final WalletLedgerIntegrationService ledgerIntegrationService;
     private final MobileCallbackReconciliationService callbackReconciliationService;
+    private final WalletLimitEnforcementService limitEnforcementService;
 
     public DefaultDepositFlowService(WalletRepository walletRepository,
                                      TransactionRepository transactionRepository,
@@ -38,7 +39,8 @@ public class DefaultDepositFlowService implements DepositFlowService {
                                      AgentServiceClient agentServiceClient,
                                      WalletIdempotencyService idempotencyService,
                                      WalletLedgerIntegrationService ledgerIntegrationService,
-                                     MobileCallbackReconciliationService callbackReconciliationService) {
+                                     MobileCallbackReconciliationService callbackReconciliationService,
+                                     WalletLimitEnforcementService limitEnforcementService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
@@ -46,6 +48,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
         this.callbackReconciliationService = callbackReconciliationService;
+        this.limitEnforcementService = limitEnforcementService;
     }
 
     @Override
@@ -82,6 +85,10 @@ public class DefaultDepositFlowService implements DepositFlowService {
             return failed(command.walletId(), command.idempotencyKey(), "Wallet not found");
         }
 
+        if (!limitEnforcementService.validate(wallet.getId(), WalletLimitEnforcementService.FlowType.DEPOSIT, command.amount())) {
+            return failed(command.walletId(), command.idempotencyKey(), "Deposit limits exceeded");
+        }
+
         if (wallet.getStatus() == Wallet.WalletStatus.FROZEN) {
             return failed(command.walletId(), command.idempotencyKey(), "Wallet is frozen");
         }
@@ -116,6 +123,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
         }
 
         emitDepositEvent(true, wallet.getId(), transaction.getReference(), command.amount(), null);
+        limitEnforcementService.record(wallet.getId(), WalletLimitEnforcementService.FlowType.DEPOSIT, command.amount());
 
         WalletFlowResult result = WalletFlowResult.success(
                 "Deposit completed",

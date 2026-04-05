@@ -28,17 +28,20 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     private final IdentityServiceClient identityServiceClient;
     private final WalletIdempotencyService idempotencyService;
     private final WalletLedgerIntegrationService ledgerIntegrationService;
+    private final WalletLimitEnforcementService limitEnforcementService;
 
     public DefaultWithdrawalFlowService(WalletRepository walletRepository,
                                         TransactionRepository transactionRepository,
                                         IdentityServiceClient identityServiceClient,
                                         WalletIdempotencyService idempotencyService,
-                                        WalletLedgerIntegrationService ledgerIntegrationService) {
+                                        WalletLedgerIntegrationService ledgerIntegrationService,
+                                        WalletLimitEnforcementService limitEnforcementService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
+        this.limitEnforcementService = limitEnforcementService;
     }
 
     @Override
@@ -80,6 +83,10 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             return failed(command.walletId(), command.idempotencyKey(), "Wallet not found");
         }
 
+        if (!limitEnforcementService.validate(wallet.getId(), WalletLimitEnforcementService.FlowType.WITHDRAWAL, command.amount())) {
+            return failed(command.walletId(), command.idempotencyKey(), "Withdrawal limits exceeded");
+        }
+
         if (wallet.getStatus() == Wallet.WalletStatus.FROZEN) {
             return failed(command.walletId(), command.idempotencyKey(), "Wallet is frozen");
         }
@@ -107,6 +114,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         ledgerIntegrationService.recordDoubleEntry("withdrawal", wallet.getId(), command.amount(), transaction.getReference());
 
         emitWithdrawalEvent(true, wallet.getId(), transaction.getReference(), command.amount(), null);
+        limitEnforcementService.record(wallet.getId(), WalletLimitEnforcementService.FlowType.WITHDRAWAL, command.amount());
 
         WalletFlowResult result = WalletFlowResult.success(
                 "Withdrawal completed",

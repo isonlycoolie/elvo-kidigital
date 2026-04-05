@@ -23,13 +23,16 @@ public class DefaultReservationFlowService implements ReservationFlowService {
     private final ReservationRepository reservationRepository;
     private final WalletIdempotencyService idempotencyService;
     private final WalletLedgerIntegrationService ledgerIntegrationService;
+    private final WalletLimitEnforcementService limitEnforcementService;
 
     public DefaultReservationFlowService(ReservationRepository reservationRepository,
                                          WalletIdempotencyService idempotencyService,
-                                         WalletLedgerIntegrationService ledgerIntegrationService) {
+                                         WalletLedgerIntegrationService ledgerIntegrationService,
+                                         WalletLimitEnforcementService limitEnforcementService) {
         this.reservationRepository = reservationRepository;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
+        this.limitEnforcementService = limitEnforcementService;
     }
 
     @Override
@@ -44,12 +47,20 @@ public class DefaultReservationFlowService implements ReservationFlowService {
             return duplicate;
         }
 
+        if (!limitEnforcementService.validate(command.walletId(), WalletLimitEnforcementService.FlowType.RESERVATION, command.amount())) {
+            WalletFlowResult result = WalletFlowResult.failure("Reservation limits exceeded", command.walletId(), "wallet.reservation.failed");
+            idempotencyService.put(command.idempotencyKey(), result);
+            return result;
+        }
+
         Reservation reservation = reservationRepository.createReservation(command.walletId(), command.amount(), command.expiryDate());
         ledgerIntegrationService.recordDoubleEntry("reservation.create", command.walletId(), command.amount(), command.reference());
         AUDIT_LOG.info("event=wallet.reservation.created walletId={} reservationId={} amount={}",
                 command.walletId(),
                 reservation.getId(),
                 command.amount());
+
+        limitEnforcementService.record(command.walletId(), WalletLimitEnforcementService.FlowType.RESERVATION, command.amount());
 
         WalletFlowResult result = WalletFlowResult.success(
                 "Reservation created",

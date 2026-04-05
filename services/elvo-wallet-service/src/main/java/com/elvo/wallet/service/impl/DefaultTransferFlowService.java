@@ -25,15 +25,18 @@ public class DefaultTransferFlowService implements TransferFlowService {
     private final TransactionRepository transactionRepository;
     private final WalletIdempotencyService idempotencyService;
     private final WalletLedgerIntegrationService ledgerIntegrationService;
+    private final WalletLimitEnforcementService limitEnforcementService;
 
     public DefaultTransferFlowService(WalletRepository walletRepository,
                                       TransactionRepository transactionRepository,
                                       WalletIdempotencyService idempotencyService,
-                                      WalletLedgerIntegrationService ledgerIntegrationService) {
+                                      WalletLedgerIntegrationService ledgerIntegrationService,
+                                      WalletLimitEnforcementService limitEnforcementService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
+        this.limitEnforcementService = limitEnforcementService;
     }
 
     @Override
@@ -62,6 +65,10 @@ public class DefaultTransferFlowService implements TransferFlowService {
 
         Wallet source = walletRepository.findByIdForUpdate(command.sourceWalletId()).orElse(null);
         Wallet target = walletRepository.findByIdForUpdate(command.targetWalletId()).orElse(null);
+
+        if (source != null && !limitEnforcementService.validate(source.getId(), WalletLimitEnforcementService.FlowType.TRANSFER, command.amount())) {
+            return failed(command.sourceWalletId(), command.idempotencyKey(), "Transfer limits exceeded");
+        }
 
         if (source == null || target == null) {
             return failed(command.sourceWalletId(), command.idempotencyKey(), "Source or target wallet not found");
@@ -115,6 +122,8 @@ public class DefaultTransferFlowService implements TransferFlowService {
                 target.getId(),
                 command.amount(),
                 transferReference);
+
+        limitEnforcementService.record(source.getId(), WalletLimitEnforcementService.FlowType.TRANSFER, command.amount());
 
         WalletFlowResult result = WalletFlowResult.success(
                 "Transfer completed",
