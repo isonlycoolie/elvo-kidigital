@@ -24,7 +24,8 @@ import jakarta.persistence.Table;
                 @Index(name = "idx_audits_user_id", columnList = "user_id"),
                 @Index(name = "idx_audits_action_type", columnList = "action_type"),
                 @Index(name = "idx_audits_created_at", columnList = "created_at"),
-                @Index(name = "idx_audits_source_ip", columnList = "source_ip")
+            @Index(name = "idx_audits_source_ip", columnList = "source_ip"),
+            @Index(name = "idx_audits_correlation_id", columnList = "correlation_id")
         }
 )
 public class Audit {
@@ -49,6 +50,9 @@ public class Audit {
 
     @Column(name = "source_user_agent", length = 512)
     private String sourceUserAgent;
+
+    @Column(name = "correlation_id", length = 128)
+    private String correlationId;
 
     @Column(name = "session_id")
     private UUID sessionId;
@@ -124,6 +128,14 @@ public class Audit {
 
     public void setSourceUserAgent(String sourceUserAgent) {
         this.sourceUserAgent = sourceUserAgent;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
     }
 
     public UUID getSessionId() {
