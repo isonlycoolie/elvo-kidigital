@@ -3,9 +3,13 @@ package com.elvo.identity.dto.request;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import com.elvo.identity.validation.DeviceIdentifier;
+import com.elvo.identity.validation.IdentityIdentifier;
+
 public class LoginRequest {
 
     @NotBlank
+    @IdentityIdentifier
     private String identifier;
 
     @NotBlank
@@ -15,6 +19,7 @@ public class LoginRequest {
     private String mfaCode;
 
     @NotBlank
+    @DeviceIdentifier
     private String deviceId;
 
     @NotBlank

@@ -4,6 +4,8 @@ import java.util.UUID;
 
 import jakarta.validation.constraints.NotNull;
 
+import com.elvo.identity.validation.ActionName;
+
 public class EacGenerateRequest {
 
     @NotNull
@@ -16,6 +18,7 @@ public class EacGenerateRequest {
     private UUID deviceId;
 
     @NotNull
+    @ActionName
     private String action;
 
     private String sourceIp;

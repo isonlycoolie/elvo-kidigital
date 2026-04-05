@@ -4,6 +4,9 @@ import java.util.UUID;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+
+import com.elvo.identity.validation.ActionName;
 
 public class EacVerifyRequest {
 
@@ -17,9 +20,11 @@ public class EacVerifyRequest {
     private UUID deviceId;
 
     @NotBlank
+    @Pattern(regexp = "^[A-Z0-9]{8}$")
     private String eacCode;
 
     @NotBlank
+    @ActionName
     private String action;
 
     private String sourceIp;

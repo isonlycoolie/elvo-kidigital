@@ -5,12 +5,15 @@ import java.util.UUID;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+import com.elvo.identity.validation.DeviceIdentifier;
+
 public class SessionCreateRequest {
 
     @NotNull
     private UUID userId;
 
     @NotBlank
+    @DeviceIdentifier
     private String deviceId;
 
     @NotBlank
