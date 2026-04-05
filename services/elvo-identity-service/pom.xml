@@ -75,6 +75,12 @@
     <profiles>
         <profile>
             <id>with-shared-libs</id>
+            <activation>
+                <property>
+                    <name>elvo.shared.enabled</name>
+                    <value>true</value>
+                </property>
+            </activation>
             <dependencies>
                 <dependency>
                     <groupId>com.elvo.shared</groupId>
@@ -88,27 +94,12 @@
                 </dependency>
                 <dependency>
                     <groupId>com.elvo.shared</groupId>
-                    <artifactId>messaging-lib</artifactId>
-                    <version>${elvo.shared.version}</version>
-                </dependency>
-                <dependency>
-                    <groupId>com.elvo.shared</groupId>
                     <artifactId>audit-lib</artifactId>
                     <version>${elvo.shared.version}</version>
                 </dependency>
                 <dependency>
                     <groupId>com.elvo.shared</groupId>
                     <artifactId>security-lib</artifactId>
-                    <version>${elvo.shared.version}</version>
-                </dependency>
-                <dependency>
-                    <groupId>com.elvo.shared</groupId>
-                    <artifactId>idempotency-lib</artifactId>
-                    <version>${elvo.shared.version}</version>
-                </dependency>
-                <dependency>
-                    <groupId>com.elvo.shared</groupId>
-                    <artifactId>saga-lib</artifactId>
                     <version>${elvo.shared.version}</version>
                 </dependency>
             </dependencies>
