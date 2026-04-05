@@ -107,6 +107,18 @@ public class User {
     @Column(name = "password_reset_last_requested_at")
     private Instant passwordResetLastRequestedAt;
 
+    @Column(name = "fast_login_pin_hash", length = 255)
+    private String fastLoginPinHash;
+
+    @Column(name = "fast_login_expires_at")
+    private Instant fastLoginExpiresAt;
+
+    @Column(name = "fast_login_failed_attempts", nullable = false)
+    private int fastLoginFailedAttempts;
+
+    @Column(name = "fast_login_last_requested_at")
+    private Instant fastLoginLastRequestedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "account_status", nullable = false, length = 32)
     private AccountStatus accountStatus = AccountStatus.PENDING_VERIFICATION;
@@ -321,6 +333,38 @@ public class User {
 
     public void setPasswordResetLastRequestedAt(Instant passwordResetLastRequestedAt) {
         this.passwordResetLastRequestedAt = passwordResetLastRequestedAt;
+    }
+
+    public String getFastLoginPinHash() {
+        return fastLoginPinHash;
+    }
+
+    public void setFastLoginPinHash(String fastLoginPinHash) {
+        this.fastLoginPinHash = fastLoginPinHash;
+    }
+
+    public Instant getFastLoginExpiresAt() {
+        return fastLoginExpiresAt;
+    }
+
+    public void setFastLoginExpiresAt(Instant fastLoginExpiresAt) {
+        this.fastLoginExpiresAt = fastLoginExpiresAt;
+    }
+
+    public int getFastLoginFailedAttempts() {
+        return fastLoginFailedAttempts;
+    }
+
+    public void setFastLoginFailedAttempts(int fastLoginFailedAttempts) {
+        this.fastLoginFailedAttempts = fastLoginFailedAttempts;
+    }
+
+    public Instant getFastLoginLastRequestedAt() {
+        return fastLoginLastRequestedAt;
+    }
+
+    public void setFastLoginLastRequestedAt(Instant fastLoginLastRequestedAt) {
+        this.fastLoginLastRequestedAt = fastLoginLastRequestedAt;
     }
 
     public AccountStatus getAccountStatus() {
