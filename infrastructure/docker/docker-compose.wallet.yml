@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+  wallet-postgres:
+    image: postgres:16
+    container_name: elvo-wallet-postgres
+    environment:
+      POSTGRES_DB: elvo_wallet
+      POSTGRES_USER: elvo
+      POSTGRES_PASSWORD: elvo
+    ports:
+      - "5432:5432"
+    volumes:
+      - wallet-postgres-data:/var/lib/postgresql/data
+
+  wallet-redis:
+    image: redis:7
+    container_name: elvo-wallet-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - wallet-redis-data:/data
+
+  wallet-rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: elvo-wallet-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - wallet-rabbitmq-data:/var/lib/rabbitmq
+
+  wallet-service:
+    build:
+      context: ../../services/elvo-wallet-service
+      dockerfile: Dockerfile
+    container_name: elvo-wallet-service
+    depends_on:
+      - wallet-postgres
+      - wallet-redis
+      - wallet-rabbitmq
+    environment:
+      DB_URL: jdbc:postgresql://wallet-postgres:5432/elvo_wallet
+      DB_USER: elvo
+      DB_PASS: elvo
+      REDIS_URL: redis://wallet-redis:6379
+      RABBITMQ_URL: amqp://guest:guest@wallet-rabbitmq:5672
+      ELVO_JWT_SECRET: replace-with-strong-32-plus-char-secret
+    ports:
+      - "8080:8080"
+
+volumes:
+  wallet-postgres-data:
+  wallet-redis-data:
+  wallet-rabbitmq-data:
