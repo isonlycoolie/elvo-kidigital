@@ -12,9 +12,11 @@ import com.elvo.wallet.entity.Etc;
 
 import jakarta.persistence.LockModeType;
 
-public interface EtcRepository extends JpaRepository<Etc, UUID> {
+public interface EtcRepository extends JpaRepository<Etc, UUID>, EtcRepositoryCustom {
 
     boolean existsByCode(String code);
+
+    boolean existsByCodeAndStatusIn(String code, Iterable<Etc.EtcStatus> statuses);
 
     Optional<Etc> findByCode(String code);
 
