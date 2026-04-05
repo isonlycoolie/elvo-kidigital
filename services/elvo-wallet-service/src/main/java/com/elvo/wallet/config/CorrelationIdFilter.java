@@ -14,23 +14,33 @@ import java.util.UUID;
 @Component
 public class CorrelationIdFilter extends OncePerRequestFilter {
 
+    public static final String REQUEST_ID_HEADER = "X-Request-Id";
     public static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
+    public static final String REQUEST_ID_KEY = "requestId";
     public static final String CORRELATION_ID_KEY = "correlationId";
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String correlationId = request.getHeader(CORRELATION_ID_HEADER);
-        if (correlationId == null || correlationId.isBlank()) {
-            correlationId = UUID.randomUUID().toString();
+        String requestId = request.getHeader(REQUEST_ID_HEADER);
+        if (requestId == null || requestId.isBlank()) {
+            requestId = UUID.randomUUID().toString();
         }
 
+        String correlationId = request.getHeader(CORRELATION_ID_HEADER);
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = requestId;
+        }
+
+        MDC.put(REQUEST_ID_KEY, requestId);
         MDC.put(CORRELATION_ID_KEY, correlationId);
+        response.setHeader(REQUEST_ID_HEADER, requestId);
         response.setHeader(CORRELATION_ID_HEADER, correlationId);
         try {
             filterChain.doFilter(request, response);
         } finally {
+            MDC.remove(REQUEST_ID_KEY);
             MDC.remove(CORRELATION_ID_KEY);
         }
     }
