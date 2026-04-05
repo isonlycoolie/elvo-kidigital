@@ -18,6 +18,7 @@ import com.elvo.wallet.service.model.ReservationCommand;
 import com.elvo.wallet.service.model.TransferCommand;
 import com.elvo.wallet.service.model.WalletFlowResult;
 import com.elvo.wallet.service.model.WithdrawalCommand;
+import com.elvo.wallet.monitoring.WalletMetricsRecorder;
 
 @Service
 public class WalletServiceImpl implements WalletService {
@@ -29,6 +30,7 @@ public class WalletServiceImpl implements WalletService {
     private final EtcFlowService etcFlowService;
     private final WalletLifecycleService walletLifecycleService;
     private final WalletExecutionLockManager lockManager;
+    private final WalletMetricsRecorder metricsRecorder;
 
     public WalletServiceImpl(DepositFlowService depositFlowService,
                              WithdrawalFlowService withdrawalFlowService,
@@ -36,7 +38,8 @@ public class WalletServiceImpl implements WalletService {
                              ReservationFlowService reservationFlowService,
                              EtcFlowService etcFlowService,
                              WalletLifecycleService walletLifecycleService,
-                             WalletExecutionLockManager lockManager) {
+                             WalletExecutionLockManager lockManager,
+                             WalletMetricsRecorder metricsRecorder) {
         this.depositFlowService = depositFlowService;
         this.withdrawalFlowService = withdrawalFlowService;
         this.transferFlowService = transferFlowService;
@@ -44,16 +47,27 @@ public class WalletServiceImpl implements WalletService {
         this.etcFlowService = etcFlowService;
         this.walletLifecycleService = walletLifecycleService;
         this.lockManager = lockManager;
+        this.metricsRecorder = metricsRecorder;
     }
 
     @Override
     public WalletFlowResult processDeposit(DepositCommand command) {
-        return withWalletLock(command.walletId(), () -> depositFlowService.process(command));
+        WalletFlowResult result = withWalletLock(command.walletId(), () -> depositFlowService.process(command));
+        metricsRecorder.recordTransaction("deposit", result.success());
+        if (result.success()) {
+            metricsRecorder.recordBalanceChange("deposit", "credit", command.amount());
+        }
+        return result;
     }
 
     @Override
     public WalletFlowResult processWithdrawal(WithdrawalCommand command) {
-        return withWalletLock(command.walletId(), () -> withdrawalFlowService.process(command));
+        WalletFlowResult result = withWalletLock(command.walletId(), () -> withdrawalFlowService.process(command));
+        metricsRecorder.recordTransaction("withdrawal", result.success());
+        if (result.success()) {
+            metricsRecorder.recordBalanceChange("withdrawal", "debit", command.amount());
+        }
+        return result;
     }
 
     @Override
@@ -63,42 +77,65 @@ public class WalletServiceImpl implements WalletService {
                 : command.targetWalletId();
         UUID right = left.equals(command.sourceWalletId()) ? command.targetWalletId() : command.sourceWalletId();
 
-        return withWalletLock(left, () -> withWalletLock(right, () -> transferFlowService.process(command)));
+        WalletFlowResult result = withWalletLock(left, () -> withWalletLock(right, () -> transferFlowService.process(command)));
+        metricsRecorder.recordTransaction("transfer", result.success());
+        if (result.success()) {
+            metricsRecorder.recordBalanceChange("transfer", "debit", command.amount());
+            metricsRecorder.recordBalanceChange("transfer", "credit", command.amount());
+        }
+        return result;
     }
 
     @Override
     public WalletFlowResult createReservation(ReservationCommand command) {
-        return withWalletLock(command.walletId(), () -> reservationFlowService.create(command));
+        WalletFlowResult result = withWalletLock(command.walletId(), () -> reservationFlowService.create(command));
+        metricsRecorder.recordReservation("create", result.success());
+        if (result.success()) {
+            metricsRecorder.recordBalanceChange("reservation", "reserve", command.amount());
+        }
+        return result;
     }
 
     @Override
     public WalletFlowResult releaseReservation(UUID reservationId, String idempotencyKey) {
-        return reservationFlowService.release(reservationId, idempotencyKey);
+        WalletFlowResult result = reservationFlowService.release(reservationId, idempotencyKey);
+        metricsRecorder.recordReservation("release", result.success());
+        return result;
     }
 
     @Override
     public WalletFlowResult confirmReservation(UUID reservationId, String idempotencyKey) {
-        return reservationFlowService.confirm(reservationId, idempotencyKey);
+        WalletFlowResult result = reservationFlowService.confirm(reservationId, idempotencyKey);
+        metricsRecorder.recordReservation("confirm", result.success());
+        return result;
     }
 
     @Override
     public WalletFlowResult generateEtc(EtcCommand command) {
-        return withWalletLock(command.walletId(), () -> etcFlowService.generate(command));
+        WalletFlowResult result = withWalletLock(command.walletId(), () -> etcFlowService.generate(command));
+        metricsRecorder.recordTransaction("etc_generate", result.success());
+        return result;
     }
 
     @Override
     public WalletFlowResult redeemEtc(String code, String idempotencyKey) {
-        return etcFlowService.redeem(code, idempotencyKey);
+        WalletFlowResult result = etcFlowService.redeem(code, idempotencyKey);
+        metricsRecorder.recordTransaction("etc_redeem", result.success());
+        return result;
     }
 
     @Override
     public WalletFlowResult freezeWallet(UUID walletId, String reason) {
-        return withWalletLock(walletId, () -> walletLifecycleService.freeze(walletId, reason));
+        WalletFlowResult result = withWalletLock(walletId, () -> walletLifecycleService.freeze(walletId, reason));
+        metricsRecorder.recordFreezeAction("freeze", result.success());
+        return result;
     }
 
     @Override
     public WalletFlowResult unfreezeWallet(UUID walletId, String reason) {
-        return withWalletLock(walletId, () -> walletLifecycleService.unfreeze(walletId, reason));
+        WalletFlowResult result = withWalletLock(walletId, () -> walletLifecycleService.unfreeze(walletId, reason));
+        metricsRecorder.recordFreezeAction("unfreeze", result.success());
+        return result;
     }
 
     private WalletFlowResult withWalletLock(UUID walletId, Operation operation) {

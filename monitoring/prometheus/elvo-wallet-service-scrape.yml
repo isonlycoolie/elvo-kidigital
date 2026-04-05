@@ -1,0 +1,11 @@
+# ELVO wallet-service scrape job fragment.
+# Merge this under prometheus.scrape_configs in the shared Prometheus deployment config.
+- job_name: elvo-wallet-service
+  metrics_path: /actuator/prometheus
+  scrape_interval: 15s
+  static_configs:
+    - targets:
+        - elvo-wallet-service:8080
+      labels:
+        service: wallet-service
+        domain: wallet

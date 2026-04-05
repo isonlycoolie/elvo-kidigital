@@ -4,13 +4,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.elvo.wallet.controller.WalletController;
+import com.elvo.wallet.monitoring.SentryExceptionReporter;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 
 @RestControllerAdvice
@@ -18,6 +21,11 @@ public class GlobalExceptionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private static final Logger AUDIT_LOG = LoggerFactory.getLogger("audit.wallet.controller");
+    private final SentryExceptionReporter sentryExceptionReporter;
+
+    public GlobalExceptionHandler(@Nullable SentryExceptionReporter sentryExceptionReporter) {
+        this.sentryExceptionReporter = sentryExceptionReporter;
+    }
 
     @ExceptionHandler(WalletController.WalletNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleWalletNotFound(WalletController.WalletNotFoundException ex) {
@@ -44,8 +52,10 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-        public ResponseEntity<ValidationErrorResponseDto> handleValidation(MethodArgumentNotValidException ex) {
+        public ResponseEntity<ValidationErrorResponseDto> handleValidation(MethodArgumentNotValidException ex,
+                                                                           HttpServletRequest request) {
         AUDIT_LOG.warn("validation_error exception={}", ex.getMessage());
+            captureIfPresent(ex, request, java.util.Map.of("category", "validation"));
 
         ValidationErrorResponseDto errorResponse = new ValidationErrorResponseDto();
         errorResponse.setCode("VALIDATION_ERROR");
@@ -60,17 +70,26 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ApiResponse<Void>> handleConstraint(ConstraintViolationException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleConstraint(ConstraintViolationException ex,
+                                                              HttpServletRequest request) {
         AUDIT_LOG.warn("constraint_violation exception={}", ex.getMessage());
+        captureIfPresent(ex, request, java.util.Map.of("category", "constraint"));
         return ResponseEntity.badRequest()
             .body(ApiResponse.error("CONSTRAINT_VIOLATION", ex.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex) {
+    public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex, HttpServletRequest request) {
         LOGGER.error("Unexpected error occurred", ex);
         AUDIT_LOG.error("unexpected_error message={}", ex.getMessage());
+        captureIfPresent(ex, request, java.util.Map.of("category", "unhandled"));
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("INTERNAL_ERROR", "Unexpected server error"));
+    }
+
+    private void captureIfPresent(Throwable ex, HttpServletRequest request, java.util.Map<String, Object> extraContext) {
+        if (sentryExceptionReporter != null) {
+            sentryExceptionReporter.captureCriticalException(ex, request, extraContext);
+        }
     }
 }

@@ -7,8 +7,13 @@ import java.util.UUID;
 
 import org.slf4j.MDC;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
+
+import com.elvo.wallet.monitoring.SentryExceptionReporter;
+import com.elvo.wallet.monitoring.WalletMetricsRecorder;
 
 @Component
 public class WalletEventPublisher {
@@ -16,13 +21,26 @@ public class WalletEventPublisher {
     private final RabbitTemplate rabbitTemplate;
     private final String exchange;
     private final String version;
+    private final SentryExceptionReporter sentryExceptionReporter;
+    private final WalletMetricsRecorder metricsRecorder;
 
     public WalletEventPublisher(RabbitTemplate rabbitTemplate,
                                 @Value("${elvo.messaging.wallet.exchange:elvo.wallet.exchange}") String exchange,
                                 @Value("${elvo.messaging.wallet.version:v1}") String version) {
+        this(rabbitTemplate, exchange, version, null, null);
+    }
+
+    @Autowired
+    public WalletEventPublisher(RabbitTemplate rabbitTemplate,
+                                @Value("${elvo.messaging.wallet.exchange:elvo.wallet.exchange}") String exchange,
+                                @Value("${elvo.messaging.wallet.version:v1}") String version,
+                                @Nullable SentryExceptionReporter sentryExceptionReporter,
+                                @Nullable WalletMetricsRecorder metricsRecorder) {
         this.rabbitTemplate = rabbitTemplate;
         this.exchange = exchange;
         this.version = version;
+        this.sentryExceptionReporter = sentryExceptionReporter;
+        this.metricsRecorder = metricsRecorder;
     }
 
     public void publish(String eventType, Map<String, Object> payload) {
@@ -33,7 +51,26 @@ public class WalletEventPublisher {
         event.put("correlationId", resolveCorrelationId());
         event.put("occurredAt", Instant.now().toString());
         event.put("payload", payload == null ? Map.of() : payload);
-        rabbitTemplate.convertAndSend(exchange, eventType, event);
+        try {
+            rabbitTemplate.convertAndSend(exchange, eventType, event);
+            if (metricsRecorder != null) {
+                metricsRecorder.recordEventPublish(eventType, true);
+            }
+        } catch (RuntimeException ex) {
+            if (metricsRecorder != null) {
+                metricsRecorder.recordEventPublish(eventType, false);
+            }
+            if (sentryExceptionReporter != null) {
+                sentryExceptionReporter.captureCriticalException(
+                        ex,
+                        null,
+                        Map.of(
+                                "eventType", String.valueOf(eventType),
+                                "exchange", exchange,
+                                "version", version));
+            }
+            throw ex;
+        }
     }
 
     private String resolveRequestId() {
