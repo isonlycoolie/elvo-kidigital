@@ -65,6 +65,18 @@ public class User {
     @Column(name = "esp_last_requested_at")
     private Instant espLastRequestedAt;
 
+    @Column(name = "eac_hash", length = 255)
+    private String eacHash;
+
+    @Column(name = "eac_expires_at")
+    private Instant eacExpiresAt;
+
+    @Column(name = "eac_failed_attempts", nullable = false)
+    private int eacFailedAttempts;
+
+    @Column(name = "eac_last_requested_at")
+    private Instant eacLastRequestedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "account_status", nullable = false, length = 32)
     private AccountStatus accountStatus = AccountStatus.PENDING_VERIFICATION;
@@ -167,6 +179,38 @@ public class User {
 
     public void setEspLastRequestedAt(Instant espLastRequestedAt) {
         this.espLastRequestedAt = espLastRequestedAt;
+    }
+
+    public String getEacHash() {
+        return eacHash;
+    }
+
+    public void setEacHash(String eacHash) {
+        this.eacHash = eacHash;
+    }
+
+    public Instant getEacExpiresAt() {
+        return eacExpiresAt;
+    }
+
+    public void setEacExpiresAt(Instant eacExpiresAt) {
+        this.eacExpiresAt = eacExpiresAt;
+    }
+
+    public int getEacFailedAttempts() {
+        return eacFailedAttempts;
+    }
+
+    public void setEacFailedAttempts(int eacFailedAttempts) {
+        this.eacFailedAttempts = eacFailedAttempts;
+    }
+
+    public Instant getEacLastRequestedAt() {
+        return eacLastRequestedAt;
+    }
+
+    public void setEacLastRequestedAt(Instant eacLastRequestedAt) {
+        this.eacLastRequestedAt = eacLastRequestedAt;
     }
 
     public AccountStatus getAccountStatus() {
