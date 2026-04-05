@@ -44,17 +44,26 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException ex) {
+        public ResponseEntity<ValidationErrorResponseDto> handleValidation(MethodArgumentNotValidException ex) {
         AUDIT_LOG.warn("validation_error exception={}", ex.getMessage());
-        return ResponseEntity.badRequest()
-                .body(ApiResponse.error("VALIDATION_ERROR", "Request validation failed"));
+
+        ValidationErrorResponseDto errorResponse = new ValidationErrorResponseDto();
+        errorResponse.setCode("VALIDATION_ERROR");
+        errorResponse.setMessage("Request validation failed");
+
+        ex.getBindingResult().getFieldErrors().forEach(fieldError ->
+            errorResponse.addFieldError(fieldError.getField(), fieldError.getDefaultMessage()));
+        ex.getBindingResult().getGlobalErrors().forEach(globalError ->
+            errorResponse.addGlobalError(globalError.getDefaultMessage()));
+
+        return ResponseEntity.badRequest().body(errorResponse);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleConstraint(ConstraintViolationException ex) {
         AUDIT_LOG.warn("constraint_violation exception={}", ex.getMessage());
         return ResponseEntity.badRequest()
-                .body(ApiResponse.error("CONSTRAINT_VIOLATION", "Constraint validation failed"));
+            .body(ApiResponse.error("CONSTRAINT_VIOLATION", ex.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

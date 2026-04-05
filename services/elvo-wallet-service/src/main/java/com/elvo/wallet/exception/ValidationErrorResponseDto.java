@@ -16,6 +16,10 @@ public class ValidationErrorResponseDto {
         this.errors.put(field, message);
     }
 
+    public void addGlobalError(String message) {
+        this.errors.put("global", message);
+    }
+
     public String getCode() {
         return code;
     }
