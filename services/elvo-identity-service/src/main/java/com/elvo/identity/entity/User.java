@@ -80,6 +80,21 @@ public class User {
     @Column(name = "eac_last_requested_at")
     private Instant eacLastRequestedAt;
 
+    @Column(name = "failed_login_attempts", nullable = false)
+    private int failedLoginAttempts;
+
+    @Column(name = "lockout_until")
+    private Instant lockoutUntil;
+
+    @Column(name = "security_last_event_at")
+    private Instant securityLastEventAt;
+
+    @Column(name = "suspicious_activity_count", nullable = false)
+    private int suspiciousActivityCount;
+
+    @Column(name = "last_login_at")
+    private Instant lastLoginAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "account_status", nullable = false, length = 32)
     private AccountStatus accountStatus = AccountStatus.PENDING_VERIFICATION;
@@ -222,6 +237,46 @@ public class User {
 
     public void setEacLastRequestedAt(Instant eacLastRequestedAt) {
         this.eacLastRequestedAt = eacLastRequestedAt;
+    }
+
+    public int getFailedLoginAttempts() {
+        return failedLoginAttempts;
+    }
+
+    public void setFailedLoginAttempts(int failedLoginAttempts) {
+        this.failedLoginAttempts = failedLoginAttempts;
+    }
+
+    public Instant getLockoutUntil() {
+        return lockoutUntil;
+    }
+
+    public void setLockoutUntil(Instant lockoutUntil) {
+        this.lockoutUntil = lockoutUntil;
+    }
+
+    public Instant getSecurityLastEventAt() {
+        return securityLastEventAt;
+    }
+
+    public void setSecurityLastEventAt(Instant securityLastEventAt) {
+        this.securityLastEventAt = securityLastEventAt;
+    }
+
+    public int getSuspiciousActivityCount() {
+        return suspiciousActivityCount;
+    }
+
+    public void setSuspiciousActivityCount(int suspiciousActivityCount) {
+        this.suspiciousActivityCount = suspiciousActivityCount;
+    }
+
+    public Instant getLastLoginAt() {
+        return lastLoginAt;
+    }
+
+    public void setLastLoginAt(Instant lastLoginAt) {
+        this.lastLoginAt = lastLoginAt;
     }
 
     public AccountStatus getAccountStatus() {

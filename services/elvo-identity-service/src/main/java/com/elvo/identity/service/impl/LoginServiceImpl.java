@@ -19,6 +19,7 @@ import com.elvo.identity.repository.DeviceRepository;
 import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.service.LoginService;
+import com.elvo.identity.service.SecurityProtectionService;
 import com.elvo.identity.util.TokenService;
 
 @Service
@@ -29,27 +30,38 @@ public class LoginServiceImpl implements LoginService {
     private final SessionRepository sessionRepository;
     private final AuditRepository auditRepository;
     private final TokenService tokenService;
+    private final SecurityProtectionService securityProtectionService;
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     public LoginServiceImpl(UserRepository userRepository,
                             DeviceRepository deviceRepository,
                             SessionRepository sessionRepository,
                             AuditRepository auditRepository,
-                            TokenService tokenService) {
+                            TokenService tokenService,
+                            SecurityProtectionService securityProtectionService) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.sessionRepository = sessionRepository;
         this.auditRepository = auditRepository;
         this.tokenService = tokenService;
+        this.securityProtectionService = securityProtectionService;
     }
 
     @Override
     @Transactional
     public LoginResponse login(LoginRequest request) {
         User user = loadUser(request.getIdentifier());
-        validatePassword(user, request.getPassword());
+        securityProtectionService.enforcePerUserRateLimit(user);
+        securityProtectionService.ensureAccountNotLocked(user);
+        validatePassword(user, request.getPassword(), request);
         validateUserStatus(user);
         validateMfaIfRequired(user, request);
+
+        securityProtectionService.recordSuccessfulAuthentication(
+            user,
+            request.getSourceIp(),
+            request.getSourceUserAgent(),
+            request.getDeviceId());
 
         Device device = upsertDevice(user, request);
 
@@ -99,8 +111,13 @@ public class LoginServiceImpl implements LoginService {
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
     }
 
-    private void validatePassword(User user, String rawPassword) {
+    private void validatePassword(User user, String rawPassword, LoginRequest request) {
         if (!passwordEncoder.matches(rawPassword, user.getHashedPassword())) {
+            securityProtectionService.recordFailedAuthentication(
+                    user,
+                    request.getSourceIp(),
+                    request.getSourceUserAgent(),
+                    request.getDeviceId());
             throw new IllegalArgumentException("Invalid credentials");
         }
     }
