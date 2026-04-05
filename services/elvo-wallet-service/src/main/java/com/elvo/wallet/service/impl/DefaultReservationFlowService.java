@@ -28,8 +28,8 @@ public class DefaultReservationFlowService implements ReservationFlowService {
 
     public DefaultReservationFlowService(ReservationRepository reservationRepository,
                                          WalletIdempotencyService idempotencyService,
-                                         WalletLedgerIntegrationService ledgerIntegrationServi,
-                                         WalletEventPublisher eventPublisherce,
+                                         WalletLedgerIntegrationService ledgerIntegrationService,
+                                         WalletEventPublisher eventPublisher,
                                          WalletLimitEnforcementService limitEnforcementService) {
         this.reservationRepository = reservationRepository;
         this.idempotencyService = idempotencyService;
