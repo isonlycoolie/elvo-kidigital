@@ -19,6 +19,7 @@
     <properties>
         <java.version>17</java.version>
         <elvo.shared.version>1.0.0-SNAPSHOT</elvo.shared.version>
+        <sentry.version>7.14.0</sentry.version>
     </properties>
 
     <dependencies>
@@ -79,6 +80,11 @@
             <artifactId>jjwt-jackson</artifactId>
             <version>0.12.6</version>
             <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.sentry</groupId>
+            <artifactId>sentry-spring-boot-starter-jakarta</artifactId>
+            <version>${sentry.version}</version>
         </dependency>
 
         <dependency>
@@ -142,6 +148,20 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>io.sentry</groupId>
+                <artifactId>sentry-maven-plugin</artifactId>
+                <version>${sentry.version}</version>
+                <configuration>
+                    <authToken>${env.SENTRY_AUTH_TOKEN}</authToken>
+                    <org>${env.SENTRY_ORG}</org>
+                    <project>${env.SENTRY_PROJECT}</project>
+                    <url>${env.SENTRY_URL:https://sentry.io/}</url>
+                    <release>${project.version}</release>
+                    <environment>${env.SENTRY_ENVIRONMENT:dev}</environment>
+                    <includeSourceContext>true</includeSourceContext>
+                </configuration>
             </plugin>
         </plugins>
     </build>

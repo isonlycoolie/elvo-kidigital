@@ -54,7 +54,25 @@ logging:
   pattern:
     level: "%5p [corr:%X{correlationId}] [req:%X{requestId}]"
 
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}
+  release: ${SENTRY_RELEASE:elvo-identity-service@${spring.application.name}-${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}}
+  traces-sample-rate: ${SENTRY_TRACES_SAMPLE_RATE:1.0}
+  send-default-pii: true
+  max-breadcrumbs: ${SENTRY_MAX_BREADCRUMBS:100}
+  attach-stacktrace: true
+  in-app-includes:
+    - com.elvo.identity
+  tags:
+    service: ${ELVO_SERVICE_TAG:elvo-identity-service}
+    domain: identity
+    platform: spring-boot
+
 elvo:
+  monitoring:
+    sentry:
+      service-tag: ${ELVO_SERVICE_TAG:elvo-identity-service}
   security:
     jwt:
       secret: ${ELVO_JWT_SECRET:elvo-identity-service-jwt-secret-must-be-at-least-32-bytes}

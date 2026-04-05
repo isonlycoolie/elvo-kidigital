@@ -1,0 +1,13 @@
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}
+  release: ${SENTRY_RELEASE:${spring.application.name}@${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}}
+  traces-sample-rate: ${SENTRY_TRACES_SAMPLE_RATE:1.0}
+  send-default-pii: true
+  attach-stacktrace: true
+  max-breadcrumbs: ${SENTRY_MAX_BREADCRUMBS:100}
+
+elvo:
+  monitoring:
+    sentry:
+      service-tag: ${ELVO_SERVICE_TAG:${spring.application.name}}
