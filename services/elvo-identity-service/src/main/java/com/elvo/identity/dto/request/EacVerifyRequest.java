@@ -10,6 +10,12 @@ public class EacVerifyRequest {
     @NotNull
     private UUID userId;
 
+    @NotNull
+    private UUID sessionId;
+
+    @NotNull
+    private UUID deviceId;
+
     @NotBlank
     private String eacCode;
 
@@ -26,6 +32,22 @@ public class EacVerifyRequest {
 
     public void setUserId(UUID userId) {
         this.userId = userId;
+    }
+
+    public UUID getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(UUID sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    public UUID getDeviceId() {
+        return deviceId;
+    }
+
+    public void setDeviceId(UUID deviceId) {
+        this.deviceId = deviceId;
     }
 
     public String getEacCode() {

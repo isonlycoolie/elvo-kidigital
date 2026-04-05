@@ -14,8 +14,12 @@ import com.elvo.identity.dto.request.EacGenerateRequest;
 import com.elvo.identity.dto.request.EacVerifyRequest;
 import com.elvo.identity.dto.response.EacGenerateResponse;
 import com.elvo.identity.entity.Audit;
+import com.elvo.identity.entity.Device;
+import com.elvo.identity.entity.Session;
 import com.elvo.identity.entity.User;
 import com.elvo.identity.repository.AuditRepository;
+import com.elvo.identity.repository.DeviceRepository;
+import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.service.EacManagementService;
 
@@ -29,12 +33,19 @@ public class EacManagementServiceImpl implements EacManagementService {
     private static final Duration EAC_RATE_LIMIT = Duration.ofSeconds(20);
 
     private final UserRepository userRepository;
+    private final SessionRepository sessionRepository;
+    private final DeviceRepository deviceRepository;
     private final AuditRepository auditRepository;
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public EacManagementServiceImpl(UserRepository userRepository, AuditRepository auditRepository) {
+    public EacManagementServiceImpl(UserRepository userRepository,
+                                    SessionRepository sessionRepository,
+                                    DeviceRepository deviceRepository,
+                                    AuditRepository auditRepository) {
         this.userRepository = userRepository;
+        this.sessionRepository = sessionRepository;
+        this.deviceRepository = deviceRepository;
         this.auditRepository = auditRepository;
     }
 
@@ -42,6 +53,7 @@ public class EacManagementServiceImpl implements EacManagementService {
     @Transactional
     public EacGenerateResponse generateEac(EacGenerateRequest request) {
         User user = loadVerifiedUser(request.getUserId());
+        validateSessionAndDevice(user, request.getSessionId(), request.getDeviceId());
         enforceRateLimit(user);
 
         String eacCode = generateCode();
@@ -59,6 +71,7 @@ public class EacManagementServiceImpl implements EacManagementService {
     @Transactional
     public boolean verifyEac(EacVerifyRequest request) {
         User user = loadVerifiedUser(request.getUserId());
+        validateSessionAndDevice(user, request.getSessionId(), request.getDeviceId());
 
         if (user.getEacHash() == null || user.getEacExpiresAt() == null || Instant.now().isAfter(user.getEacExpiresAt())) {
             logAudit(user, "EAC verification failed: code missing or expired", request.getSourceIp(), request.getSourceUserAgent());
@@ -101,6 +114,24 @@ public class EacManagementServiceImpl implements EacManagementService {
         Instant lastRequested = user.getEacLastRequestedAt();
         if (lastRequested != null && Instant.now().isBefore(lastRequested.plus(EAC_RATE_LIMIT))) {
             throw new IllegalStateException("EAC generation rate limit exceeded");
+        }
+    }
+
+    private void validateSessionAndDevice(User user, java.util.UUID sessionId, java.util.UUID deviceId) {
+        Session session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found"));
+        if (session.isRevoked() || !session.isActive() || !session.getUser().getId().equals(user.getId())) {
+            throw new IllegalStateException("Session is not valid for this user");
+        }
+
+        Device device = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new IllegalArgumentException("Device not found"));
+        if (device.isRevoked() || !device.getUser().getId().equals(user.getId())) {
+            throw new IllegalStateException("Device is not valid for this user");
+        }
+
+        if (!session.getDevice().getId().equals(device.getId())) {
+            throw new IllegalStateException("Session and device do not match");
         }
     }
 

@@ -10,6 +10,12 @@ public class EacGenerateRequest {
     private UUID userId;
 
     @NotNull
+    private UUID sessionId;
+
+    @NotNull
+    private UUID deviceId;
+
+    @NotNull
     private String action;
 
     private String sourceIp;
@@ -22,6 +28,22 @@ public class EacGenerateRequest {
 
     public void setUserId(UUID userId) {
         this.userId = userId;
+    }
+
+    public UUID getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(UUID sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    public UUID getDeviceId() {
+        return deviceId;
+    }
+
+    public void setDeviceId(UUID deviceId) {
+        this.deviceId = deviceId;
     }
 
     public String getAction() {
