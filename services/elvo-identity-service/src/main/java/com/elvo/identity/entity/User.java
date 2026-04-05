@@ -95,6 +95,18 @@ public class User {
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
+    @Column(name = "password_reset_hash", length = 255)
+    private String passwordResetHash;
+
+    @Column(name = "password_reset_expires_at")
+    private Instant passwordResetExpiresAt;
+
+    @Column(name = "password_reset_failed_attempts", nullable = false)
+    private int passwordResetFailedAttempts;
+
+    @Column(name = "password_reset_last_requested_at")
+    private Instant passwordResetLastRequestedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "account_status", nullable = false, length = 32)
     private AccountStatus accountStatus = AccountStatus.PENDING_VERIFICATION;
@@ -277,6 +289,38 @@ public class User {
 
     public void setLastLoginAt(Instant lastLoginAt) {
         this.lastLoginAt = lastLoginAt;
+    }
+
+    public String getPasswordResetHash() {
+        return passwordResetHash;
+    }
+
+    public void setPasswordResetHash(String passwordResetHash) {
+        this.passwordResetHash = passwordResetHash;
+    }
+
+    public Instant getPasswordResetExpiresAt() {
+        return passwordResetExpiresAt;
+    }
+
+    public void setPasswordResetExpiresAt(Instant passwordResetExpiresAt) {
+        this.passwordResetExpiresAt = passwordResetExpiresAt;
+    }
+
+    public int getPasswordResetFailedAttempts() {
+        return passwordResetFailedAttempts;
+    }
+
+    public void setPasswordResetFailedAttempts(int passwordResetFailedAttempts) {
+        this.passwordResetFailedAttempts = passwordResetFailedAttempts;
+    }
+
+    public Instant getPasswordResetLastRequestedAt() {
+        return passwordResetLastRequestedAt;
+    }
+
+    public void setPasswordResetLastRequestedAt(Instant passwordResetLastRequestedAt) {
+        this.passwordResetLastRequestedAt = passwordResetLastRequestedAt;
     }
 
     public AccountStatus getAccountStatus() {
