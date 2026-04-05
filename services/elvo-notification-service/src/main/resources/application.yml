@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: elvo-notification-service
+  config:
+    import: optional:classpath:/shared/config-lib.yml
+  datasource:
+    url: jdbc:postgresql://localhost:5432/elvo-notification-service
+    username: ${ELVO_DB_USER:elvo}
+    password: ${ELVO_DB_PASSWORD:elvo}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  data:
+    redis:
+      host: ${ELVO_REDIS_HOST:localhost}
+      port: ${ELVO_REDIS_PORT:6379}
+  rabbitmq:
+    host: ${ELVO_RABBITMQ_HOST:localhost}
+    port: ${ELVO_RABBITMQ_PORT:5672}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+logging:
+  pattern:
+    level: "%5p [corr:%X{correlationId}]"
