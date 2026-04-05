@@ -52,7 +52,7 @@ logging:
     root: ${ELVO_LOG_LEVEL_ROOT:INFO}
     com.elvo.identity: ${ELVO_LOG_LEVEL_APP:INFO}
   pattern:
-    level: "%5p [corr:%X{correlationId}]"
+    level: "%5p [corr:%X{correlationId}] [req:%X{requestId}]"
 
 ---
 spring:
