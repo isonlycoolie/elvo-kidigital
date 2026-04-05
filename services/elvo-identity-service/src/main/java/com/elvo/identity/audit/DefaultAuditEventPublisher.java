@@ -1,14 +1,21 @@
 package com.elvo.identity.audit;
 
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.retry.support.RetryTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import com.elvo.identity.config.CorrelationIdFilter;
+import com.elvo.identity.config.AuditMessagingProperties;
 import com.elvo.identity.dto.event.AuditEvent;
 import com.elvo.identity.entity.Audit;
 
@@ -16,13 +23,42 @@ import com.elvo.identity.entity.Audit;
 public class DefaultAuditEventPublisher implements AuditEventPublisher {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultAuditEventPublisher.class);
-    private static final String EVENT_VERSION = "v1";
+
+    private final RabbitTemplate rabbitTemplate;
+    private final RetryTemplate retryTemplate;
+    private final AuditMessagingProperties properties;
+
+    public DefaultAuditEventPublisher(RabbitTemplate rabbitTemplate,
+                                      @Qualifier("auditPublishRetryTemplate") RetryTemplate retryTemplate,
+                                      AuditMessagingProperties properties) {
+        this.rabbitTemplate = rabbitTemplate;
+        this.retryTemplate = retryTemplate;
+        this.properties = properties;
+    }
 
     @Override
+    @Async("auditEventPublisherExecutor")
     public void publish(Audit audit) {
         AuditEvent event = toAuditEvent(audit);
-        LOGGER.info("Published audit event {} action={} correlationId={} occurredAt={}",
-                event.eventId(), event.actionType(), event.correlationId(), event.occurredAt());
+
+        retryTemplate.execute(context -> {
+            rabbitTemplate.convertAndSend(properties.getExchange(), properties.getRoutingKey(), event, message -> {
+                message.getMessageProperties().setHeader("eventVersion", event.eventVersion());
+                message.getMessageProperties().setHeader("correlationId", event.correlationId());
+                message.getMessageProperties().setHeader(
+                        "occurredAt",
+                        DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(event.occurredAt().atOffset(ZoneOffset.UTC)));
+                return message;
+            });
+            return null;
+        }, context -> {
+            rabbitTemplate.convertAndSend(properties.getDeadLetterExchange(), properties.getDeadLetterRoutingKey(), event);
+            LOGGER.error("Audit event {} routed to DLQ after {} attempts", event.eventId(), context.getRetryCount());
+            return null;
+        });
+
+        LOGGER.info("Published audit event {} action={} exchange={} routingKey={}",
+                event.eventId(), event.actionType(), properties.getExchange(), properties.getRoutingKey());
     }
 
     private AuditEvent toAuditEvent(Audit audit) {
@@ -32,7 +68,7 @@ public class DefaultAuditEventPublisher implements AuditEventPublisher {
 
         return new AuditEvent(
                 UUID.randomUUID(),
-                EVENT_VERSION,
+            properties.getEventVersion(),
                 occurredAt,
                 correlationId,
                 audit.getActionType().name(),

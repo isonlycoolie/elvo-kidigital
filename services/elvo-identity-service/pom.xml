@@ -55,6 +55,10 @@
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
@@ -117,6 +121,11 @@
                 <dependency>
                     <groupId>com.elvo.shared</groupId>
                     <artifactId>security-lib</artifactId>
+                    <version>${elvo.shared.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>com.elvo.shared</groupId>
+                    <artifactId>messaging-lib</artifactId>
                     <version>${elvo.shared.version}</version>
                 </dependency>
             </dependencies>
