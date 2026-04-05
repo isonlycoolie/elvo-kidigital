@@ -17,6 +17,7 @@ import com.elvo.wallet.service.WithdrawalFlowService;
 import com.elvo.wallet.service.model.WalletFlowResult;
 import com.elvo.wallet.service.model.WithdrawalMode;
 import com.elvo.wallet.service.model.WithdrawalCommand;
+import com.elvo.wallet.service.orchestration.WalletSagaOrchestrator;
 
 @Service
 public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
@@ -29,19 +30,22 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     private final WalletIdempotencyService idempotencyService;
     private final WalletLedgerIntegrationService ledgerIntegrationService;
     private final WalletLimitEnforcementService limitEnforcementService;
+    private final WalletSagaOrchestrator sagaOrchestrator;
 
     public DefaultWithdrawalFlowService(WalletRepository walletRepository,
                                         TransactionRepository transactionRepository,
                                         IdentityServiceClient identityServiceClient,
                                         WalletIdempotencyService idempotencyService,
                                         WalletLedgerIntegrationService ledgerIntegrationService,
-                                        WalletLimitEnforcementService limitEnforcementService) {
+                                        WalletLimitEnforcementService limitEnforcementService,
+                                        WalletSagaOrchestrator sagaOrchestrator) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
         this.limitEnforcementService = limitEnforcementService;
+        this.sagaOrchestrator = sagaOrchestrator;
     }
 
     @Override
@@ -63,6 +67,9 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         if (duplicate != null) {
             return duplicate;
         }
+
+        String sagaReference = resolveReference(command.reference(), command.idempotencyKey());
+        sagaOrchestrator.begin("withdrawal", command.walletId(), command.amount(), sagaReference);
 
         if (!identityServiceClient.isUserActive(command.userId())) {
             return failed(command.walletId(), command.idempotencyKey(), "User is not active");
@@ -116,6 +123,8 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         emitWithdrawalEvent(true, wallet.getId(), transaction.getReference(), command.amount(), null);
         limitEnforcementService.record(wallet.getId(), WalletLimitEnforcementService.FlowType.WITHDRAWAL, command.amount());
 
+        sagaOrchestrator.complete("withdrawal", wallet.getId(), command.amount(), transaction.getReference());
+
         WalletFlowResult result = WalletFlowResult.success(
                 "Withdrawal completed",
                 wallet.getId(),
@@ -128,6 +137,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     private WalletFlowResult failed(UUID walletId, String idempotencyKey, String message) {
         emitWithdrawalEvent(false, walletId, idempotencyKey, null, message);
         WalletFlowResult result = WalletFlowResult.failure(message, walletId, "wallet.withdrawal.failed");
+        sagaOrchestrator.compensate("withdrawal", walletId, null, idempotencyKey, new IllegalStateException(message));
         idempotencyService.put(idempotencyKey, result);
         return result;
     }

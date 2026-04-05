@@ -15,6 +15,7 @@ import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.service.TransferFlowService;
 import com.elvo.wallet.service.model.TransferCommand;
 import com.elvo.wallet.service.model.WalletFlowResult;
+import com.elvo.wallet.service.orchestration.WalletSagaOrchestrator;
 
 @Service
 public class DefaultTransferFlowService implements TransferFlowService {
@@ -26,17 +27,20 @@ public class DefaultTransferFlowService implements TransferFlowService {
     private final WalletIdempotencyService idempotencyService;
     private final WalletLedgerIntegrationService ledgerIntegrationService;
     private final WalletLimitEnforcementService limitEnforcementService;
+    private final WalletSagaOrchestrator sagaOrchestrator;
 
     public DefaultTransferFlowService(WalletRepository walletRepository,
                                       TransactionRepository transactionRepository,
                                       WalletIdempotencyService idempotencyService,
                                       WalletLedgerIntegrationService ledgerIntegrationService,
-                                      WalletLimitEnforcementService limitEnforcementService) {
+                                      WalletLimitEnforcementService limitEnforcementService,
+                                      WalletSagaOrchestrator sagaOrchestrator) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
         this.limitEnforcementService = limitEnforcementService;
+        this.sagaOrchestrator = sagaOrchestrator;
     }
 
     @Override
@@ -62,6 +66,9 @@ public class DefaultTransferFlowService implements TransferFlowService {
         if (duplicate != null) {
             return duplicate;
         }
+
+        String sagaReference = resolveReference(command.reference(), command.idempotencyKey());
+        sagaOrchestrator.begin("transfer", command.sourceWalletId(), command.amount(), sagaReference);
 
         Wallet source = walletRepository.findByIdForUpdate(command.sourceWalletId()).orElse(null);
         Wallet target = walletRepository.findByIdForUpdate(command.targetWalletId()).orElse(null);
@@ -125,6 +132,8 @@ public class DefaultTransferFlowService implements TransferFlowService {
 
         limitEnforcementService.record(source.getId(), WalletLimitEnforcementService.FlowType.TRANSFER, command.amount());
 
+        sagaOrchestrator.complete("transfer", source.getId(), command.amount(), transferReference);
+
         WalletFlowResult result = WalletFlowResult.success(
                 "Transfer completed",
                 source.getId(),
@@ -137,6 +146,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
     private WalletFlowResult failed(UUID walletId, String idempotencyKey, String message) {
         AUDIT_LOG.warn("event=wallet.transfer.failed sourceWalletId={} reason={}", walletId, message);
         WalletFlowResult result = WalletFlowResult.failure(message, walletId, "wallet.transfer.failed");
+        sagaOrchestrator.compensate("transfer", walletId, null, idempotencyKey, new IllegalStateException(message));
         idempotencyService.put(idempotencyKey, result);
         return result;
     }

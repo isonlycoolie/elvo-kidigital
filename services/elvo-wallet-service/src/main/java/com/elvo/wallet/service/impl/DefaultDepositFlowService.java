@@ -18,6 +18,7 @@ import com.elvo.wallet.service.DepositFlowService;
 import com.elvo.wallet.service.model.DepositCommand;
 import com.elvo.wallet.service.model.WalletChannel;
 import com.elvo.wallet.service.model.WalletFlowResult;
+import com.elvo.wallet.service.orchestration.WalletSagaOrchestrator;
 
 @Service
 public class DefaultDepositFlowService implements DepositFlowService {
@@ -32,6 +33,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
     private final WalletLedgerIntegrationService ledgerIntegrationService;
     private final MobileCallbackReconciliationService callbackReconciliationService;
     private final WalletLimitEnforcementService limitEnforcementService;
+    private final WalletSagaOrchestrator sagaOrchestrator;
 
     public DefaultDepositFlowService(WalletRepository walletRepository,
                                      TransactionRepository transactionRepository,
@@ -40,7 +42,8 @@ public class DefaultDepositFlowService implements DepositFlowService {
                                      WalletIdempotencyService idempotencyService,
                                      WalletLedgerIntegrationService ledgerIntegrationService,
                                      MobileCallbackReconciliationService callbackReconciliationService,
-                                     WalletLimitEnforcementService limitEnforcementService) {
+                                     WalletLimitEnforcementService limitEnforcementService,
+                                     WalletSagaOrchestrator sagaOrchestrator) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
@@ -48,6 +51,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
         this.callbackReconciliationService = callbackReconciliationService;
+        this.sagaOrchestrator = sagaOrchestrator;
         this.limitEnforcementService = limitEnforcementService;
     }
 
@@ -70,6 +74,9 @@ public class DefaultDepositFlowService implements DepositFlowService {
         if (duplicate != null) {
             return duplicate;
         }
+
+        String sagaReference = resolveReference(command.reference(), command.idempotencyKey());
+        sagaOrchestrator.begin("deposit", command.walletId(), command.amount(), sagaReference);
 
         if (!identityServiceClient.isUserActive(command.userId())) {
             return failed(command.walletId(), command.idempotencyKey(), "User is not active");
@@ -125,6 +132,8 @@ public class DefaultDepositFlowService implements DepositFlowService {
         emitDepositEvent(true, wallet.getId(), transaction.getReference(), command.amount(), null);
         limitEnforcementService.record(wallet.getId(), WalletLimitEnforcementService.FlowType.DEPOSIT, command.amount());
 
+        sagaOrchestrator.complete("deposit", wallet.getId(), command.amount(), transaction.getReference());
+
         WalletFlowResult result = WalletFlowResult.success(
                 "Deposit completed",
                 wallet.getId(),
@@ -137,6 +146,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
     private WalletFlowResult failed(UUID walletId, String idempotencyKey, String message) {
         emitDepositEvent(false, walletId, idempotencyKey, null, message);
         WalletFlowResult result = WalletFlowResult.failure(message, walletId, "wallet.deposit.failed");
+        sagaOrchestrator.compensate("deposit", walletId, null, idempotencyKey, new IllegalStateException(message));
         idempotencyService.put(idempotencyKey, result);
         return result;
     }
