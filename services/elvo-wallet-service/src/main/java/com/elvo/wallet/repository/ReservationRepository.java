@@ -1,5 +1,6 @@
 package com.elvo.wallet.repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,6 +14,8 @@ import com.elvo.wallet.entity.Reservation;
 import jakarta.persistence.LockModeType;
 
 public interface ReservationRepository extends JpaRepository<Reservation, UUID>, ReservationRepositoryCustom {
+
+    List<Reservation> findByWalletIdOrderByCreatedAtDesc(UUID walletId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from Reservation r where r.id = :reservationId")

@@ -1,5 +1,6 @@
 package com.elvo.wallet.repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,6 +20,8 @@ public interface EtcRepository extends JpaRepository<Etc, UUID>, EtcRepositoryCu
     boolean existsByCodeAndStatusIn(String code, Iterable<Etc.EtcStatus> statuses);
 
     Optional<Etc> findByCode(String code);
+
+    List<Etc> findByWalletIdOrderByCreatedAtDesc(UUID walletId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select e from Etc e where e.code = :code")

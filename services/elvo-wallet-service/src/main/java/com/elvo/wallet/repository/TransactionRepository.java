@@ -1,6 +1,7 @@
 package com.elvo.wallet.repository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -16,6 +17,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
         boolean existsByReference(String reference);
 
         Transaction findFirstByReferenceOrderByCreatedAtDesc(String reference);
+
+    Page<Transaction> findByWalletIdOrderByCreatedAtDesc(UUID walletId, Pageable pageable);
+
+    List<Transaction> findByWalletIdOrderByCreatedAtDesc(UUID walletId);
 
     @Query("""
             select t

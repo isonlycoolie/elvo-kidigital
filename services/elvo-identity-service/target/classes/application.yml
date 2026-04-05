@@ -1,0 +1,112 @@
+spring:
+  application:
+    name: elvo-identity-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  config:
+    import: optional:classpath:/shared/config-lib.yml,optional:classpath:/shared/messaging-lib.yml
+  datasource:
+    url: jdbc:postgresql://${ELVO_DB_HOST:localhost}:${ELVO_DB_PORT:5432}/${ELVO_DB_NAME:elvo_identity}
+    username: ${ELVO_DB_USER:elvo}
+    password: ${ELVO_DB_PASSWORD:elvo}
+    hikari:
+      maximum-pool-size: ${ELVO_DB_POOL_MAX:20}
+      minimum-idle: ${ELVO_DB_POOL_MIN:5}
+      connection-timeout: ${ELVO_DB_CONNECTION_TIMEOUT_MS:30000}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+  data:
+    redis:
+      host: ${ELVO_REDIS_HOST:localhost}
+      port: ${ELVO_REDIS_PORT:6379}
+      timeout: ${ELVO_REDIS_TIMEOUT_MS:5000}
+  rabbitmq:
+    host: ${ELVO_RABBITMQ_HOST:localhost}
+    port: ${ELVO_RABBITMQ_PORT:5672}
+    username: ${ELVO_RABBITMQ_USER:guest}
+    password: ${ELVO_RABBITMQ_PASSWORD:guest}
+
+server:
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+    include-exception: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+
+logging:
+  level:
+    root: ${ELVO_LOG_LEVEL_ROOT:INFO}
+    com.elvo.identity: ${ELVO_LOG_LEVEL_APP:INFO}
+  pattern:
+    level: "%5p [corr:%X{correlationId}] [req:%X{requestId}]"
+
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}
+  release: ${SENTRY_RELEASE:elvo-identity-service@${spring.application.name}-${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}}
+  traces-sample-rate: ${SENTRY_TRACES_SAMPLE_RATE:1.0}
+  send-default-pii: true
+  max-breadcrumbs: ${SENTRY_MAX_BREADCRUMBS:100}
+  attach-stacktrace: true
+  in-app-includes:
+    - com.elvo.identity
+  tags:
+    service: ${ELVO_SERVICE_TAG:elvo-identity-service}
+    domain: identity
+    platform: spring-boot
+
+elvo:
+  monitoring:
+    sentry:
+      service-tag: ${ELVO_SERVICE_TAG:elvo-identity-service}
+  security:
+    jwt:
+      secret: ${ELVO_JWT_SECRET:elvo-identity-service-jwt-secret-must-be-at-least-32-bytes}
+      access-token-ttl-minutes: ${ELVO_JWT_ACCESS_TTL_MINUTES:15}
+      refresh-token-ttl-days: ${ELVO_JWT_REFRESH_TTL_DAYS:7}
+  messaging:
+    audit:
+      event-version: ${ELVO_AUDIT_EVENT_VERSION:v1}
+      exchange: ${ELVO_AUDIT_EXCHANGE:elvo.identity.audit.exchange}
+      routing-key: ${ELVO_AUDIT_ROUTING_KEY:elvo.identity.audit.event}
+      dead-letter-exchange: ${ELVO_AUDIT_DLX:elvo.identity.audit.dlx}
+      dead-letter-routing-key: ${ELVO_AUDIT_DLQ_ROUTING_KEY:elvo.identity.audit.dead}
+      queue: ${ELVO_AUDIT_QUEUE:elvo.identity.audit.queue}
+      dead-letter-queue: ${ELVO_AUDIT_DLQ:elvo.identity.audit.dlq}
+      retry-queue: ${ELVO_AUDIT_RETRY_QUEUE:elvo.identity.audit.retry.queue}
+      retry-routing-key: ${ELVO_AUDIT_RETRY_ROUTING_KEY:elvo.identity.audit.retry}
+      retry-delay-ms: ${ELVO_AUDIT_RETRY_DELAY_MS:5000}
+      publish-max-attempts: ${ELVO_AUDIT_PUBLISH_MAX_ATTEMPTS:3}
+      publish-initial-interval-ms: ${ELVO_AUDIT_PUBLISH_INITIAL_INTERVAL_MS:200}
+      publish-multiplier: ${ELVO_AUDIT_PUBLISH_MULTIPLIER:2.0}
+      publish-max-interval-ms: ${ELVO_AUDIT_PUBLISH_MAX_INTERVAL_MS:2000}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  jpa:
+    show-sql: true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  jpa:
+    show-sql: false
