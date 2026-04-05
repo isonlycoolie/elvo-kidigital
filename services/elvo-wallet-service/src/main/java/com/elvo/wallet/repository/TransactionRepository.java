@@ -13,6 +13,10 @@ import com.elvo.wallet.entity.Transaction;
 
 public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
 
+        boolean existsByReference(String reference);
+
+        Transaction findFirstByReferenceOrderByCreatedAtDesc(String reference);
+
     @Query("""
             select t
             from Transaction t
