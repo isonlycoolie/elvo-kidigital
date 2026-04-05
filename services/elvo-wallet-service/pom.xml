@@ -44,11 +44,19 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
@@ -71,6 +79,12 @@
     <profiles>
         <profile>
             <id>with-shared-libs</id>
+            <activation>
+                <property>
+                    <name>elvo.shared.enabled</name>
+                    <value>true</value>
+                </property>
+            </activation>
             <dependencies>
                 <dependency>
                     <groupId>com.elvo.shared</groupId>
