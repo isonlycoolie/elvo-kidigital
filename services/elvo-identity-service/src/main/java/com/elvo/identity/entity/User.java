@@ -53,6 +53,18 @@ public class User {
     @Column(name = "esp_enabled", nullable = false)
     private boolean espEnabled;
 
+    @Column(name = "esp_hash", length = 255)
+    private String espHash;
+
+    @Column(name = "esp_expires_at")
+    private Instant espExpiresAt;
+
+    @Column(name = "esp_failed_attempts", nullable = false)
+    private int espFailedAttempts;
+
+    @Column(name = "esp_last_requested_at")
+    private Instant espLastRequestedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "account_status", nullable = false, length = 32)
     private AccountStatus accountStatus = AccountStatus.PENDING_VERIFICATION;
@@ -123,6 +135,38 @@ public class User {
 
     public void setEspEnabled(boolean espEnabled) {
         this.espEnabled = espEnabled;
+    }
+
+    public String getEspHash() {
+        return espHash;
+    }
+
+    public void setEspHash(String espHash) {
+        this.espHash = espHash;
+    }
+
+    public Instant getEspExpiresAt() {
+        return espExpiresAt;
+    }
+
+    public void setEspExpiresAt(Instant espExpiresAt) {
+        this.espExpiresAt = espExpiresAt;
+    }
+
+    public int getEspFailedAttempts() {
+        return espFailedAttempts;
+    }
+
+    public void setEspFailedAttempts(int espFailedAttempts) {
+        this.espFailedAttempts = espFailedAttempts;
+    }
+
+    public Instant getEspLastRequestedAt() {
+        return espLastRequestedAt;
+    }
+
+    public void setEspLastRequestedAt(Instant espLastRequestedAt) {
+        this.espLastRequestedAt = espLastRequestedAt;
     }
 
     public AccountStatus getAccountStatus() {
