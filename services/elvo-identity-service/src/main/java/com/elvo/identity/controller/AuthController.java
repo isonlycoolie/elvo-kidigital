@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.elvo.identity.audit.AuditEventPublisher;
 import com.elvo.identity.dto.request.AuthLogoutAllRequest;
 import com.elvo.identity.dto.request.AuthLogoutRequest;
 import com.elvo.identity.dto.request.AuthRefreshTokenRequest;
@@ -52,6 +53,7 @@ public class AuthController {
     private final SessionRepository sessionRepository;
     private final UserRepository userRepository;
     private final AuditRepository auditRepository;
+    private final AuditEventPublisher auditEventPublisher;
     private final TokenService tokenService;
     private final SecurityHashingService hashingService;
 
@@ -60,6 +62,7 @@ public class AuthController {
                           SessionRepository sessionRepository,
                           UserRepository userRepository,
                           AuditRepository auditRepository,
+                          AuditEventPublisher auditEventPublisher,
                           TokenService tokenService,
                           SecurityHashingService hashingService) {
         this.registrationService = registrationService;
@@ -67,6 +70,7 @@ public class AuthController {
         this.sessionRepository = sessionRepository;
         this.userRepository = userRepository;
         this.auditRepository = auditRepository;
+        this.auditEventPublisher = auditEventPublisher;
         this.tokenService = tokenService;
         this.hashingService = hashingService;
     }
@@ -112,7 +116,8 @@ public class AuthController {
         audit.setSourceUserAgent(request.getSourceUserAgent());
         audit.setSessionId(session.getId());
         audit.setUser(session.getUser());
-        auditRepository.save(audit);
+        Audit savedAudit = auditRepository.save(audit);
+        auditEventPublisher.publish(savedAudit);
 
         LoginResponse response = new LoginResponse(
                 session.getUser().getId(),
@@ -151,7 +156,8 @@ public class AuthController {
             audit.setSourceIp(request.getSourceIp());
             audit.setSourceUserAgent(request.getSourceUserAgent());
             userRepository.findById(request.getUserId()).ifPresent(audit::setUser);
-            auditRepository.save(audit);
+            Audit savedAudit = auditRepository.save(audit);
+            auditEventPublisher.publish(savedAudit);
         }
         return ResponseEntity.ok(ApiResponse.ok("Logout-all processed", new AuthActionResponse(updated > 0, "All sessions revoked")));
     }
@@ -177,7 +183,8 @@ public class AuthController {
         audit.setSourceIp(request.getSourceIp());
         audit.setSourceUserAgent(request.getSourceUserAgent());
         audit.setUser(user);
-        auditRepository.save(audit);
+        Audit savedAudit = auditRepository.save(audit);
+        auditEventPublisher.publish(savedAudit);
 
         return ResponseEntity.ok(ApiResponse.ok("Password reset token generated", new ForgotPasswordResponse(user.getId(), resetToken, user.getPasswordResetExpiresAt())));
     }
@@ -212,7 +219,8 @@ public class AuthController {
         audit.setSourceIp(request.getSourceIp());
         audit.setSourceUserAgent(request.getSourceUserAgent());
         audit.setUser(user);
-        auditRepository.save(audit);
+        Audit savedAudit = auditRepository.save(audit);
+        auditEventPublisher.publish(savedAudit);
 
         return ResponseEntity.ok(ApiResponse.ok("Password updated", new AuthActionResponse(true, "Password reset complete")));
     }
@@ -233,6 +241,7 @@ public class AuthController {
         audit.setSessionId(session.getId());
         audit.setDeviceId(session.getDevice().getId());
         audit.setUser(session.getUser());
-        auditRepository.save(audit);
+        Audit savedAudit = auditRepository.save(audit);
+        auditEventPublisher.publish(savedAudit);
     }
 }

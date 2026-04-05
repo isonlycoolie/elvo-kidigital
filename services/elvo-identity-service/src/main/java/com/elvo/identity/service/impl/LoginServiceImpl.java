@@ -6,6 +6,7 @@ import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.elvo.identity.audit.AuditEventPublisher;
 import com.elvo.identity.dto.request.LoginRequest;
 import com.elvo.identity.dto.response.LoginResponse;
 import com.elvo.identity.entity.Audit;
@@ -31,6 +32,7 @@ public class LoginServiceImpl implements LoginService {
     private final TokenService tokenService;
     private final SecurityProtectionService securityProtectionService;
     private final SecurityHashingService hashingService;
+    private final AuditEventPublisher auditEventPublisher;
 
     public LoginServiceImpl(UserRepository userRepository,
                             DeviceRepository deviceRepository,
@@ -38,7 +40,8 @@ public class LoginServiceImpl implements LoginService {
                             AuditRepository auditRepository,
                             TokenService tokenService,
                             SecurityProtectionService securityProtectionService,
-                            SecurityHashingService hashingService) {
+                            SecurityHashingService hashingService,
+                            AuditEventPublisher auditEventPublisher) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.sessionRepository = sessionRepository;
@@ -46,6 +49,7 @@ public class LoginServiceImpl implements LoginService {
         this.tokenService = tokenService;
         this.securityProtectionService = securityProtectionService;
         this.hashingService = hashingService;
+        this.auditEventPublisher = auditEventPublisher;
     }
 
     @Override
@@ -94,7 +98,8 @@ public class LoginServiceImpl implements LoginService {
         audit.setSessionId(savedSession.getId());
         audit.setDeviceId(device.getId());
         audit.setUser(user);
-        auditRepository.save(audit);
+        Audit savedAudit = auditRepository.save(audit);
+        auditEventPublisher.publish(savedAudit);
 
         return new LoginResponse(
                 user.getId(),

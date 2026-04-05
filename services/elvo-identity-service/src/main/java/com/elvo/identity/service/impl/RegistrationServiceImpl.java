@@ -5,6 +5,7 @@ import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.elvo.identity.audit.AuditEventPublisher;
 import com.elvo.identity.dto.request.RegistrationRequest;
 import com.elvo.identity.dto.response.RegistrationResponse;
 import com.elvo.identity.entity.Audit;
@@ -23,15 +24,18 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final AuditRepository auditRepository;
     private final EanGenerator eanGenerator;
     private final SecurityHashingService hashingService;
+    private final AuditEventPublisher auditEventPublisher;
 
     public RegistrationServiceImpl(UserRepository userRepository,
                                    AuditRepository auditRepository,
                                    EanGenerator eanGenerator,
-                                   SecurityHashingService hashingService) {
+                                   SecurityHashingService hashingService,
+                                   AuditEventPublisher auditEventPublisher) {
         this.userRepository = userRepository;
         this.auditRepository = auditRepository;
         this.eanGenerator = eanGenerator;
         this.hashingService = hashingService;
+        this.auditEventPublisher = auditEventPublisher;
     }
 
     @Override
@@ -57,7 +61,8 @@ public class RegistrationServiceImpl implements RegistrationService {
         audit.setSourceIp(request.getSourceIp());
         audit.setSourceUserAgent(request.getSourceUserAgent());
         audit.setUser(savedUser);
-        auditRepository.save(audit);
+        Audit savedAudit = auditRepository.save(audit);
+        auditEventPublisher.publish(savedAudit);
 
         return new RegistrationResponse(
                 savedUser.getId(),

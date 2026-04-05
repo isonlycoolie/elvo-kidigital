@@ -7,6 +7,7 @@ import java.time.Instant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.elvo.identity.audit.AuditEventPublisher;
 import com.elvo.identity.dto.request.EspGenerateRequest;
 import com.elvo.identity.dto.request.EspVerifyRequest;
 import com.elvo.identity.dto.response.EspGenerateResponse;
@@ -27,14 +28,17 @@ public class EspManagementServiceImpl implements EspManagementService {
     private final UserRepository userRepository;
     private final AuditRepository auditRepository;
     private final SecurityHashingService hashingService;
+    private final AuditEventPublisher auditEventPublisher;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public EspManagementServiceImpl(UserRepository userRepository,
                                     AuditRepository auditRepository,
-                                    SecurityHashingService hashingService) {
+                                    SecurityHashingService hashingService,
+                                    AuditEventPublisher auditEventPublisher) {
         this.userRepository = userRepository;
         this.auditRepository = auditRepository;
         this.hashingService = hashingService;
+        this.auditEventPublisher = auditEventPublisher;
     }
 
     @Override
@@ -120,6 +124,7 @@ public class EspManagementServiceImpl implements EspManagementService {
         audit.setSourceIp(sourceIp);
         audit.setSourceUserAgent(sourceUserAgent);
         audit.setUser(user);
-        auditRepository.save(audit);
+        Audit savedAudit = auditRepository.save(audit);
+        auditEventPublisher.publish(savedAudit);
     }
 }

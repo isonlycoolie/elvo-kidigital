@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.elvo.identity.audit.AuditEventPublisher;
 import com.elvo.identity.dto.request.SessionCreateRequest;
 import com.elvo.identity.dto.response.SessionInfoResponse;
 import com.elvo.identity.dto.response.SessionTokenResponse;
@@ -31,17 +32,20 @@ public class SessionManagementServiceImpl implements SessionManagementService {
     private final SessionRepository sessionRepository;
     private final AuditRepository auditRepository;
     private final TokenService tokenService;
+    private final AuditEventPublisher auditEventPublisher;
 
     public SessionManagementServiceImpl(UserRepository userRepository,
                                         DeviceRepository deviceRepository,
                                         SessionRepository sessionRepository,
                                         AuditRepository auditRepository,
-                                        TokenService tokenService) {
+                                        TokenService tokenService,
+                                        AuditEventPublisher auditEventPublisher) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.sessionRepository = sessionRepository;
         this.auditRepository = auditRepository;
         this.tokenService = tokenService;
+        this.auditEventPublisher = auditEventPublisher;
     }
 
     @Override
@@ -168,6 +172,7 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         if (userId != null) {
             userRepository.findById(userId).ifPresent(audit::setUser);
         }
-        auditRepository.save(audit);
+        Audit savedAudit = auditRepository.save(audit);
+        auditEventPublisher.publish(savedAudit);
     }
 }

@@ -5,6 +5,7 @@ import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.elvo.identity.audit.AuditEventPublisher;
 import com.elvo.identity.dto.request.ProfileUpdateRequest;
 import com.elvo.identity.dto.response.ProfileResponse;
 import com.elvo.identity.entity.Audit;
@@ -20,13 +21,16 @@ public class ProfileManagementServiceImpl implements ProfileManagementService {
     private final UserRepository userRepository;
     private final AuditRepository auditRepository;
     private final SecurityHashingService hashingService;
+    private final AuditEventPublisher auditEventPublisher;
 
     public ProfileManagementServiceImpl(UserRepository userRepository,
                                         AuditRepository auditRepository,
-                                        SecurityHashingService hashingService) {
+                                        SecurityHashingService hashingService,
+                                        AuditEventPublisher auditEventPublisher) {
         this.userRepository = userRepository;
         this.auditRepository = auditRepository;
         this.hashingService = hashingService;
+        this.auditEventPublisher = auditEventPublisher;
     }
 
     @Override
@@ -59,23 +63,26 @@ public class ProfileManagementServiceImpl implements ProfileManagementService {
             user.setDisplayName(request.getDisplayName().trim());
         }
 
+        boolean passwordChanged = false;
         if (request.getNewPassword() != null && !request.getNewPassword().isBlank()) {
             if (request.getCurrentPassword() == null || !hashingService.verifyPassword(request.getCurrentPassword(), user.getHashedPassword())) {
                 throw new IllegalArgumentException("Current password is invalid");
             }
             user.setHashedPassword(hashingService.hashPassword(request.getNewPassword()));
+            passwordChanged = true;
         }
 
         User savedUser = userRepository.save(user);
 
         Audit audit = new Audit();
-        audit.setActionType(Audit.ActionType.USER_ACTIVITY);
-        audit.setDescription("User profile updated");
+        audit.setActionType(passwordChanged ? Audit.ActionType.PASSWORD_CHANGE : Audit.ActionType.USER_ACTIVITY);
+        audit.setDescription(passwordChanged ? "User password changed" : "User profile updated");
         audit.setSourceType(Audit.SourceType.API);
         audit.setSourceIp(request.getSourceIp());
         audit.setSourceUserAgent(request.getSourceUserAgent());
         audit.setUser(savedUser);
-        auditRepository.save(audit);
+        Audit savedAudit = auditRepository.save(audit);
+        auditEventPublisher.publish(savedAudit);
 
         return new ProfileResponse(
                 savedUser.getId(),

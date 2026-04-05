@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.elvo.identity.audit.AuditEventPublisher;
 import com.elvo.identity.dto.request.ProfileUpdateRequest;
 import com.elvo.identity.dto.response.DeviceInfoResponse;
 import com.elvo.identity.dto.response.ProfileResponse;
@@ -40,6 +41,7 @@ public class UserController {
     private final DeviceRepository deviceRepository;
     private final SessionRepository sessionRepository;
     private final AuditRepository auditRepository;
+    private final AuditEventPublisher auditEventPublisher;
     private final ProfileManagementService profileManagementService;
     private final SessionManagementService sessionManagementService;
 
@@ -47,12 +49,14 @@ public class UserController {
                           DeviceRepository deviceRepository,
                           SessionRepository sessionRepository,
                           AuditRepository auditRepository,
+                          AuditEventPublisher auditEventPublisher,
                           ProfileManagementService profileManagementService,
                           SessionManagementService sessionManagementService) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.sessionRepository = sessionRepository;
         this.auditRepository = auditRepository;
+        this.auditEventPublisher = auditEventPublisher;
         this.profileManagementService = profileManagementService;
         this.sessionManagementService = sessionManagementService;
     }
@@ -125,7 +129,8 @@ public class UserController {
         audit.setSourceUserAgent(sourceUserAgent);
         audit.setDeviceId(deviceId);
         audit.setUser(device.getUser());
-        auditRepository.save(audit);
+        Audit savedAudit = auditRepository.save(audit);
+        auditEventPublisher.publish(savedAudit);
 
         return ResponseEntity.ok(ApiResponse.ok("Device revoked", null));
     }
