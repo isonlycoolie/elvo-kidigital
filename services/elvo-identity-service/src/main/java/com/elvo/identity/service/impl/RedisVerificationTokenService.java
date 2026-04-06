@@ -4,10 +4,12 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
 import com.elvo.identity.service.VerificationTokenService;
@@ -16,12 +18,31 @@ import com.elvo.identity.service.VerificationTokenService;
 public class RedisVerificationTokenService implements VerificationTokenService {
 
     private static final int TOKEN_BYTES = 32;
+    private static final String ISSUE_SCRIPT = """
+            local previousToken = redis.call('GET', KEYS[1])
+            if previousToken then
+                redis.call('DEL', KEYS[3] .. previousToken)
+            end
+            redis.call('SET', KEYS[2], ARGV[1], 'EX', ARGV[2])
+            redis.call('SET', KEYS[1], ARGV[3], 'EX', ARGV[2])
+            return 1
+            """;
+    private static final String INVALIDATE_SCRIPT = """
+            local token = redis.call('GET', KEYS[1])
+            if token then
+                redis.call('DEL', KEYS[2] .. token)
+            end
+            redis.call('DEL', KEYS[1])
+            return 1
+            """;
 
     private final StringRedisTemplate redisTemplate;
     private final Duration ttl;
     private final String tokenKeyPrefix;
     private final String userKeyPrefix;
     private final SecureRandom secureRandom = new SecureRandom();
+    private final RedisScript<Long> issueScript;
+    private final RedisScript<Long> invalidateScript;
 
     public RedisVerificationTokenService(
             StringRedisTemplate redisTemplate,
@@ -32,19 +53,21 @@ public class RedisVerificationTokenService implements VerificationTokenService {
         this.ttl = Duration.ofMinutes(Math.max(1, ttlMinutes));
         this.tokenKeyPrefix = tokenKeyPrefix;
         this.userKeyPrefix = userKeyPrefix;
+        this.issueScript = RedisScript.of(ISSUE_SCRIPT, Long.class);
+        this.invalidateScript = RedisScript.of(INVALIDATE_SCRIPT, Long.class);
     }
 
     @Override
     public VerificationToken issueToken(UUID userId) {
         String userKey = userKey(userId);
-        String previousToken = redisTemplate.opsForValue().get(userKey);
-        if (previousToken != null && !previousToken.isBlank()) {
-            redisTemplate.delete(tokenKey(previousToken));
-        }
-
         String token = generateToken();
-        redisTemplate.opsForValue().set(tokenKey(token), userId.toString(), ttl);
-        redisTemplate.opsForValue().set(userKey, token, ttl);
+        long ttlSeconds = Math.max(1L, ttl.getSeconds());
+        redisTemplate.execute(
+                issueScript,
+                List.of(userKey, tokenKey(token), tokenKeyPrefix),
+                userId.toString(),
+                String.valueOf(ttlSeconds),
+                token);
         return new VerificationToken(token, Instant.now().plus(ttl));
     }
 
@@ -62,12 +85,7 @@ public class RedisVerificationTokenService implements VerificationTokenService {
         if (userId == null) {
             return;
         }
-        String userKey = userKey(userId);
-        String token = redisTemplate.opsForValue().get(userKey);
-        if (token != null && !token.isBlank()) {
-            redisTemplate.delete(tokenKey(token));
-        }
-        redisTemplate.delete(userKey);
+        redisTemplate.execute(invalidateScript, List.of(userKey(userId), tokenKeyPrefix));
     }
 
     private String generateToken() {
