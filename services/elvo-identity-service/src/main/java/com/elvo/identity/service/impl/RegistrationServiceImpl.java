@@ -3,6 +3,7 @@ package com.elvo.identity.service.impl;
 import java.util.Locale;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,14 +47,12 @@ public class RegistrationServiceImpl implements RegistrationService {
     @Override
     @Transactional
     public RegistrationResponse register(RegistrationRequest request) {
-        validateUniqueIdentity(request.getEmail(), request.getPhone());
+        String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
+        String phone = request.getPhone().trim();
 
-        User user = buildPendingUser(
-                request.getEmail().trim().toLowerCase(Locale.ROOT),
-                request.getPhone().trim(),
-                request.getPassword(),
-                request.isEnableMfa(),
-                request.getDisplayName());
+        User user = resolvePendingUser(email, phone)
+            .map(existing -> refreshPendingUser(existing, email, phone, request.getPassword(), request.isEnableMfa(), request.getDisplayName()))
+            .orElseGet(() -> buildPendingUser(email, phone, request.getPassword(), request.isEnableMfa(), request.getDisplayName()));
 
         User savedUser = userRepository.save(user);
         auditRegistration(savedUser, request.getSourceIp(), request.getSourceUserAgent());
@@ -65,14 +64,12 @@ public class RegistrationServiceImpl implements RegistrationService {
     @Transactional
     public RegistrationResponse registerEmail(EmailRegistrationRequest request) {
         String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
-        validateUniqueIdentity(email, null);
-
-        User user = buildPendingUser(
-                email,
-                null,
-                request.getPassword(),
-                request.isEnableMfa(),
-                request.getDisplayName());
+        User user = userRepository.findByEmailIgnoreCase(email)
+            .map(existing -> {
+                ensurePendingReusable(existing, "Email is already registered");
+                return refreshPendingUser(existing, email, existing.getPhone(), request.getPassword(), request.isEnableMfa(), request.getDisplayName());
+            })
+            .orElseGet(() -> buildPendingUser(email, null, request.getPassword(), request.isEnableMfa(), request.getDisplayName()));
 
         User savedUser = userRepository.save(user);
         auditRegistration(savedUser, request.getSourceIp(), request.getSourceUserAgent());
@@ -84,14 +81,12 @@ public class RegistrationServiceImpl implements RegistrationService {
     @Transactional
     public RegistrationResponse registerMobile(MobileRegistrationRequest request) {
         String phone = request.getPhone().trim();
-        validateUniqueIdentity(null, phone);
-
-        User user = buildPendingUser(
-                null,
-                phone,
-                request.getPassword(),
-                request.isEnableMfa(),
-                request.getDisplayName());
+        User user = userRepository.findByPhone(phone)
+                .map(existing -> {
+                    ensurePendingReusable(existing, "Phone is already registered");
+                    return refreshPendingUser(existing, existing.getEmail(), phone, request.getPassword(), request.isEnableMfa(), request.getDisplayName());
+                })
+                .orElseGet(() -> buildPendingUser(null, phone, request.getPassword(), request.isEnableMfa(), request.getDisplayName()));
 
         User savedUser = userRepository.save(user);
         auditRegistration(savedUser, request.getSourceIp(), request.getSourceUserAgent());
@@ -120,6 +115,27 @@ public class RegistrationServiceImpl implements RegistrationService {
         return user;
     }
 
+    private User refreshPendingUser(User existing,
+                                    String email,
+                                    String phone,
+                                    String rawPassword,
+                                    boolean mfaEnabled,
+                                    String displayName) {
+        existing.setEmail(email);
+        existing.setPhone(phone);
+        existing.setDisplayName(displayName);
+        existing.setHashedPassword(hashingService.hashPassword(rawPassword));
+        existing.setMfaEnabled(mfaEnabled);
+        existing.setEmailVerified(false);
+        existing.setMobileVerified(false);
+        existing.setEmailVerifiedAt(null);
+        existing.setMobileVerifiedAt(null);
+        existing.setVerificationStatus(User.VerificationStatus.UNVERIFIED);
+        existing.setAccountStatus(User.AccountStatus.PENDING_VERIFICATION);
+        existing.setVerificationDeadline(Instant.now().plus(DEFAULT_VERIFICATION_DEADLINE));
+        return existing;
+    }
+
     private void auditRegistration(User savedUser, String sourceIp, String sourceUserAgent) {
         Audit audit = new Audit();
         audit.setActionType(Audit.ActionType.REGISTRATION);
@@ -141,13 +157,31 @@ public class RegistrationServiceImpl implements RegistrationService {
                 savedUser.isMfaEnabled());
     }
 
-    private void validateUniqueIdentity(String email, String phone) {
-        if (email != null && userRepository.findByEmailIgnoreCase(email).isPresent()) {
-            throw new IllegalArgumentException("Email is already registered");
+    private Optional<User> resolvePendingUser(String email, String phone) {
+        Optional<User> byEmail = userRepository.findByEmailIgnoreCase(email);
+        Optional<User> byPhone = userRepository.findByPhone(phone);
+
+        if (byEmail.isPresent() && byPhone.isPresent() && !byEmail.get().getId().equals(byPhone.get().getId())) {
+            throw new IllegalArgumentException("Identity is already registered");
         }
 
-        if (phone != null && userRepository.findByPhone(phone).isPresent()) {
-            throw new IllegalArgumentException("Phone is already registered");
+        Optional<User> existing = byEmail.isPresent() ? byEmail : byPhone;
+        if (existing.isEmpty()) {
+            return Optional.empty();
+        }
+
+        ensurePendingReusable(existing.get(), "Identity is already registered");
+        return existing;
+    }
+
+    private void ensurePendingReusable(User existing, String duplicateMessage) {
+        if (existing.getAccountStatus() != User.AccountStatus.PENDING_VERIFICATION) {
+            throw new IllegalArgumentException(duplicateMessage);
+        }
+
+        Instant deadline = existing.getVerificationDeadline();
+        if (deadline != null && Instant.now().isAfter(deadline)) {
+            throw new IllegalStateException("Pending registration expired. Restart registration");
         }
     }
 
