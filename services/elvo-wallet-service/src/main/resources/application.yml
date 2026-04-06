@@ -84,6 +84,14 @@ elvo:
           - POST:/api/v1/internal/wallets/*/reverse
         agent-service:
           - POST:/api/v1/internal/wallets/*/device-free-withdrawal
+    mtls:
+      enabled: ${ELVO_MTLS_ENABLED:false}
+      subject-principal-regex: ${ELVO_MTLS_SUBJECT_REGEX:CN=(.*?)(?:,|$)}
+      trusted-common-names:
+        - ${ELVO_MTLS_CN_IDENTITY_SERVICE:identity-service}
+        - ${ELVO_MTLS_CN_BILLING_SERVICE:billing-service}
+        - ${ELVO_MTLS_CN_AGENT_SERVICE:agent-service}
+        - ${ELVO_MTLS_CN_SAGA_SERVICE:saga-service}
     eac:
       replay:
         window-seconds: ${ELVO_EAC_REPLAY_WINDOW_SECONDS:300}
@@ -104,6 +112,8 @@ elvo:
       issuer: ${ELVO_TX_CHALLENGE_ISSUER:elvo-wallet-service}
       audience: ${ELVO_TX_CHALLENGE_AUDIENCE:wallet-transaction-challenge}
       ttl-seconds: ${ELVO_TX_CHALLENGE_TTL_SECONDS:300}
+    transaction-lifecycle:
+      expiry-minutes: ${ELVO_TRANSACTION_LIFECYCLE_EXPIRY_MINUTES:30}
     rate-limit:
       window-seconds: ${ELVO_RATE_LIMIT_WINDOW_SECONDS:60}
       per-user-threshold: ${ELVO_RATE_LIMIT_PER_USER_THRESHOLD:30}
