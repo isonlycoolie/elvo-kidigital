@@ -35,8 +35,11 @@ public class Etc {
     @JoinColumn(name = "wallet_id", nullable = false)
     private Wallet wallet;
 
-    @Column(name = "code", nullable = false, length = 128, unique = true)
-    private String code;
+    @Column(name = "code_hash", nullable = false, length = 128, unique = true)
+    private String codeHash;
+
+    @Column(name = "failed_attempt_count", nullable = false)
+    private int failedAttemptCount;
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
@@ -61,29 +64,32 @@ public class Etc {
 
     @PrePersist
     void onCreate() {
-        AUDIT_LOG.info("etc_entity_generated walletId={} code={} expiresAt={} status={}",
+        AUDIT_LOG.info("etc_entity_generated walletId={} codeHash={} expiresAt={} status={} failedAttempts={}",
                 wallet != null ? wallet.getId() : null,
-                code,
+            codeHash,
                 expiresAt,
-                status);
+            status,
+            failedAttemptCount);
     }
 
     @PreUpdate
     void onUpdate() {
         if (status == EtcStatus.REDEEMED) {
-            AUDIT_LOG.info("etc_entity_redeemed etcId={} walletId={} code={}",
+            AUDIT_LOG.info("etc_entity_redeemed etcId={} walletId={} codeHash={} failedAttempts={}",
                     id,
                     wallet != null ? wallet.getId() : null,
-                    code);
+                codeHash,
+                failedAttemptCount);
             return;
         }
 
-        AUDIT_LOG.info("etc_entity_updated etcId={} walletId={} code={} status={} expiresAt={}",
+        AUDIT_LOG.info("etc_entity_updated etcId={} walletId={} codeHash={} status={} expiresAt={} failedAttempts={}",
                 id,
                 wallet != null ? wallet.getId() : null,
-                code,
+            codeHash,
                 status,
-                expiresAt);
+            expiresAt,
+            failedAttemptCount);
     }
 
     public UUID getId() {
@@ -98,12 +104,20 @@ public class Etc {
         this.wallet = wallet;
     }
 
-    public String getCode() {
-        return code;
+    public String getCodeHash() {
+        return codeHash;
     }
 
-    public void setCode(String code) {
-        this.code = code;
+    public void setCodeHash(String codeHash) {
+        this.codeHash = codeHash;
+    }
+
+    public int getFailedAttemptCount() {
+        return failedAttemptCount;
+    }
+
+    public void setFailedAttemptCount(int failedAttemptCount) {
+        this.failedAttemptCount = failedAttemptCount;
     }
 
     public Instant getExpiresAt() {

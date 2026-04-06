@@ -87,3 +87,5 @@ elvo:
     eac:
       replay:
         window-seconds: ${ELVO_EAC_REPLAY_WINDOW_SECONDS:300}
+    etc:
+      hash-pepper: ${ELVO_ETC_HASH_PEPPER:elvo-wallet-etc-pepper}

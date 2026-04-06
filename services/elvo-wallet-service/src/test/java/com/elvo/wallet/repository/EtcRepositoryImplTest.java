@@ -27,23 +27,26 @@ class EtcRepositoryImplTest {
     @Test
     void generateCodeShouldPersistEtc() {
         Wallet wallet = walletRepository.save(createWallet());
+        String codeHash = "hash-etc-test-1";
 
-        Etc etc = etcRepository.generateCode(wallet.getId(), "ETC-TEST-1", Instant.now().plusSeconds(3600));
+        Etc etc = etcRepository.generateCode(wallet.getId(), codeHash, Instant.now().plusSeconds(3600));
 
-        Etc reloaded = etcRepository.findByCode("ETC-TEST-1").orElseThrow();
+        Etc reloaded = etcRepository.findByCodeHash(codeHash).orElseThrow();
         org.assertj.core.api.Assertions.assertThat(etc.getId()).isNotNull();
         org.assertj.core.api.Assertions.assertThat(reloaded.getStatus()).isEqualTo(Etc.EtcStatus.GENERATED);
         org.assertj.core.api.Assertions.assertThat(reloaded.getWallet().getId()).isEqualTo(wallet.getId());
+        org.assertj.core.api.Assertions.assertThat(reloaded.getCodeHash()).isEqualTo(codeHash);
     }
 
     @Test
     void redeemCodeShouldMarkEtcRedeemed() {
         Wallet wallet = walletRepository.save(createWallet());
-        etcRepository.generateCode(wallet.getId(), "ETC-TEST-2", Instant.now().plusSeconds(3600));
+        String codeHash = "hash-etc-test-2";
+        etcRepository.generateCode(wallet.getId(), codeHash, Instant.now().plusSeconds(3600));
 
-        boolean redeemed = etcRepository.redeemCode("ETC-TEST-2", Instant.now());
+        boolean redeemed = etcRepository.redeemCode(codeHash, Instant.now());
 
-        Etc reloaded = etcRepository.findByCode("ETC-TEST-2").orElseThrow();
+        Etc reloaded = etcRepository.findByCodeHash(codeHash).orElseThrow();
         org.assertj.core.api.Assertions.assertThat(redeemed).isTrue();
         org.assertj.core.api.Assertions.assertThat(reloaded.getStatus()).isEqualTo(Etc.EtcStatus.REDEEMED);
     }
@@ -52,7 +55,7 @@ class EtcRepositoryImplTest {
     void generateCodeShouldRejectBlankCode() {
         assertThatThrownBy(() -> etcRepository.generateCode(UUID.randomUUID(), "  ", Instant.now().plusSeconds(3600)))
                 .isInstanceOf(InvalidDataAccessApiUsageException.class)
-                .hasMessageContaining("ETC code must not be blank");
+                .hasMessageContaining("ETC code hash must not be blank");
     }
 
     private Wallet createWallet() {

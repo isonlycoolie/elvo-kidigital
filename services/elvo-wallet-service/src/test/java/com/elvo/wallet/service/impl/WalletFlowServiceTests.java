@@ -31,6 +31,7 @@ import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.security.EtcCodeSecurityService;
 import com.elvo.wallet.service.EacReplayProtectionService;
 import com.elvo.wallet.service.model.DepositCommand;
 import com.elvo.wallet.service.model.EtcCommand;
@@ -58,6 +59,7 @@ class WalletFlowServiceTests {
     @Mock private WalletEventPublisher eventPublisher;
     @Mock private WalletSagaOrchestrator sagaOrchestrator;
     @Mock private EacReplayProtectionService eacReplayProtectionService;
+    @Mock private EtcCodeSecurityService etcCodeSecurityService;
 
     private Wallet wallet;
 
@@ -228,7 +230,7 @@ class WalletFlowServiceTests {
         when(etcRepository.generateCode(any(), anyString(), any())).thenAnswer(invocation -> {
             Etc etc = new Etc();
             etc.setWallet(wallet);
-            etc.setCode(invocation.getArgument(1));
+            etc.setCodeHash(invocation.getArgument(1));
             etc.setExpiresAt(invocation.getArgument(2));
             try {
                 java.lang.reflect.Field idField = Etc.class.getDeclaredField("id");
@@ -239,6 +241,9 @@ class WalletFlowServiceTests {
             return etc;
         });
 
+        when(etcCodeSecurityService.hashCode(anyString())).thenReturn("hash-etc");
+        when(etcCodeSecurityService.redact(anyString())).thenReturn("***C123");
+
         DefaultEtcFlowService service = new DefaultEtcFlowService(
                 etcRepository,
                 walletRepository,
@@ -246,7 +251,8 @@ class WalletFlowServiceTests {
                 idempotencyService,
                 ledgerIntegrationService,
                 limitEnforcementService,
-                eventPublisher);
+            eventPublisher,
+            etcCodeSecurityService);
 
         WalletFlowResult result = service.generate(new EtcCommand(wallet.getId(), wallet.getUserId(), "ETC-10-ABC123", Instant.now().plusSeconds(3600), "idem-5"));
 

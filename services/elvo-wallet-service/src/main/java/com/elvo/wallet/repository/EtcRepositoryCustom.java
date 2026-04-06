@@ -7,11 +7,11 @@ import com.elvo.wallet.entity.Etc;
 
 public interface EtcRepositoryCustom {
 
-    Etc generateCode(UUID walletId, String code, Instant expiresAt);
+    Etc generateCode(UUID walletId, String codeHash, Instant expiresAt);
 
-    boolean redeemCode(String code, Instant currentTime);
+    boolean redeemCode(String codeHash, Instant currentTime);
 
     int expireGeneratedCodes(Instant currentTime);
 
-    boolean isCodeExpired(String code, Instant currentTime);
+    boolean isCodeExpired(String codeHash, Instant currentTime);
 }

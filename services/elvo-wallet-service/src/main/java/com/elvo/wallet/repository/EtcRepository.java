@@ -15,15 +15,15 @@ import jakarta.persistence.LockModeType;
 
 public interface EtcRepository extends JpaRepository<Etc, UUID>, EtcRepositoryCustom {
 
-    boolean existsByCode(String code);
+    boolean existsByCodeHash(String codeHash);
 
-    boolean existsByCodeAndStatusIn(String code, Iterable<Etc.EtcStatus> statuses);
+    boolean existsByCodeHashAndStatusIn(String codeHash, Iterable<Etc.EtcStatus> statuses);
 
-    Optional<Etc> findByCode(String code);
+    Optional<Etc> findByCodeHash(String codeHash);
 
     List<Etc> findByWalletIdOrderByCreatedAtDesc(UUID walletId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select e from Etc e where e.code = :code")
-    Optional<Etc> findByCodeForUpdate(@Param("code") String code);
+    @Query("select e from Etc e where e.codeHash = :codeHash")
+    Optional<Etc> findByCodeHashForUpdate(@Param("codeHash") String codeHash);
 }

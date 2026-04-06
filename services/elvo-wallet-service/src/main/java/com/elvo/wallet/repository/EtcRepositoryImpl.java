@@ -27,13 +27,13 @@ public class EtcRepositoryImpl implements EtcRepositoryCustom {
     private EntityManager entityManager;
 
     @Override
-    public Etc generateCode(UUID walletId, String code, Instant expiresAt) {
-        validateGenerateInputs(walletId, code, expiresAt);
+    public Etc generateCode(UUID walletId, String codeHash, Instant expiresAt) {
+        validateGenerateInputs(walletId, codeHash, expiresAt);
 
         Long duplicateCount = entityManager.createQuery(
-                        "select count(e.id) from Etc e where e.code = :code and e.status in :statuses",
+                        "select count(e.id) from Etc e where e.codeHash = :codeHash and e.status in :statuses",
                         Long.class)
-                .setParameter("code", code)
+                .setParameter("codeHash", codeHash)
                 .setParameter("statuses", List.of(Etc.EtcStatus.GENERATED, Etc.EtcStatus.REDEEMED))
                 .getSingleResult();
 
@@ -48,28 +48,29 @@ public class EtcRepositoryImpl implements EtcRepositoryCustom {
 
         Etc etc = new Etc();
         etc.setWallet(wallet);
-        etc.setCode(code);
+        etc.setCodeHash(codeHash);
         etc.setExpiresAt(expiresAt);
         etc.setStatus(Etc.EtcStatus.GENERATED);
+        etc.setFailedAttemptCount(0);
         entityManager.persist(etc);
 
-        AUDIT_LOG.info("etc_generated etcId={} walletId={} code={} expiresAt={}",
+        AUDIT_LOG.info("etc_generated etcId={} walletId={} codeHash={} expiresAt={}",
                 etc.getId(),
                 walletId,
-                code,
+            codeHash,
                 expiresAt);
 
         return etc;
     }
 
     @Override
-    public boolean redeemCode(String code, Instant currentTime) {
+        public boolean redeemCode(String codeHash, Instant currentTime) {
         Objects.requireNonNull(currentTime, "currentTime must not be null");
 
         Etc etc = entityManager.createQuery(
-                        "select e from Etc e where e.code = :code",
+                "select e from Etc e where e.codeHash = :codeHash",
                         Etc.class)
-                .setParameter("code", code)
+            .setParameter("codeHash", codeHash)
                 .setLockMode(LockModeType.PESSIMISTIC_WRITE)
                 .getResultStream()
                 .findFirst()
@@ -85,18 +86,20 @@ public class EtcRepositoryImpl implements EtcRepositoryCustom {
 
         if (etc.getExpiresAt().isBefore(currentTime)) {
             etc.setStatus(Etc.EtcStatus.EXPIRED);
-            AUDIT_LOG.info("etc_marked_expired etcId={} walletId={} code={}",
+            AUDIT_LOG.info("etc_marked_expired etcId={} walletId={} codeHash={} failedAttempts={}",
                     etc.getId(),
                     etc.getWallet() != null ? etc.getWallet().getId() : null,
-                    etc.getCode());
+                etc.getCodeHash(),
+                etc.getFailedAttemptCount());
             return false;
         }
 
         etc.setStatus(Etc.EtcStatus.REDEEMED);
-        AUDIT_LOG.info("etc_redeemed etcId={} walletId={} code={}",
+        AUDIT_LOG.info("etc_redeemed etcId={} walletId={} codeHash={} failedAttempts={}",
                 etc.getId(),
                 etc.getWallet() != null ? etc.getWallet().getId() : null,
-                etc.getCode());
+            etc.getCodeHash(),
+            etc.getFailedAttemptCount());
 
         return true;
     }
@@ -115,11 +118,12 @@ public class EtcRepositoryImpl implements EtcRepositoryCustom {
 
         for (Etc etc : generatedButExpiredCodes) {
             etc.setStatus(Etc.EtcStatus.EXPIRED);
-            AUDIT_LOG.info("etc_expired etcId={} walletId={} code={} expiresAt={}",
+                AUDIT_LOG.info("etc_expired etcId={} walletId={} codeHash={} expiresAt={} failedAttempts={}",
                     etc.getId(),
                     etc.getWallet() != null ? etc.getWallet().getId() : null,
-                    etc.getCode(),
-                    etc.getExpiresAt());
+                    etc.getCodeHash(),
+                    etc.getExpiresAt(),
+                    etc.getFailedAttemptCount());
         }
 
         return generatedButExpiredCodes.size();
@@ -127,12 +131,12 @@ public class EtcRepositoryImpl implements EtcRepositoryCustom {
 
     @Override
     @Transactional(readOnly = true)
-    public boolean isCodeExpired(String code, Instant currentTime) {
-        Objects.requireNonNull(code, "code must not be null");
+    public boolean isCodeExpired(String codeHash, Instant currentTime) {
+        Objects.requireNonNull(codeHash, "codeHash must not be null");
         Objects.requireNonNull(currentTime, "currentTime must not be null");
 
-        Etc etc = entityManager.createQuery("select e from Etc e where e.code = :code", Etc.class)
-                .setParameter("code", code)
+        Etc etc = entityManager.createQuery("select e from Etc e where e.codeHash = :codeHash", Etc.class)
+                .setParameter("codeHash", codeHash)
                 .getResultStream()
                 .findFirst()
                 .orElse(null);
@@ -140,13 +144,13 @@ public class EtcRepositoryImpl implements EtcRepositoryCustom {
         return etc == null || etc.getStatus() == Etc.EtcStatus.EXPIRED || etc.getExpiresAt().isBefore(currentTime);
     }
 
-    private static void validateGenerateInputs(UUID walletId, String code, Instant expiresAt) {
+    private static void validateGenerateInputs(UUID walletId, String codeHash, Instant expiresAt) {
         Objects.requireNonNull(walletId, "walletId must not be null");
-        Objects.requireNonNull(code, "code must not be null");
+        Objects.requireNonNull(codeHash, "codeHash must not be null");
         Objects.requireNonNull(expiresAt, "expiresAt must not be null");
 
-        if (code.isBlank()) {
-            throw new IllegalArgumentException("ETC code must not be blank");
+        if (codeHash.isBlank()) {
+            throw new IllegalArgumentException("ETC code hash must not be blank");
         }
     }
 }

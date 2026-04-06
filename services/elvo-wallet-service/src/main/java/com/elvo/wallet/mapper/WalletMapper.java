@@ -78,7 +78,7 @@ public class WalletMapper {
         return new EtcResponseDto(
             etc.getId(),
             etc.getWallet().getId(),
-            etc.getCode(),
+            "REDACTED",
             etc.getStatus() != null ? etc.getStatus().toString() : null,
             etc.getExpiresAt(),
             etc.getCreatedAt()
