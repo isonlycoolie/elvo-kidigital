@@ -1,21 +1,28 @@
 package com.elvo.wallet.mapper;
 
+import org.springframework.stereotype.Component;
+
 import com.elvo.wallet.dto.response.BalanceResponseDto;
-import com.elvo.wallet.dto.response.ReservationResponseDto;
-import com.elvo.wallet.dto.response.TransactionResponseDto;
 import com.elvo.wallet.dto.response.EtcResponseDto;
 import com.elvo.wallet.dto.response.FlowResultResponseDto;
+import com.elvo.wallet.dto.response.ReservationResponseDto;
+import com.elvo.wallet.dto.response.TransactionResponseDto;
 import com.elvo.wallet.dto.response.WalletResponseDto;
 import com.elvo.wallet.entity.Etc;
 import com.elvo.wallet.entity.Reservation;
 import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.Wallet;
+import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.service.model.WalletFlowResult;
-
-import org.springframework.stereotype.Component;
 
 @Component
 public class WalletMapper {
+
+    private final WalletFieldEncryptionService fieldEncryptionService;
+
+    public WalletMapper(WalletFieldEncryptionService fieldEncryptionService) {
+        this.fieldEncryptionService = fieldEncryptionService;
+    }
 
     public WalletResponseDto toWalletResponseDto(Wallet wallet) {
         if (wallet == null) {
@@ -49,7 +56,7 @@ public class WalletMapper {
             transaction.getType() != null ? transaction.getType().toString() : null,
             transaction.getAmount(),
             transaction.getStatus() != null ? transaction.getStatus().toString() : null,
-            transaction.getReference(),
+            fieldEncryptionService.decrypt(transaction.getReference()),
             null,
             transaction.getCreatedAt(),
             transaction.getUpdatedAt()

@@ -15,6 +15,7 @@ import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.service.DepositFlowService;
 import com.elvo.wallet.service.model.DepositCommand;
 import com.elvo.wallet.service.model.WalletChannel;
@@ -36,6 +37,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
     private final WalletLimitEnforcementService limitEnforcementService;
     private final WalletSagaOrchestrator sagaOrchestrator;
     private final WalletEventPublisher eventPublisher;
+    private final WalletFieldEncryptionService fieldEncryptionService;
 
     public DefaultDepositFlowService(WalletRepository walletRepository,
                                      TransactionRepository transactionRepository,
@@ -46,7 +48,8 @@ public class DefaultDepositFlowService implements DepositFlowService {
                                      MobileCallbackReconciliationService callbackReconciliationService,
                                      WalletLimitEnforcementService limitEnforcementService,
                                      WalletSagaOrchestrator sagaOrchestrator,
-                                     WalletEventPublisher eventPublisher) {
+                                     WalletEventPublisher eventPublisher,
+                                     WalletFieldEncryptionService fieldEncryptionService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
@@ -57,6 +60,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
         this.sagaOrchestrator = sagaOrchestrator;
         this.eventPublisher = eventPublisher;
         this.limitEnforcementService = limitEnforcementService;
+        this.fieldEncryptionService = fieldEncryptionService;
     }
 
     @Override
@@ -104,8 +108,11 @@ public class DefaultDepositFlowService implements DepositFlowService {
             return failed(command.walletId(), command.idempotencyKey(), "Wallet is frozen");
         }
 
-        if (command.reference() != null && !command.reference().isBlank() && transactionRepository.existsByReference(command.reference())) {
-            Transaction existing = transactionRepository.findFirstByReferenceOrderByCreatedAtDesc(command.reference());
+        String resolvedReference = resolveReference(command.reference(), command.idempotencyKey());
+        String encryptedReference = fieldEncryptionService.encrypt(resolvedReference);
+
+        if (transactionRepository.existsByReference(encryptedReference)) {
+            Transaction existing = transactionRepository.findFirstByReferenceOrderByCreatedAtDesc(encryptedReference);
             WalletFlowResult result = WalletFlowResult.success(
                     "Deposit already processed",
                     command.walletId(),
@@ -123,7 +130,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
         transaction.setAmount(command.amount());
         transaction.setType(Transaction.TransactionType.DEPOSIT);
         transaction.setStatus(Transaction.TransactionStatus.COMPLETED);
-        transaction.setReference(resolveReference(command.reference(), command.idempotencyKey()));
+        transaction.setReference(encryptedReference);
         transactionRepository.save(transaction);
 
         ledgerIntegrationService.recordDoubleEntry("deposit", wallet.getId(), command.amount(), transaction.getReference());

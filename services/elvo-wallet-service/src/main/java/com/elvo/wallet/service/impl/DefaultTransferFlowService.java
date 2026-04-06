@@ -15,6 +15,7 @@ import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.StepUpAuthenticationService;
 import com.elvo.wallet.security.TransactionSigningChallengeService;
+import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.security.WalletFraudVelocityService;
 import com.elvo.wallet.service.TransferFlowService;
 import com.elvo.wallet.service.model.TransferCommand;
@@ -36,6 +37,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
     private final StepUpAuthenticationService stepUpAuthenticationService;
     private final TransactionSigningChallengeService transactionSigningChallengeService;
     private final WalletFraudVelocityService fraudVelocityService;
+    private final WalletFieldEncryptionService fieldEncryptionService;
 
     public DefaultTransferFlowService(WalletRepository walletRepository,
                                       TransactionRepository transactionRepository,
@@ -46,7 +48,8 @@ public class DefaultTransferFlowService implements TransferFlowService {
                                       WalletEventPublisher eventPublisher,
                                       StepUpAuthenticationService stepUpAuthenticationService,
                                       TransactionSigningChallengeService transactionSigningChallengeService,
-                                      WalletFraudVelocityService fraudVelocityService) {
+                                      WalletFraudVelocityService fraudVelocityService,
+                                      WalletFieldEncryptionService fieldEncryptionService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.idempotencyService = idempotencyService;
@@ -57,6 +60,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
         this.stepUpAuthenticationService = stepUpAuthenticationService;
         this.transactionSigningChallengeService = transactionSigningChallengeService;
         this.fraudVelocityService = fraudVelocityService;
+        this.fieldEncryptionService = fieldEncryptionService;
     }
 
     @Override
@@ -123,8 +127,9 @@ public class DefaultTransferFlowService implements TransferFlowService {
         }
 
         String transferReference = resolveReference(command.reference(), command.idempotencyKey());
-        if (transactionRepository.existsByReference(transferReference)) {
-            Transaction existing = transactionRepository.findFirstByReferenceOrderByCreatedAtDesc(transferReference);
+        String encryptedTransferReference = fieldEncryptionService.encrypt(transferReference);
+        if (transactionRepository.existsByReference(encryptedTransferReference)) {
+            Transaction existing = transactionRepository.findFirstByReferenceOrderByCreatedAtDesc(encryptedTransferReference);
             WalletFlowResult result = WalletFlowResult.success(
                     "Transfer already processed",
                     command.sourceWalletId(),
@@ -147,7 +152,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
         debit.setType(Transaction.TransactionType.TRANSFER);
         debit.setAmount(command.amount());
         debit.setStatus(Transaction.TransactionStatus.COMPLETED);
-        debit.setReference(transferReference + "-debit");
+        debit.setReference(fieldEncryptionService.encrypt(transferReference + "-debit"));
         transactionRepository.save(debit);
 
         Transaction credit = new Transaction();
@@ -155,7 +160,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
         credit.setType(Transaction.TransactionType.TRANSFER);
         credit.setAmount(command.amount());
         credit.setStatus(Transaction.TransactionStatus.COMPLETED);
-        credit.setReference(transferReference + "-credit");
+        credit.setReference(fieldEncryptionService.encrypt(transferReference + "-credit"));
         transactionRepository.save(credit);
 
         ledgerIntegrationService.recordDoubleEntry("transfer", source.getId(), command.amount(), transferReference);

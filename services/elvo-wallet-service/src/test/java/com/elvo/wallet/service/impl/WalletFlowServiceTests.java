@@ -36,6 +36,7 @@ import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.security.EtcCodeSecurityService;
 import com.elvo.wallet.security.StepUpAuthenticationService;
 import com.elvo.wallet.security.TransactionSigningChallengeService;
+import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.security.WalletFraudVelocityService;
 import com.elvo.wallet.service.EacReplayProtectionService;
 import com.elvo.wallet.service.model.DepositCommand;
@@ -70,6 +71,7 @@ class WalletFlowServiceTests {
     @Mock private StepUpAuthenticationService stepUpAuthenticationService;
     @Mock private TransactionSigningChallengeService transactionSigningChallengeService;
         @Mock private WalletFraudVelocityService fraudVelocityService;
+        @Mock private WalletFieldEncryptionService fieldEncryptionService;
 
     private Wallet wallet;
 
@@ -81,6 +83,9 @@ class WalletFlowServiceTests {
         wallet.setBalance(new BigDecimal("100.00"));
         wallet.setReservedBalance(BigDecimal.ZERO);
         wallet.setStatus(Wallet.WalletStatus.ACTIVE);
+
+                lenient().when(fieldEncryptionService.encrypt(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+                lenient().when(fieldEncryptionService.decrypt(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
@@ -113,7 +118,8 @@ class WalletFlowServiceTests {
                 callbackReconciliationService,
                 limitEnforcementService,
                 sagaOrchestrator,
-                eventPublisher);
+                eventPublisher,
+                fieldEncryptionService);
 
         WalletFlowResult result = service.process(new DepositCommand(
                 walletId,
@@ -150,7 +156,8 @@ class WalletFlowServiceTests {
                 eacReplayProtectionService,
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
-                fraudVelocityService);
+                fraudVelocityService,
+                fieldEncryptionService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),
@@ -193,7 +200,8 @@ class WalletFlowServiceTests {
                 eacReplayProtectionService,
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
-                fraudVelocityService);
+                fraudVelocityService,
+                fieldEncryptionService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),
@@ -226,7 +234,8 @@ class WalletFlowServiceTests {
                 eventPublisher,
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
-                fraudVelocityService);
+                fraudVelocityService,
+                fieldEncryptionService);
 
         UUID walletId = UUID.randomUUID();
         WalletFlowResult result = service.process(new TransferCommand(
@@ -266,7 +275,8 @@ class WalletFlowServiceTests {
                 eacReplayProtectionService,
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
-                fraudVelocityService);
+                fraudVelocityService,
+                fieldEncryptionService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),
@@ -303,7 +313,8 @@ class WalletFlowServiceTests {
                 eventPublisher,
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
-                fraudVelocityService);
+                fraudVelocityService,
+                fieldEncryptionService);
 
         WalletFlowResult result = service.process(new TransferCommand(
                 UUID.randomUUID(),
@@ -337,7 +348,8 @@ class WalletFlowServiceTests {
                 eventPublisher,
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
-                fraudVelocityService);
+                fraudVelocityService,
+                fieldEncryptionService);
 
         WalletFlowResult result = service.process(new TransferCommand(
                 UUID.randomUUID(),
@@ -376,7 +388,8 @@ class WalletFlowServiceTests {
                 eacReplayProtectionService,
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
-                fraudVelocityService);
+                fraudVelocityService,
+                fieldEncryptionService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),
@@ -412,7 +425,8 @@ class WalletFlowServiceTests {
                 eventPublisher,
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
-                fraudVelocityService);
+                fraudVelocityService,
+                fieldEncryptionService);
 
         WalletFlowResult result = service.process(new TransferCommand(
                 UUID.randomUUID(),
@@ -446,7 +460,8 @@ class WalletFlowServiceTests {
                 eacReplayProtectionService,
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
-                fraudVelocityService);
+                fraudVelocityService,
+                fieldEncryptionService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),

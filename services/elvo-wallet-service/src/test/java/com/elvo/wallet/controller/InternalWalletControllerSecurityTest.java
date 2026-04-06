@@ -28,6 +28,7 @@ import com.elvo.wallet.mapper.WalletMapper;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.InternalServiceAuthorizationMatrix;
 import com.elvo.wallet.security.SecurityConfig;
+import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
 
@@ -61,6 +62,9 @@ class InternalWalletControllerSecurityTest {
 
         @MockBean
         private WalletOperationRateLimitService operationRateLimitService;
+
+        @MockBean
+        private WalletFieldEncryptionService fieldEncryptionService;
 
     @Test
     void internalBalanceShouldRejectUnauthorizedSourceService() throws Exception {

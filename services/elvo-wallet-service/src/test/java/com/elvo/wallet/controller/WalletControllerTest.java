@@ -29,6 +29,7 @@ import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.DestinationRiskService;
 import com.elvo.wallet.security.DeviceLocationRiskService;
 import com.elvo.wallet.security.EtcCodePolicyService;
+import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -66,6 +67,9 @@ class WalletControllerTest {
 
     @MockBean
     private DestinationRiskService destinationRiskService;
+    
+    @MockBean
+    private WalletFieldEncryptionService fieldEncryptionService;
 
     @Test
     @WithMockUser(username = "11111111-1111-1111-1111-111111111111")

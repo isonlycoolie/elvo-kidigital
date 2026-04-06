@@ -16,6 +16,7 @@ import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.StepUpAuthenticationService;
 import com.elvo.wallet.security.TransactionSigningChallengeService;
+import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.security.WalletFraudVelocityService;
 import com.elvo.wallet.service.EacReplayProtectionService;
 import com.elvo.wallet.service.WithdrawalFlowService;
@@ -41,6 +42,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     private final StepUpAuthenticationService stepUpAuthenticationService;
     private final TransactionSigningChallengeService transactionSigningChallengeService;
     private final WalletFraudVelocityService fraudVelocityService;
+    private final WalletFieldEncryptionService fieldEncryptionService;
 
     public DefaultWithdrawalFlowService(WalletRepository walletRepository,
                                         TransactionRepository transactionRepository,
@@ -53,7 +55,8 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
                                         EacReplayProtectionService eacReplayProtectionService,
                                         StepUpAuthenticationService stepUpAuthenticationService,
                                         TransactionSigningChallengeService transactionSigningChallengeService,
-                                        WalletFraudVelocityService fraudVelocityService) {
+                                        WalletFraudVelocityService fraudVelocityService,
+                                        WalletFieldEncryptionService fieldEncryptionService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
@@ -66,6 +69,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         this.stepUpAuthenticationService = stepUpAuthenticationService;
         this.transactionSigningChallengeService = transactionSigningChallengeService;
         this.fraudVelocityService = fraudVelocityService;
+        this.fieldEncryptionService = fieldEncryptionService;
     }
 
     @Override
@@ -165,7 +169,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         transaction.setType(Transaction.TransactionType.WITHDRAWAL);
         transaction.setAmount(command.amount());
         transaction.setStatus(Transaction.TransactionStatus.COMPLETED);
-        transaction.setReference(resolveReference(command.reference(), command.idempotencyKey()));
+        transaction.setReference(fieldEncryptionService.encrypt(resolveReference(command.reference(), command.idempotencyKey())));
         transactionRepository.save(transaction);
 
         ledgerIntegrationService.recordDoubleEntry("withdrawal", wallet.getId(), command.amount(), transaction.getReference());
