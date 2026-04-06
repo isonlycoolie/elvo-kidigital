@@ -45,6 +45,7 @@ import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.EtcCodePolicyService;
+import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
 import com.elvo.wallet.service.model.DepositCommand;
 import com.elvo.wallet.service.model.EtcCommand;
@@ -76,11 +77,13 @@ public class WalletController {
     private final EtcRepository etcRepository;
     private final WalletMapper walletMapper;
     private final EtcCodePolicyService etcCodePolicyService;
+    private final WalletOperationRateLimitService operationRateLimitService;
 
     public WalletController(WalletService walletService, WalletRepository walletRepository,
                           TransactionRepository transactionRepository, ReservationRepository reservationRepository,
                           EtcRepository etcRepository, WalletMapper walletMapper,
-                          EtcCodePolicyService etcCodePolicyService) {
+                          EtcCodePolicyService etcCodePolicyService,
+                          WalletOperationRateLimitService operationRateLimitService) {
         this.walletService = walletService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -88,6 +91,7 @@ public class WalletController {
         this.etcRepository = etcRepository;
         this.walletMapper = walletMapper;
         this.etcCodePolicyService = etcCodePolicyService;
+        this.operationRateLimitService = operationRateLimitService;
     }
 
     /**
@@ -193,7 +197,8 @@ public class WalletController {
      * Process a withdrawal
      */
     @PostMapping("/withdrawals")
-    public ResponseEntity<FlowResultResponseDto> withdraw(@Valid @RequestBody WithdrawalRequestDto request) {
+    public ResponseEntity<FlowResultResponseDto> withdraw(@Valid @RequestBody WithdrawalRequestDto request,
+                                                          HttpServletRequest httpRequest) {
         UUID userId = getCurrentUserId();
         String reference = request.getReference() != null ? request.getReference() : UUID.randomUUID().toString();
 
@@ -202,6 +207,17 @@ public class WalletController {
 
         Wallet wallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
+
+        WalletOperationRateLimitService.RateLimitResult withdrawalRateLimit = operationRateLimitService.enforce(
+            WalletOperationRateLimitService.Operation.WITHDRAWAL,
+            userId,
+            httpRequest.getRemoteAddr(),
+            httpRequest.getHeader("X-Device-Id"),
+            request.getTargetNumber());
+        if (!withdrawalRateLimit.allowed()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, "Withdrawal rate limit exceeded", wallet.getId(), null, "wallet.withdrawal.failed"));
+        }
 
         try {
             WithdrawalMode mode = WithdrawalMode.valueOf(request.getMode());
@@ -244,7 +260,8 @@ public class WalletController {
      * Process a transfer to another wallet
      */
     @PostMapping("/transfers")
-    public ResponseEntity<FlowResultResponseDto> transfer(@Valid @RequestBody TransferRequestDto request) {
+    public ResponseEntity<FlowResultResponseDto> transfer(@Valid @RequestBody TransferRequestDto request,
+                                                          HttpServletRequest httpRequest) {
         UUID userId = getCurrentUserId();
         String reference = request.getReference() != null ? request.getReference() : UUID.randomUUID().toString();
 
@@ -253,6 +270,17 @@ public class WalletController {
 
         Wallet sourceWallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
+
+        WalletOperationRateLimitService.RateLimitResult transferRateLimit = operationRateLimitService.enforce(
+            WalletOperationRateLimitService.Operation.TRANSFER,
+            userId,
+            httpRequest.getRemoteAddr(),
+            httpRequest.getHeader("X-Device-Id"),
+            null);
+        if (!transferRateLimit.allowed()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, "Transfer rate limit exceeded", sourceWallet.getId(), null, "wallet.transfer.failed"));
+        }
 
         Wallet targetWallet = walletRepository.findById(request.getTargetWalletId())
             .orElseThrow(() -> new WalletNotFoundException("Target wallet not found: " + request.getTargetWalletId()));
@@ -356,6 +384,17 @@ public class WalletController {
 
         String deviceId = httpRequest.getHeader("X-Device-Id");
         String sourceIp = httpRequest.getRemoteAddr();
+        WalletOperationRateLimitService.RateLimitResult etcRateLimit = operationRateLimitService.enforce(
+            WalletOperationRateLimitService.Operation.ETC_REDEMPTION,
+            userId,
+            sourceIp,
+            deviceId,
+            code);
+        if (!etcRateLimit.allowed()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, "Withdrawal-code redemption rate limit exceeded", wallet.getId(), null, "wallet.etc.failed"));
+        }
+
         WalletFlowResult result = walletService.redeemEtc(code, request.getIdempotencyKey(), deviceId, sourceIp);
         FlowResultResponseDto response = walletMapper.toFlowResultResponseDto(result);
 

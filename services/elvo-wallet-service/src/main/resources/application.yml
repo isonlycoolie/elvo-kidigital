@@ -104,3 +104,9 @@ elvo:
       issuer: ${ELVO_TX_CHALLENGE_ISSUER:elvo-wallet-service}
       audience: ${ELVO_TX_CHALLENGE_AUDIENCE:wallet-transaction-challenge}
       ttl-seconds: ${ELVO_TX_CHALLENGE_TTL_SECONDS:300}
+    rate-limit:
+      window-seconds: ${ELVO_RATE_LIMIT_WINDOW_SECONDS:60}
+      per-user-threshold: ${ELVO_RATE_LIMIT_PER_USER_THRESHOLD:30}
+      per-ip-threshold: ${ELVO_RATE_LIMIT_PER_IP_THRESHOLD:60}
+      per-device-threshold: ${ELVO_RATE_LIMIT_PER_DEVICE_THRESHOLD:40}
+      per-ean-threshold: ${ELVO_RATE_LIMIT_PER_EAN_THRESHOLD:20}

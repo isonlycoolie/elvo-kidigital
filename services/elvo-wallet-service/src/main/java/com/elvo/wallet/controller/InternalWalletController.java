@@ -23,10 +23,12 @@ import com.elvo.wallet.dto.response.FlowResultResponseDto;
 import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.mapper.WalletMapper;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
 import com.elvo.wallet.service.model.ReservationCommand;
 import com.elvo.wallet.service.model.WalletFlowResult;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 @RestController
@@ -40,11 +42,16 @@ public class InternalWalletController {
     private final WalletRepository walletRepository;
     private final WalletService walletService;
     private final WalletMapper walletMapper;
+        private final WalletOperationRateLimitService operationRateLimitService;
 
-    public InternalWalletController(WalletRepository walletRepository, WalletService walletService, WalletMapper walletMapper) {
+        public InternalWalletController(WalletRepository walletRepository,
+                                                                        WalletService walletService,
+                                                                        WalletMapper walletMapper,
+                                                                        WalletOperationRateLimitService operationRateLimitService) {
         this.walletRepository = walletRepository;
         this.walletService = walletService;
         this.walletMapper = walletMapper;
+                this.operationRateLimitService = operationRateLimitService;
     }
 
     @GetMapping("/{userId}/balance")
@@ -57,9 +64,21 @@ public class InternalWalletController {
     @PostMapping("/{userId}/reserve")
     public ResponseEntity<FlowResultResponseDto> reserve(
             @PathVariable UUID userId,
-            @Valid @RequestBody ReservationRequestDto request
+            @Valid @RequestBody ReservationRequestDto request,
+            HttpServletRequest httpRequest
     ) {
         Wallet wallet = walletByUser(userId);
+        WalletOperationRateLimitService.RateLimitResult reserveRateLimit = operationRateLimitService.enforce(
+                WalletOperationRateLimitService.Operation.RESERVE,
+                userId,
+                httpRequest.getRemoteAddr(),
+                httpRequest.getHeader("X-Device-Id"),
+                null);
+        if (!reserveRateLimit.allowed()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new FlowResultResponseDto(false, "Reserve rate limit exceeded", wallet.getId(), null, "wallet.reservation.failed"));
+        }
+
         ReservationCommand command = new ReservationCommand(
                 wallet.getId(),
                 userId,
@@ -102,9 +121,21 @@ public class InternalWalletController {
     @PostMapping("/{userId}/reverse")
     public ResponseEntity<FlowResultResponseDto> reverse(
             @PathVariable UUID userId,
-            @Valid @RequestBody InternalReservationActionRequestDto request
+            @Valid @RequestBody InternalReservationActionRequestDto request,
+            HttpServletRequest httpRequest
     ) {
         Wallet wallet = walletByUser(userId);
+        WalletOperationRateLimitService.RateLimitResult reverseRateLimit = operationRateLimitService.enforce(
+                WalletOperationRateLimitService.Operation.REVERSE,
+                userId,
+                httpRequest.getRemoteAddr(),
+                httpRequest.getHeader("X-Device-Id"),
+                null);
+        if (!reverseRateLimit.allowed()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new FlowResultResponseDto(false, "Reverse rate limit exceeded", wallet.getId(), null, "wallet.reservation.failed"));
+        }
+
         WalletFlowResult result = walletService.releaseReservation(request.getReservationId(), request.getIdempotencyKey());
         AUDIT_LOG.info("internal_wallet_reverse userId={} walletId={} reservationId={} success={} message={}",
                 userId, wallet.getId(), request.getReservationId(), result.success(), result.message());

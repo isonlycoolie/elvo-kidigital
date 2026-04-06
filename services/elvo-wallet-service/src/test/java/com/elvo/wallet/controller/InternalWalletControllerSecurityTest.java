@@ -1,11 +1,5 @@
 package com.elvo.wallet.controller;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -16,6 +10,7 @@ import java.util.UUID;
 import javax.crypto.SecretKey;
 
 import org.junit.jupiter.api.Test;
+import static org.mockito.Mockito.when;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -23,6 +18,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.exception.GlobalExceptionHandler;
@@ -30,6 +28,7 @@ import com.elvo.wallet.mapper.WalletMapper;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.InternalServiceAuthorizationMatrix;
 import com.elvo.wallet.security.SecurityConfig;
+import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
 
 import io.jsonwebtoken.Jwts;
@@ -59,6 +58,9 @@ class InternalWalletControllerSecurityTest {
 
     @MockBean
     private WalletService walletService;
+
+        @MockBean
+        private WalletOperationRateLimitService operationRateLimitService;
 
     @Test
     void internalBalanceShouldRejectUnauthorizedSourceService() throws Exception {
