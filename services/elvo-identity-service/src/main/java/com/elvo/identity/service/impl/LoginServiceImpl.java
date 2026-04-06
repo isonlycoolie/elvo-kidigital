@@ -62,6 +62,7 @@ public class LoginServiceImpl implements LoginService {
             securityProtectionService.enforcePerUserRateLimit(user);
             securityProtectionService.ensureAccountNotLocked(user);
             validatePassword(user, request.getPassword(), request);
+            enforcePendingLifecycle(user, request.getIdentifier());
             validateUserStatus(user);
             enforceChannelVerification(user, request.getIdentifier());
             validateMfaIfRequired(user, request);
@@ -147,6 +148,26 @@ public class LoginServiceImpl implements LoginService {
         }
     }
 
+    private void enforcePendingLifecycle(User user, String identifier) {
+        if (user.getAccountStatus() != User.AccountStatus.PENDING_VERIFICATION) {
+            return;
+        }
+
+        Instant deadline = user.getVerificationDeadline();
+        if (deadline != null && Instant.now().isAfter(deadline)) {
+            throw new IllegalStateException("Pending registration expired. Restart registration");
+        }
+
+        boolean emailLogin = identifier != null && identifier.contains("@");
+        if (emailLogin && !user.isEmailVerified()) {
+            throw new PendingVerificationException("Email verification is required", user.getId());
+        }
+
+        if (!emailLogin && !user.isMobileVerified()) {
+            throw new PendingVerificationException("Mobile verification is required", user.getId());
+        }
+    }
+
     private void enforceChannelVerification(User user, String identifier) {
         boolean emailLogin = identifier != null && identifier.contains("@");
         if (emailLogin && !user.isEmailVerified()) {
@@ -210,6 +231,9 @@ public class LoginServiceImpl implements LoginService {
         }
         if ("Account is not active".equals(message)) {
             return "ACCOUNT_DISABLED";
+        }
+        if ("Pending registration expired. Restart registration".equals(message)) {
+            return "REGISTRATION_EXPIRED";
         }
         if ("MFA code is required".equals(message)) {
             return "MFA_REQUIRED";
