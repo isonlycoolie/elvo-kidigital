@@ -1,6 +1,8 @@
 package com.elvo.identity.service.impl;
 
 import java.util.Locale;
+import java.time.Duration;
+import java.time.Instant;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +22,8 @@ import com.elvo.identity.util.EanGenerator;
 
 @Service
 public class RegistrationServiceImpl implements RegistrationService {
+
+    private static final Duration DEFAULT_VERIFICATION_DEADLINE = Duration.ofHours(24);
 
     private final UserRepository userRepository;
     private final AuditRepository auditRepository;
@@ -111,6 +115,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         user.setMobileVerified(false);
         user.setVerificationStatus(User.VerificationStatus.UNVERIFIED);
         user.setAccountStatus(User.AccountStatus.PENDING_VERIFICATION);
+        user.setVerificationDeadline(Instant.now().plus(DEFAULT_VERIFICATION_DEADLINE));
         user.setEan(generateUniqueEan());
         return user;
     }

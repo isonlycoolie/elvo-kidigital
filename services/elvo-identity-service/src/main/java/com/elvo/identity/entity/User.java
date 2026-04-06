@@ -140,6 +140,9 @@ public class User {
     @Column(name = "account_status", nullable = false, length = 32)
     private AccountStatus accountStatus = AccountStatus.PENDING_VERIFICATION;
 
+    @Column(name = "verification_deadline")
+    private Instant verificationDeadline;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -151,6 +154,7 @@ public class User {
     public enum AccountStatus {
         PENDING_VERIFICATION,
         ACTIVE,
+        EXPIRED,
         LOCKED,
         SUSPENDED,
         DISABLED
@@ -436,6 +440,14 @@ public class User {
 
     public void setAccountStatus(AccountStatus accountStatus) {
         this.accountStatus = accountStatus;
+    }
+
+    public Instant getVerificationDeadline() {
+        return verificationDeadline;
+    }
+
+    public void setVerificationDeadline(Instant verificationDeadline) {
+        this.verificationDeadline = verificationDeadline;
     }
 
     public Instant getCreatedAt() {
