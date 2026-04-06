@@ -145,7 +145,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Step-up authentication required");
         }
 
-        if (command.mode() != WithdrawalMode.OTHER_NUMBER) {
+        if (command.mode() == WithdrawalMode.REGISTERED_NUMBER) {
             EacReplayProtectionService.EacValidationResult replayCheck = eacReplayProtectionService.validateAndConsume(
                     command.userId(),
                     command.eacCode(),
@@ -226,6 +226,21 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         if (command.mode() == WithdrawalMode.DEVICE_FREE) {
             transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.AWAITING_CONFIRMATION,
                 "Waiting for device-free withdrawal confirmation", correlationId(), null, null);
+
+            EacReplayProtectionService.EacValidationResult replayCheck = eacReplayProtectionService.validateAndConsume(
+                    command.userId(),
+                    command.eacCode(),
+                    replayBinding(command)
+            );
+            if (!replayCheck.accepted()) {
+                if (isExpiredEac(replayCheck.message())) {
+                    transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.EXPIRED,
+                        "Device-free withdrawal confirmation expired", correlationId(), "WITHDRAWAL_DEVICE_EXPIRED", replayCheck.message());
+                    return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Device-free withdrawal expired");
+                }
+                return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, replayCheck.message());
+            }
+
             transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.RESERVED,
                 "Funds reserved for device-free payout", correlationId(), null, null);
         }
