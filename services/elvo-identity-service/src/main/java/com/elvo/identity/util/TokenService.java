@@ -3,6 +3,7 @@ package com.elvo.identity.util;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 
 import javax.crypto.SecretKey;
@@ -22,6 +23,10 @@ public class TokenService {
     private static final String ACCESS_TOKEN_TYPE = "ACCESS";
     private static final String REFRESH_TOKEN_TYPE = "REFRESH";
     private static final String EAN_CLAIM = "ean";
+    private static final String ROLES_CLAIM = "roles";
+    private static final String SCOPES_CLAIM = "scopes";
+    private static final List<String> DEFAULT_ROLES = List.of("USER");
+    private static final List<String> DEFAULT_SCOPES = List.of("wallet:read", "wallet:write");
 
     private final SecretKey signingKey;
     private final String issuer;
@@ -52,6 +57,10 @@ public class TokenService {
     }
 
     public TokenPayload generateAccessToken(UUID userId, String ean) {
+        return generateAccessToken(userId, ean, DEFAULT_ROLES, DEFAULT_SCOPES);
+    }
+
+    public TokenPayload generateAccessToken(UUID userId, String ean, List<String> roles, List<String> scopes) {
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(accessTokenTtlMinutes * 60);
         String token = Jwts.builder()
@@ -61,6 +70,8 @@ public class TokenService {
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiresAt))
                 .claim(EAN_CLAIM, ean)
+                .claim(ROLES_CLAIM, sanitizeRequiredStringListClaim(roles, ROLES_CLAIM))
+                .claim(SCOPES_CLAIM, sanitizeRequiredStringListClaim(scopes, SCOPES_CLAIM))
                 .claim(TOKEN_TYPE_CLAIM, ACCESS_TOKEN_TYPE)
                 .id(UUID.randomUUID().toString())
                 .signWith(signingKey)
@@ -95,8 +106,10 @@ public class TokenService {
         if (ean == null || ean.isBlank()) {
             throw new IllegalArgumentException("Token payload is invalid");
         }
+        List<String> roles = parseRequiredStringListClaim(claims.get(ROLES_CLAIM), ROLES_CLAIM);
+        List<String> scopes = parseRequiredStringListClaim(claims.get(SCOPES_CLAIM), SCOPES_CLAIM);
 
-        return new AccessTokenClaims(userId, ean, claims.getExpiration().toInstant());
+        return new AccessTokenClaims(userId, ean, roles, scopes, claims.getExpiration().toInstant());
     }
 
     public RefreshTokenClaims validateRefreshToken(String token) {
@@ -131,10 +144,42 @@ public class TokenService {
         }
     }
 
+    private List<String> sanitizeRequiredStringListClaim(List<String> values, String claimName) {
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("Token " + claimName + " claim is invalid");
+        }
+        List<String> sanitized = values.stream()
+                .filter(v -> v != null && !v.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+        if (sanitized.isEmpty()) {
+            throw new IllegalArgumentException("Token " + claimName + " claim is invalid");
+        }
+        return sanitized;
+    }
+
+    private List<String> parseRequiredStringListClaim(Object claimValue, String claimName) {
+        if (!(claimValue instanceof List<?> rawValues) || rawValues.isEmpty()) {
+            throw new IllegalArgumentException("Token " + claimName + " claim is invalid");
+        }
+        List<String> parsed = rawValues.stream()
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .map(String::trim)
+                .filter(v -> !v.isBlank())
+                .distinct()
+                .toList();
+        if (parsed.isEmpty() || parsed.size() != rawValues.size()) {
+            throw new IllegalArgumentException("Token " + claimName + " claim is invalid");
+        }
+        return parsed;
+    }
+
     public record TokenPayload(String token, Instant expiresAt) {
     }
 
-    public record AccessTokenClaims(UUID userId, String ean, Instant expiresAt) {
+    public record AccessTokenClaims(UUID userId, String ean, List<String> roles, List<String> scopes, Instant expiresAt) {
     }
 
     public record RefreshTokenClaims(UUID userId, Instant expiresAt) {
