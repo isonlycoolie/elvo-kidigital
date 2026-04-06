@@ -13,7 +13,15 @@ public class EtcCodeSecurityService {
 
     private final String hashPepper;
 
-    public EtcCodeSecurityService(@Value("${elvo.security.etc.hash-pepper:elvo-wallet-etc-pepper}") String hashPepper) {
+    public EtcCodeSecurityService(@Value("${elvo.security.etc.hash-pepper:}") String hashPepper) {
+        // SECURITY: Reject hardcoded default pepper. Must use secret manager.
+        if (hashPepper == null || hashPepper.trim().isEmpty() || "elvo-wallet-etc-pepper".equalsIgnoreCase(hashPepper.trim())) {
+            throw new IllegalStateException(
+                "ETC code hash pepper must be securely configured via environment variable ELVO_ETC_HASH_PEPPER_REF " +
+                "pointing to secret manager (e.g., sm://wallet-etc-hash-pepper). " +
+                "Hardcoded or default pepper values are not permitted for security compliance."
+            );
+        }
         this.hashPepper = hashPepper;
     }
 

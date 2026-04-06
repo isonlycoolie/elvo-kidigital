@@ -6,9 +6,10 @@ spring:
   config:
     import: optional:classpath:/shared/config-lib.yml,optional:classpath:/shared/messaging-lib.yml,optional:file:./config/application-database.yml,optional:file:./config/application-messaging.yml,optional:file:./config/application-security.yml
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/elvo_wallet}
-    username: ${DB_USER:${ELVO_DB_USER:elvo}}
-    password: ${DB_PASS:${ELVO_DB_PASSWORD:elvo}}
+    # SECURITY: Database credentials must be provided via environment variables. No defaults allowed.
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASS}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -21,7 +22,8 @@ spring:
       url: ${REDIS_URL:redis://localhost:6379}
       timeout: ${ELVO_REDIS_TIMEOUT_MS:5000}
   rabbitmq:
-    addresses: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672}
+    # SECURITY: RabbitMQ credentials must be provided via environment variable. Guest account must never be used.
+    addresses: ${RABBITMQ_URL}
 
 management:
   metrics:
@@ -58,13 +60,16 @@ sentry:
     platform: spring-boot
 
 elvo:
+  wallet:
+    default-currency: ${ELVO_WALLET_DEFAULT_CURRENCY:TZS}
   messaging:
     outbox:
       max-attempts: ${ELVO_OUTBOX_MAX_ATTEMPTS:6}
       base-backoff-seconds: ${ELVO_OUTBOX_BASE_BACKOFF_SECONDS:2}
   clients:
     identity:
-      base-url: ${ELVO_IDENTITY_INTERNAL_BASE_URL:http://localhost:8081/internal}
+      # SECURITY: Identity service must use HTTPS. Update ELVO_IDENTITY_INTERNAL_BASE_URL in production.
+      base-url: ${ELVO_IDENTITY_INTERNAL_BASE_URL:https://localhost:8381/internal}
       source-service-name: ${ELVO_IDENTITY_CLIENT_SOURCE_SERVICE:wallet-service}
       client-source-ip: ${ELVO_IDENTITY_CLIENT_SOURCE_IP:wallet-service}
       client-source-user-agent: ${ELVO_IDENTITY_CLIENT_SOURCE_USER_AGENT:wallet-service-client}
@@ -132,7 +137,8 @@ elvo:
       replay:
         window-seconds: ${ELVO_EAC_REPLAY_WINDOW_SECONDS:300}
     etc:
-      hash-pepper: ${ELVO_ETC_HASH_PEPPER:}
+      # SECURITY: ETC hash pepper must be loaded from secret manager, never hardcoded
+      hash-pepper: ${ELVO_ETC_HASH_PEPPER_REF:sm://wallet-etc-hash-pepper}
       min-secure-length: ${ELVO_ETC_MIN_SECURE_LENGTH:12}
       max-expiry-window-seconds: ${ELVO_ETC_MAX_EXPIRY_WINDOW_SECONDS:900}
       bruteforce:
