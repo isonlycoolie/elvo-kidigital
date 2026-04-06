@@ -47,6 +47,34 @@ public class Transaction {
     @Column(name = "status", nullable = false, length = 32)
     private TransactionStatus status = TransactionStatus.INITIATED;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "previous_status", length = 32)
+    private TransactionStatus previousStatus;
+
+    @Column(name = "status_reason", length = 512)
+    private String statusReason;
+
+    @Column(name = "status_updated_at")
+    private Instant statusUpdatedAt;
+
+    @Column(name = "external_reference", length = 128)
+    private String externalReference;
+
+    @Column(name = "correlation_id", length = 128)
+    private String correlationId;
+
+    @Column(name = "retry_count")
+    private Integer retryCount = 0;
+
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
+    @Column(name = "failure_code", length = 64)
+    private String failureCode;
+
+    @Column(name = "failure_message", length = 512)
+    private String failureMessage;
+
     @Column(name = "reference", nullable = false, length = 128)
     private String reference;
 
@@ -131,6 +159,78 @@ public class Transaction {
 
     public void setStatus(TransactionStatus status) {
         this.status = status;
+    }
+
+    public TransactionStatus getPreviousStatus() {
+        return previousStatus;
+    }
+
+    public void setPreviousStatus(TransactionStatus previousStatus) {
+        this.previousStatus = previousStatus;
+    }
+
+    public String getStatusReason() {
+        return statusReason;
+    }
+
+    public void setStatusReason(String statusReason) {
+        this.statusReason = statusReason;
+    }
+
+    public Instant getStatusUpdatedAt() {
+        return statusUpdatedAt;
+    }
+
+    public void setStatusUpdatedAt(Instant statusUpdatedAt) {
+        this.statusUpdatedAt = statusUpdatedAt;
+    }
+
+    public String getExternalReference() {
+        return externalReference;
+    }
+
+    public void setExternalReference(String externalReference) {
+        this.externalReference = externalReference;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
+    }
+
+    public Integer getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(Integer retryCount) {
+        this.retryCount = retryCount;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(Instant expiresAt) {
+        this.expiresAt = expiresAt;
+    }
+
+    public String getFailureCode() {
+        return failureCode;
+    }
+
+    public void setFailureCode(String failureCode) {
+        this.failureCode = failureCode;
+    }
+
+    public String getFailureMessage() {
+        return failureMessage;
+    }
+
+    public void setFailureMessage(String failureMessage) {
+        this.failureMessage = failureMessage;
     }
 
     public String getReference() {
