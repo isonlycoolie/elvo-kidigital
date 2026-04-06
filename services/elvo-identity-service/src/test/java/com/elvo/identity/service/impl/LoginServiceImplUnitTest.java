@@ -20,6 +20,7 @@ import com.elvo.identity.audit.AuditEventPublisher;
 import com.elvo.identity.dto.request.LoginRequest;
 import com.elvo.identity.entity.Audit;
 import com.elvo.identity.entity.User;
+import com.elvo.identity.exception.PendingVerificationException;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.DeviceRepository;
 import com.elvo.identity.repository.SessionRepository;
@@ -98,5 +99,50 @@ class LoginServiceImplUnitTest {
             audit.getDescription() != null
                 && audit.getDescription().startsWith("AUTH_FAILURE|flow=login|reason=ACCOUNT_DISABLED")));
         verify(auditEventPublisher).publish(any(Audit.class));
+    }
+
+    @Test
+    void pendingUserLoginShouldReturnVerificationRequired() {
+        User user = new User();
+        user.setEmail("pending@elvo.com");
+        user.setHashedPassword("hashed-password");
+        user.setAccountStatus(User.AccountStatus.PENDING_VERIFICATION);
+        user.setVerificationDeadline(java.time.Instant.now().plusSeconds(600));
+        user.setEmailVerified(false);
+
+        LoginRequest request = new LoginRequest();
+        request.setIdentifier("pending@elvo.com");
+        request.setPassword("Password123");
+        request.setDeviceId("device-1");
+        request.setDeviceType("ANDROID");
+
+        when(userRepository.findByEmailIgnoreCase("pending@elvo.com")).thenReturn(Optional.of(user));
+        when(hashingService.verifyPassword("Password123", "hashed-password")).thenReturn(true);
+        when(auditRepository.save(any(Audit.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PendingVerificationException ex = assertThrows(PendingVerificationException.class, () -> loginService.login(request));
+        assertEquals("Email verification is required", ex.getMessage());
+    }
+
+    @Test
+    void expiredPendingLoginShouldRequireRestart() {
+        User user = new User();
+        user.setEmail("expired@elvo.com");
+        user.setHashedPassword("hashed-password");
+        user.setAccountStatus(User.AccountStatus.PENDING_VERIFICATION);
+        user.setVerificationDeadline(java.time.Instant.now().minusSeconds(5));
+
+        LoginRequest request = new LoginRequest();
+        request.setIdentifier("expired@elvo.com");
+        request.setPassword("Password123");
+        request.setDeviceId("device-1");
+        request.setDeviceType("ANDROID");
+
+        when(userRepository.findByEmailIgnoreCase("expired@elvo.com")).thenReturn(Optional.of(user));
+        when(hashingService.verifyPassword("Password123", "hashed-password")).thenReturn(true);
+        when(auditRepository.save(any(Audit.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> loginService.login(request));
+        assertEquals("Pending registration expired. Restart registration", ex.getMessage());
     }
 }
