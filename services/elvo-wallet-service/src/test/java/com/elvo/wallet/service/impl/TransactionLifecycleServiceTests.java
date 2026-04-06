@@ -184,6 +184,31 @@ class TransactionLifecycleServiceTests {
             Transaction.TransactionStatus.PROCESSING)).isTrue();
         }
 
+            @Test
+            void retryAndReversalPathsShouldNotConflict() {
+            assertThat(service.canTransition(
+                Transaction.TransactionStatus.RETRYING,
+                Transaction.TransactionStatus.REVERSED)).isFalse();
+            assertThat(service.canTransition(
+                Transaction.TransactionStatus.REVERSED,
+                Transaction.TransactionStatus.RETRYING)).isFalse();
+            }
+
+            @Test
+            void transitionShouldRejectRetryAfterReversal() {
+            Transaction transaction = newTransaction(Transaction.TransactionStatus.REVERSED);
+
+            assertThatThrownBy(() -> service.transition(
+                transaction,
+                Transaction.TransactionStatus.RETRYING,
+                "retry after reversal",
+                "corr-r1",
+                null,
+                null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Invalid transaction transition from REVERSED to RETRYING");
+            }
+
     private Transaction newTransaction(Transaction.TransactionStatus status) {
         Transaction transaction = new Transaction();
         transaction.setStatus(status);
