@@ -9,20 +9,28 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import com.elvo.wallet.security.WalletFieldEncryptionService;
+
 @Service
 public class MobileCallbackReconciliationService {
 
     private static final Logger AUDIT_LOG = LoggerFactory.getLogger("audit.wallet.reconciliation");
 
     private final Map<String, ReconciliationEntry> pendingCallbacks = new ConcurrentHashMap<>();
+    private final WalletFieldEncryptionService fieldEncryptionService;
+
+    public MobileCallbackReconciliationService(WalletFieldEncryptionService fieldEncryptionService) {
+        this.fieldEncryptionService = fieldEncryptionService;
+    }
 
     public void scheduleRetry(String callbackReference, UUID walletId, BigDecimal amount) {
         if (callbackReference == null || callbackReference.isBlank()) {
             return;
         }
-        pendingCallbacks.put(callbackReference, new ReconciliationEntry(walletId, amount, 1));
+        String protectedReference = protect(callbackReference);
+        pendingCallbacks.put(protectedReference, new ReconciliationEntry(walletId, amount, 1));
         AUDIT_LOG.info("mobile_callback_retry_scheduled callbackReference={} walletId={} amount={}",
-                callbackReference,
+                protectedReference,
                 walletId,
                 amount);
     }
@@ -31,8 +39,13 @@ public class MobileCallbackReconciliationService {
         if (callbackReference == null || callbackReference.isBlank()) {
             return;
         }
-        pendingCallbacks.remove(callbackReference);
-        AUDIT_LOG.info("mobile_callback_reconciled callbackReference={}", callbackReference);
+        String protectedReference = protect(callbackReference);
+        pendingCallbacks.remove(protectedReference);
+        AUDIT_LOG.info("mobile_callback_reconciled callbackReference={}", protectedReference);
+    }
+
+    private String protect(String callbackReference) {
+        return fieldEncryptionService.encrypt(callbackReference.trim());
     }
 
     private record ReconciliationEntry(UUID walletId, BigDecimal amount, int attempts) {
