@@ -764,6 +764,114 @@ class WalletFlowServiceTests {
                         .transition(any(Transaction.class), eq(Transaction.TransactionStatus.REVERSED), anyString(), any(), eq("TRANSFER_REVERSED"), any());
             }
 
+            @Test
+            void transferShouldPersistFailureCodeWhenBalanceIsInsufficient() {
+                Wallet sourceWallet = new Wallet();
+                ReflectionTestUtils.setField(sourceWallet, "id", UUID.randomUUID());
+                sourceWallet.setUserId(UUID.randomUUID());
+                sourceWallet.setBalance(new BigDecimal("10.00"));
+                sourceWallet.setReservedBalance(BigDecimal.ZERO);
+                sourceWallet.setStatus(Wallet.WalletStatus.ACTIVE);
+
+                Wallet targetWallet = new Wallet();
+                ReflectionTestUtils.setField(targetWallet, "id", UUID.randomUUID());
+                targetWallet.setUserId(UUID.randomUUID());
+                targetWallet.setBalance(new BigDecimal("80.00"));
+                targetWallet.setReservedBalance(BigDecimal.ZERO);
+                targetWallet.setStatus(Wallet.WalletStatus.ACTIVE);
+
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
+                when(stepUpAuthenticationService.requiresStepUpForTransfer(any())).thenReturn(false);
+                when(walletRepository.findByIdForUpdate(sourceWallet.getId())).thenReturn(Optional.of(sourceWallet));
+                when(walletRepository.findByIdForUpdate(targetWallet.getId())).thenReturn(Optional.of(targetWallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+                when(transactionRepository.findByExternalReferenceAndStatusInForUpdate(anyString(), any())).thenReturn(java.util.List.of());
+                when(transactionRepository.existsByReference(anyString())).thenReturn(false);
+
+                DefaultTransferFlowService service = new DefaultTransferFlowService(
+                        walletRepository,
+                        transactionRepository,
+                        idempotencyService,
+                        ledgerIntegrationService,
+                        limitEnforcementService,
+                        sagaOrchestrator,
+                        eventPublisher,
+                        stepUpAuthenticationService,
+                        transactionSigningChallengeService,
+                        fraudVelocityService,
+                        fieldEncryptionService,
+                        transactionLifecycleService);
+
+                WalletFlowResult result = service.process(new TransferCommand(
+                        sourceWallet.getId(),
+                        targetWallet.getId(),
+                        sourceWallet.getUserId(),
+                        new BigDecimal("20.00"),
+                        "idem-transfer-insufficient",
+                        "transfer-insufficient-ref",
+                        null,
+                        null,
+                        null));
+
+                assertThat(result.success()).isFalse();
+                assertThat(result.message()).isEqualTo("Insufficient balance for transfer");
+                verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.FAILED), anyString(), any(), eq("TRANSFER_INSUFFICIENT_BALANCE"), eq("Insufficient balance for transfer"));
+            }
+
+            @Test
+            void transferShouldPersistFailureCodeWhenLimitValidationFails() {
+                Wallet sourceWallet = new Wallet();
+                ReflectionTestUtils.setField(sourceWallet, "id", UUID.randomUUID());
+                sourceWallet.setUserId(UUID.randomUUID());
+                sourceWallet.setBalance(new BigDecimal("200.00"));
+                sourceWallet.setReservedBalance(BigDecimal.ZERO);
+                sourceWallet.setStatus(Wallet.WalletStatus.ACTIVE);
+
+                Wallet targetWallet = new Wallet();
+                ReflectionTestUtils.setField(targetWallet, "id", UUID.randomUUID());
+                targetWallet.setUserId(UUID.randomUUID());
+                targetWallet.setBalance(new BigDecimal("40.00"));
+                targetWallet.setReservedBalance(BigDecimal.ZERO);
+                targetWallet.setStatus(Wallet.WalletStatus.ACTIVE);
+
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
+                when(stepUpAuthenticationService.requiresStepUpForTransfer(any())).thenReturn(false);
+                when(walletRepository.findByIdForUpdate(sourceWallet.getId())).thenReturn(Optional.of(sourceWallet));
+                when(walletRepository.findByIdForUpdate(targetWallet.getId())).thenReturn(Optional.of(targetWallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(false);
+
+                DefaultTransferFlowService service = new DefaultTransferFlowService(
+                        walletRepository,
+                        transactionRepository,
+                        idempotencyService,
+                        ledgerIntegrationService,
+                        limitEnforcementService,
+                        sagaOrchestrator,
+                        eventPublisher,
+                        stepUpAuthenticationService,
+                        transactionSigningChallengeService,
+                        fraudVelocityService,
+                        fieldEncryptionService,
+                        transactionLifecycleService);
+
+                WalletFlowResult result = service.process(new TransferCommand(
+                        sourceWallet.getId(),
+                        targetWallet.getId(),
+                        sourceWallet.getUserId(),
+                        new BigDecimal("25.00"),
+                        "idem-transfer-limit",
+                        "transfer-limit-ref",
+                        null,
+                        null,
+                        null));
+
+                assertThat(result.success()).isFalse();
+                assertThat(result.message()).isEqualTo("Transfer limits exceeded");
+                verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.FAILED), anyString(), any(), eq("TRANSFER_LIMIT_EXCEEDED"), eq("Transfer limits exceeded"));
+            }
+
     @Test
     void mobileDepositShouldFailWhenCallbackReferenceIsMissing() {
         UUID walletId = UUID.randomUUID();

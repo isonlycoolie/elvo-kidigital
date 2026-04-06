@@ -124,12 +124,15 @@ public class DefaultTransferFlowService implements TransferFlowService {
         }
 
         String sagaReference = resolveReference(command.reference(), command.idempotencyKey());
+        String transferReference = sagaReference;
         sagaOrchestrator.begin("transfer", command.sourceWalletId(), command.amount(), sagaReference);
 
         Wallet source = walletRepository.findByIdForUpdate(command.sourceWalletId()).orElse(null);
         Wallet target = walletRepository.findByIdForUpdate(command.targetWalletId()).orElse(null);
 
         if (source != null && !limitEnforcementService.validate(source.getId(), WalletLimitEnforcementService.FlowType.TRANSFER, command.amount())) {
+            recordFailedTransfer(source, command.amount(), transferReference,
+                "Transfer limits exceeded", "TRANSFER_LIMIT_EXCEEDED");
             return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Transfer limits exceeded");
         }
 
@@ -141,7 +144,6 @@ public class DefaultTransferFlowService implements TransferFlowService {
             return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Source or target wallet is frozen");
         }
 
-        String transferReference = resolveReference(command.reference(), command.idempotencyKey());
         String encryptedTransferReference = fieldEncryptionService.encrypt(transferReference);
         if (!transactionRepository.findByExternalReferenceAndStatusInForUpdate(
                 transferReference,
@@ -162,6 +164,8 @@ public class DefaultTransferFlowService implements TransferFlowService {
 
         BigDecimal available = source.getBalance().subtract(source.getReservedBalance());
         if (available.compareTo(command.amount()) < 0) {
+            recordFailedTransfer(source, command.amount(), transferReference,
+                "Insufficient balance for transfer", "TRANSFER_INSUFFICIENT_BALANCE");
             return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Insufficient balance for transfer");
         }
 
@@ -287,6 +291,35 @@ public class DefaultTransferFlowService implements TransferFlowService {
             transactionLifecycleService.transition(transaction, status, reason, correlationId(), failureCode, failureMessage);
         } catch (RuntimeException ignored) {
             // Best effort lifecycle transition during failure handling.
+        }
+    }
+
+    private void recordFailedTransfer(Wallet wallet,
+                                      BigDecimal amount,
+                                      String transferReference,
+                                      String reason,
+                                      String failureCode) {
+        try {
+            Transaction failedTransaction = new Transaction();
+            failedTransaction.setWallet(wallet);
+            failedTransaction.setType(Transaction.TransactionType.TRANSFER);
+            failedTransaction.setAmount(amount);
+            failedTransaction.setReference(fieldEncryptionService.encrypt(transferReference + "-failed"));
+            failedTransaction.setExternalReference(transferReference);
+            failedTransaction = transactionLifecycleService.initialize(
+                failedTransaction,
+                "Transfer initiated",
+                correlationId(),
+                transferReference);
+            transactionLifecycleService.transition(
+                failedTransaction,
+                Transaction.TransactionStatus.FAILED,
+                reason,
+                correlationId(),
+                failureCode,
+                reason);
+        } catch (RuntimeException ignored) {
+            // Best effort failure capture; response path still reports failure.
         }
     }
 }
