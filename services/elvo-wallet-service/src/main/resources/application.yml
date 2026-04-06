@@ -58,6 +58,15 @@ sentry:
     platform: spring-boot
 
 elvo:
+  clients:
+    identity:
+      base-url: ${ELVO_IDENTITY_INTERNAL_BASE_URL:http://localhost:8081/internal}
+      source-service-name: ${ELVO_IDENTITY_CLIENT_SOURCE_SERVICE:wallet-service}
+      client-source-ip: ${ELVO_IDENTITY_CLIENT_SOURCE_IP:wallet-service}
+      client-source-user-agent: ${ELVO_IDENTITY_CLIENT_SOURCE_USER_AGENT:wallet-service-client}
+      token-ttl-seconds: ${ELVO_IDENTITY_CLIENT_TOKEN_TTL_SECONDS:60}
+      connect-timeout-seconds: ${ELVO_IDENTITY_CLIENT_CONNECT_TIMEOUT_SECONDS:3}
+      read-timeout-seconds: ${ELVO_IDENTITY_CLIENT_READ_TIMEOUT_SECONDS:5}
   monitoring:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:wallet-service}
