@@ -9,6 +9,8 @@ public record TransferCommand(
         UUID userId,
         BigDecimal amount,
         String idempotencyKey,
-        String reference
+        String reference,
+        String stepUpMethod,
+        String stepUpToken
 ) {
 }

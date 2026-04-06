@@ -13,6 +13,7 @@ import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.security.StepUpAuthenticationService;
 import com.elvo.wallet.service.TransferFlowService;
 import com.elvo.wallet.service.model.TransferCommand;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -30,6 +31,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
     private final WalletLimitEnforcementService limitEnforcementService;
     private final WalletSagaOrchestrator sagaOrchestrator;
     private final WalletEventPublisher eventPublisher;
+    private final StepUpAuthenticationService stepUpAuthenticationService;
 
     public DefaultTransferFlowService(WalletRepository walletRepository,
                                       TransactionRepository transactionRepository,
@@ -37,7 +39,8 @@ public class DefaultTransferFlowService implements TransferFlowService {
                                       WalletLedgerIntegrationService ledgerIntegrationService,
                                       WalletLimitEnforcementService limitEnforcementService,
                                       WalletSagaOrchestrator sagaOrchestrator,
-                                      WalletEventPublisher eventPublisher) {
+                                      WalletEventPublisher eventPublisher,
+                                      StepUpAuthenticationService stepUpAuthenticationService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.idempotencyService = idempotencyService;
@@ -45,6 +48,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
         this.limitEnforcementService = limitEnforcementService;
         this.sagaOrchestrator = sagaOrchestrator;
         this.eventPublisher = eventPublisher;
+        this.stepUpAuthenticationService = stepUpAuthenticationService;
     }
 
     @Override
@@ -64,6 +68,14 @@ public class DefaultTransferFlowService implements TransferFlowService {
 
         if (command.idempotencyKey() == null || command.idempotencyKey().isBlank()) {
             return WalletFlowResult.failure("Idempotency key is required", command.sourceWalletId(), "wallet.transfer.failed");
+        }
+
+        if (stepUpAuthenticationService.requiresStepUpForTransfer(command.amount())
+                && !stepUpAuthenticationService.isValidConfirmation(
+                        command.stepUpMethod(),
+                        command.stepUpToken(),
+                        transferBinding(command))) {
+            return failed(command.sourceWalletId(), command.idempotencyKey(), "Step-up authentication required");
         }
 
         WalletFlowResult duplicate = idempotencyService.get(command.idempotencyKey()).orElse(null);
@@ -168,5 +180,10 @@ public class DefaultTransferFlowService implements TransferFlowService {
             return reference;
         }
         return "trf-" + idempotencyKey + "-" + UUID.randomUUID();
+    }
+
+    private String transferBinding(TransferCommand command) {
+        String amount = command.amount() == null ? "0" : command.amount().stripTrailingZeros().toPlainString();
+        return command.sourceWalletId() + ":" + command.targetWalletId() + ":" + amount;
     }
 }

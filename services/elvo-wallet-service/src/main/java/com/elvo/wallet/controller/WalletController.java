@@ -214,7 +214,9 @@ public class WalletController {
                 request.getEspCode(),
                 request.getEacCode(),
                 request.getIdempotencyKey(),
-                reference
+                reference,
+                request.getStepUpMethod(),
+                request.getStepUpToken()
             );
 
             WalletFlowResult result = walletService.processWithdrawal(command);
@@ -260,7 +262,9 @@ public class WalletController {
             userId,
             request.getAmount(),
             request.getIdempotencyKey(),
-            reference
+            reference,
+            request.getStepUpMethod(),
+            request.getStepUpToken()
         );
 
         WalletFlowResult result = walletService.processTransfer(command);

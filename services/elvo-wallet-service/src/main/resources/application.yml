@@ -96,3 +96,6 @@ elvo:
         max-attempts-per-device: ${ELVO_ETC_MAX_ATTEMPTS_PER_DEVICE:10}
         max-attempts-per-ip: ${ELVO_ETC_MAX_ATTEMPTS_PER_IP:20}
         window-seconds: ${ELVO_ETC_BRUTEFORCE_WINDOW_SECONDS:900}
+    step-up:
+      withdrawal-threshold: ${ELVO_STEP_UP_WITHDRAWAL_THRESHOLD:250.00}
+      transfer-threshold: ${ELVO_STEP_UP_TRANSFER_THRESHOLD:500.00}

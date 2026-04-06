@@ -12,6 +12,8 @@ public record WithdrawalCommand(
         String espCode,
         String eacCode,
         String idempotencyKey,
-        String reference
+        String reference,
+        String stepUpMethod,
+        String stepUpToken
 ) {
 }

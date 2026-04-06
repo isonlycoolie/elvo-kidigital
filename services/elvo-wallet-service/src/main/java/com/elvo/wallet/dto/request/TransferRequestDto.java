@@ -31,6 +31,13 @@ public class TransferRequestDto {
     @Pattern(regexp = "^[A-Za-z0-9._:-]*$", message = "Reference may only contain letters, numbers, dot, underscore, colon, and hyphen")
     private String reference;
 
+    @Pattern(regexp = "PASSWORD|PIN|BIOMETRIC|MFA", message = "Step-up method must be PASSWORD, PIN, BIOMETRIC, or MFA")
+    private String stepUpMethod;
+
+    @Size(max = 256, message = "Step-up token must be 256 characters or fewer")
+    @Pattern(regexp = "^[A-Za-z0-9._:-]*$", message = "Step-up token may only contain letters, numbers, dot, underscore, colon, and hyphen")
+    private String stepUpToken;
+
     public TransferRequestDto() {
     }
 
@@ -71,5 +78,21 @@ public class TransferRequestDto {
 
     public void setReference(String reference) {
         this.reference = reference;
+    }
+
+    public String getStepUpMethod() {
+        return stepUpMethod;
+    }
+
+    public void setStepUpMethod(String stepUpMethod) {
+        this.stepUpMethod = stepUpMethod;
+    }
+
+    public String getStepUpToken() {
+        return stepUpToken;
+    }
+
+    public void setStepUpToken(String stepUpToken) {
+        this.stepUpToken = stepUpToken;
     }
 }
