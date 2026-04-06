@@ -84,3 +84,6 @@ elvo:
           - POST:/api/v1/internal/wallets/*/reverse
         agent-service:
           - POST:/api/v1/internal/wallets/*/device-free-withdrawal
+    eac:
+      replay:
+        window-seconds: ${ELVO_EAC_REPLAY_WINDOW_SECONDS:300}

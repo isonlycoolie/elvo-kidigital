@@ -14,6 +14,7 @@ import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.service.EacReplayProtectionService;
 import com.elvo.wallet.service.WithdrawalFlowService;
 import com.elvo.wallet.service.model.WalletFlowResult;
 import com.elvo.wallet.service.model.WithdrawalMode;
@@ -33,6 +34,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     private final WalletLimitEnforcementService limitEnforcementService;
     private final WalletSagaOrchestrator sagaOrchestrator;
     private final WalletEventPublisher eventPublisher;
+    private final EacReplayProtectionService eacReplayProtectionService;
 
     public DefaultWithdrawalFlowService(WalletRepository walletRepository,
                                         TransactionRepository transactionRepository,
@@ -41,7 +43,8 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
                                         WalletLedgerIntegrationService ledgerIntegrationService,
                                         WalletLimitEnforcementService limitEnforcementService,
                                         WalletSagaOrchestrator sagaOrchestrator,
-                                        WalletEventPublisher eventPublisher) {
+                                        WalletEventPublisher eventPublisher,
+                                        EacReplayProtectionService eacReplayProtectionService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
@@ -50,6 +53,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         this.limitEnforcementService = limitEnforcementService;
         this.eventPublisher = eventPublisher;
         this.sagaOrchestrator = sagaOrchestrator;
+        this.eacReplayProtectionService = eacReplayProtectionService;
     }
 
     @Override
@@ -82,6 +86,15 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         if (!identityServiceClient.verifyEsp(command.userId(), command.espCode())
                 || !identityServiceClient.verifyEac(command.userId(), command.eacCode())) {
             return failed(command.walletId(), command.idempotencyKey(), "ESP/EAC verification failed");
+        }
+
+        EacReplayProtectionService.EacValidationResult replayCheck = eacReplayProtectionService.validateAndConsume(
+                command.userId(),
+                command.eacCode(),
+                replayBinding(command)
+        );
+        if (!replayCheck.accepted()) {
+            return failed(command.walletId(), command.idempotencyKey(), replayCheck.message());
         }
 
         if (command.mode() != WithdrawalMode.REGISTERED_NUMBER
@@ -167,5 +180,9 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             return reference;
         }
         return "wd-" + idempotencyKey + "-" + UUID.randomUUID();
+    }
+
+    private String replayBinding(WithdrawalCommand command) {
+        return command.walletId() + ":" + command.userId() + ":" + command.idempotencyKey();
     }
 }

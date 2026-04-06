@@ -31,6 +31,7 @@ import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.service.EacReplayProtectionService;
 import com.elvo.wallet.service.model.DepositCommand;
 import com.elvo.wallet.service.model.EtcCommand;
 import com.elvo.wallet.service.model.ReservationCommand;
@@ -56,6 +57,7 @@ class WalletFlowServiceTests {
     @Mock private WalletLimitEnforcementService limitEnforcementService;
     @Mock private WalletEventPublisher eventPublisher;
     @Mock private WalletSagaOrchestrator sagaOrchestrator;
+    @Mock private EacReplayProtectionService eacReplayProtectionService;
 
     private Wallet wallet;
 
@@ -124,7 +126,8 @@ class WalletFlowServiceTests {
                 ledgerIntegrationService,
                 limitEnforcementService,
                 sagaOrchestrator,
-                eventPublisher);
+            eventPublisher,
+            eacReplayProtectionService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(UUID.randomUUID(), wallet.getUserId(), new BigDecimal("10.00"), WithdrawalMode.DEVICE_FREE, "0900000000", "esp", "eac", "idem-2", "ref-2"));
 
@@ -132,6 +135,43 @@ class WalletFlowServiceTests {
         verify(walletRepository, never()).findByIdForUpdate(any());
         verify(eventPublisher).publish(eq("wallet.withdrawal.failed"), any());
     }
+
+        @Test
+        void withdrawalShouldFailWhenEacReplayDetected() {
+        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        when(identityServiceClient.isUserActive(any())).thenReturn(true);
+        when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
+        when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
+        when(eacReplayProtectionService.validateAndConsume(any(), anyString(), anyString()))
+            .thenReturn(EacReplayProtectionService.EacValidationResult.deny("EAC replay detected"));
+
+        DefaultWithdrawalFlowService service = new DefaultWithdrawalFlowService(
+            walletRepository,
+            transactionRepository,
+            identityServiceClient,
+            idempotencyService,
+            ledgerIntegrationService,
+            limitEnforcementService,
+            sagaOrchestrator,
+            eventPublisher,
+            eacReplayProtectionService);
+
+        WalletFlowResult result = service.process(new WithdrawalCommand(
+            UUID.randomUUID(),
+            wallet.getUserId(),
+            new BigDecimal("10.00"),
+            WithdrawalMode.DEVICE_FREE,
+            "0900000000",
+            "esp",
+            "eac",
+            "idem-22",
+            "ref-22"
+        ));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.message()).isEqualTo("EAC replay detected");
+        verify(walletRepository, never()).findByIdForUpdate(any());
+        }
 
     @Test
     void transferShouldRejectSelfTransfer() {
