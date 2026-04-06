@@ -95,6 +95,31 @@ class TransactionLifecycleServiceTests {
     }
 
     @Test
+    void shouldAllowValidTransitionsAcrossLifecycleFlows() {
+        assertThat(service.canTransition(Transaction.TransactionStatus.INITIATED, Transaction.TransactionStatus.PENDING)).isTrue();
+        assertThat(service.canTransition(Transaction.TransactionStatus.INITIATED, Transaction.TransactionStatus.PROCESSING)).isTrue();
+        assertThat(service.canTransition(Transaction.TransactionStatus.INITIATED, Transaction.TransactionStatus.AWAITING_CONFIRMATION)).isTrue();
+        assertThat(service.canTransition(Transaction.TransactionStatus.INITIATED, Transaction.TransactionStatus.RESERVED)).isTrue();
+
+        assertThat(service.canTransition(Transaction.TransactionStatus.PENDING, Transaction.TransactionStatus.PROCESSING)).isTrue();
+        assertThat(service.canTransition(Transaction.TransactionStatus.PENDING, Transaction.TransactionStatus.AWAITING_CONFIRMATION)).isTrue();
+
+        assertThat(service.canTransition(Transaction.TransactionStatus.AWAITING_CONFIRMATION, Transaction.TransactionStatus.RETRYING)).isTrue();
+        assertThat(service.canTransition(Transaction.TransactionStatus.AWAITING_CONFIRMATION, Transaction.TransactionStatus.PROCESSING)).isTrue();
+
+        assertThat(service.canTransition(Transaction.TransactionStatus.RETRYING, Transaction.TransactionStatus.PENDING)).isTrue();
+        assertThat(service.canTransition(Transaction.TransactionStatus.RETRYING, Transaction.TransactionStatus.PROCESSING)).isTrue();
+
+        assertThat(service.canTransition(Transaction.TransactionStatus.RESERVED, Transaction.TransactionStatus.RELEASED)).isTrue();
+        assertThat(service.canTransition(Transaction.TransactionStatus.RESERVED, Transaction.TransactionStatus.REVERSED)).isTrue();
+        assertThat(service.canTransition(Transaction.TransactionStatus.RELEASED, Transaction.TransactionStatus.COMPLETED)).isTrue();
+
+        assertThat(service.canTransition(Transaction.TransactionStatus.PROCESSING, Transaction.TransactionStatus.COMPLETED)).isTrue();
+        assertThat(service.canTransition(Transaction.TransactionStatus.PROCESSING, Transaction.TransactionStatus.FAILED)).isTrue();
+        assertThat(service.canTransition(Transaction.TransactionStatus.PROCESSING, Transaction.TransactionStatus.REVERSED)).isTrue();
+    }
+
+    @Test
     void expireOverdueTransactionsShouldExpireEligibleTransactions() {
         Transaction transaction = newTransaction(Transaction.TransactionStatus.PROCESSING);
         transaction.setExpiresAt(Instant.now().minusSeconds(60));
