@@ -1,20 +1,35 @@
 package com.elvo.wallet.security;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class MutualTlsProperties {
 
-    private boolean enabled = false;
+    private Boolean enabled;
     private String subjectPrincipalRegex = "CN=(.*?)(?:,|$)";
     private List<String> trustedCommonNames = new ArrayList<>();
 
-    public boolean isEnabled() {
+    public Boolean getEnabled() {
         return enabled;
     }
 
-    public void setEnabled(boolean enabled) {
+    public void setEnabled(Boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public boolean isEnabledForProfiles(String[] activeProfiles) {
+        if (enabled != null) {
+            return enabled;
+        }
+
+        if (activeProfiles == null || activeProfiles.length == 0) {
+            return true;
+        }
+
+        return Arrays.stream(activeProfiles)
+                .map(String::toLowerCase)
+                .noneMatch(profile -> profile.equals("local") || profile.equals("dev") || profile.equals("test"));
     }
 
     public String getSubjectPrincipalRegex() {

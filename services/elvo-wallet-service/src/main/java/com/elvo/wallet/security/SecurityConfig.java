@@ -3,6 +3,7 @@ package com.elvo.wallet.security;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -96,7 +97,8 @@ public class SecurityConfig {
             WalletBruteForceProtectionFilter bruteForceProtectionFilter,
             AuthenticationEntryPoint authenticationEntryPoint,
             MutualTlsProperties mutualTlsProperties,
-            UserDetailsService mutualTlsUserDetailsService) throws Exception {
+            UserDetailsService mutualTlsUserDetailsService,
+            Environment environment) throws Exception {
         HttpSecurity configured = http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -111,7 +113,7 @@ public class SecurityConfig {
                 .addFilterBefore(bruteForceProtectionFilter, org.springframework.security.web.authentication.www.BasicAuthenticationFilter.class)
                 .httpBasic(AbstractHttpConfigurer::disable);
 
-        if (mutualTlsProperties.isEnabled()) {
+        if (mutualTlsProperties.isEnabledForProfiles(environment.getActiveProfiles())) {
             configured.requiresChannel(channel -> channel
                     .requestMatchers("/api/v1/internal/**")
                     .requiresSecure());

@@ -100,7 +100,7 @@ elvo:
         agent-service:
           - POST:/api/v1/internal/wallets/*/device-free-withdrawal
     mtls:
-      enabled: ${ELVO_MTLS_ENABLED:false}
+      enabled: ${ELVO_MTLS_ENABLED:}
       subject-principal-regex: ${ELVO_MTLS_SUBJECT_REGEX:CN=(.*?)(?:,|$)}
       trusted-common-names:
         - ${ELVO_MTLS_CN_IDENTITY_SERVICE:identity-service}
