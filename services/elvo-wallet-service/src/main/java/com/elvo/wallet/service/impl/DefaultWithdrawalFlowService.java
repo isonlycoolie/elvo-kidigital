@@ -188,6 +188,10 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         transaction.setReference(fieldEncryptionService.encrypt(resolvedReference));
         transaction.setExternalReference(resolvedReference);
         transaction = transactionLifecycleService.initialize(transaction, "Withdrawal initiated", correlationId(), resolvedReference);
+        if (command.mode() == WithdrawalMode.REGISTERED_NUMBER) {
+            transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PENDING,
+                "Registered withdrawal queued", correlationId(), null, null);
+        }
         transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PROCESSING,
             "Posting withdrawal", correlationId(), null, null);
 

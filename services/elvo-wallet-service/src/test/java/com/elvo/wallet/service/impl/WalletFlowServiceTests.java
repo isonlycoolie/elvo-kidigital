@@ -273,6 +273,60 @@ class WalletFlowServiceTests {
         verify(eventPublisher).publish(eq("wallet.withdrawal.failed"), any());
     }
 
+        @Test
+        void registeredWithdrawalShouldFollowLifecycleStateFlow() {
+                UUID walletId = UUID.randomUUID();
+                wallet.setBalance(new BigDecimal("100.00"));
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
+                when(identityServiceClient.isUserActive(any())).thenReturn(true);
+                when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
+                when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
+                when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(false);
+                when(eacReplayProtectionService.validateAndConsume(any(), anyString(), anyString()))
+                                .thenReturn(EacReplayProtectionService.EacValidationResult.allow());
+                when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+
+                DefaultWithdrawalFlowService service = new DefaultWithdrawalFlowService(
+                                walletRepository,
+                                transactionRepository,
+                                identityServiceClient,
+                                idempotencyService,
+                                ledgerIntegrationService,
+                                limitEnforcementService,
+                                sagaOrchestrator,
+                                eventPublisher,
+                                eacReplayProtectionService,
+                                stepUpAuthenticationService,
+                                transactionSigningChallengeService,
+                                fraudVelocityService,
+                                fieldEncryptionService,
+                                transactionLifecycleService);
+
+                WalletFlowResult result = service.process(new WithdrawalCommand(
+                                walletId,
+                                wallet.getUserId(),
+                                new BigDecimal("25.00"),
+                                WithdrawalMode.REGISTERED_NUMBER,
+                                null,
+                                "esp",
+                                "eac",
+                                "idem-reg-withdraw",
+                                "ref-reg-withdraw",
+                                null,
+                                null,
+                                null));
+
+                assertThat(result.success()).isTrue();
+
+                InOrder order = inOrder(transactionLifecycleService);
+                order.verify(transactionLifecycleService).initialize(any(Transaction.class), anyString(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.PENDING), anyString(), any(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.PROCESSING), anyString(), any(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.COMPLETED), anyString(), any(), any(), any());
+        }
+
     @Test
     void withdrawalShouldFailWhenEacReplayDetected() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
