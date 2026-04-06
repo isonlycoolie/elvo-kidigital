@@ -215,6 +215,8 @@ public class DefaultEtcFlowService implements EtcFlowService {
         transaction.setReference(externalReference);
         transaction.setExternalReference(externalReference);
         transaction = transactionLifecycleService.initialize(transaction, "ETC redemption initiated", correlationId(), externalReference);
+        transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PENDING,
+            "ETC redemption queued", correlationId(), null, null);
         transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PROCESSING,
             "Redeeming ETC", correlationId(), null, null);
 
