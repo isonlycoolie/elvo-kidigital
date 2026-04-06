@@ -174,6 +174,12 @@ public class DefaultDepositFlowService implements DepositFlowService {
                 return failed(wallet.getId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Mobile callback authentication failed");
             }
 
+            if (!callbackReconciliationService.consumeOnce(command.mobileCallbackReference(), command.mobileCallbackTimestamp())) {
+                transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.FAILED,
+                    "Mobile callback replay detected", correlationId(), "CALLBACK_REPLAY", "Duplicate or stale callback payload");
+                return failed(wallet.getId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Mobile callback replay detected");
+            }
+
             callbackReconciliationService.scheduleRetry(command.mobileCallbackReference(), wallet.getId(), command.amount());
             transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.RETRYING,
                 "Waiting for callback reconciliation", correlationId(), null, null);

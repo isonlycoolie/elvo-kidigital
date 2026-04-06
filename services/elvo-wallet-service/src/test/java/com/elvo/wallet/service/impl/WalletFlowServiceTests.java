@@ -127,6 +127,7 @@ class WalletFlowServiceTests {
         when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
         when(transactionRepository.existsByReference(anyString())).thenReturn(false);
         when(mobileMoneyCallbackSecurityService.isAuthenticatedCallback(anyString(), anyString(), any(), anyString())).thenReturn(true);
+        when(callbackReconciliationService.consumeOnce(anyString(), any())).thenReturn(true);
                 lenient().when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> {
             Transaction transaction = invocation.getArgument(0);
             try {
@@ -169,6 +170,7 @@ class WalletFlowServiceTests {
         assertThat(result.success()).isTrue();
         verify(eventPublisher).publish(eq("wallet.deposit.completed"), any());
         verify(ledgerIntegrationService).recordDoubleEntry(anyString(), any(), any(), anyString());
+        verify(callbackReconciliationService).consumeOnce(eq("cb-1"), any());
         verify(callbackReconciliationService).scheduleRetry("cb-1", wallet.getId(), new BigDecimal("20.00"));
         verify(callbackReconciliationService).markReconciled("cb-1");
     }
@@ -611,6 +613,51 @@ class WalletFlowServiceTests {
         assertThat(result.message()).isEqualTo("Mobile callback authentication failed");
         verify(callbackReconciliationService, never()).scheduleRetry(anyString(), any(), any());
     }
+
+        @Test
+        void mobileDepositShouldFailWhenCallbackReplayDetected() {
+                UUID walletId = UUID.randomUUID();
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(identityServiceClient.isUserActive(any())).thenReturn(true);
+                when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+                when(transactionRepository.existsByReference(anyString())).thenReturn(false);
+                when(mobileMoneyCallbackSecurityService.isAuthenticatedCallback(anyString(), anyString(), any(), anyString())).thenReturn(true);
+                when(callbackReconciliationService.consumeOnce(anyString(), any())).thenReturn(false);
+
+                DefaultDepositFlowService service = new DefaultDepositFlowService(
+                                walletRepository,
+                                transactionRepository,
+                                identityServiceClient,
+                                agentServiceClient,
+                                idempotencyService,
+                                ledgerIntegrationService,
+                                mobileMoneyCallbackSecurityService,
+                                callbackReconciliationService,
+                                limitEnforcementService,
+                                sagaOrchestrator,
+                                eventPublisher,
+                                fieldEncryptionService,
+                                transactionLifecycleService);
+
+                WalletFlowResult result = service.process(new DepositCommand(
+                                walletId,
+                                wallet.getUserId(),
+                                new BigDecimal("20.00"),
+                                WalletChannel.MOBILE,
+                                "idem-mobile-replay",
+                                "dep-mobile-replay",
+                                true,
+                                "cb-3",
+                                "signed-callback",
+                                System.currentTimeMillis() / 1000,
+                                "10.0.0.2"));
+
+                assertThat(result.success()).isFalse();
+                assertThat(result.message()).isEqualTo("Mobile callback replay detected");
+                verify(callbackReconciliationService).consumeOnce(eq("cb-3"), any());
+                verify(callbackReconciliationService, never()).scheduleRetry(anyString(), any(), any());
+        }
 
     @Test
     void withdrawalShouldFailWhenVelocityRiskDetected() {
