@@ -19,6 +19,7 @@ import io.jsonwebtoken.Jwts;
 
 class TokenServiceUnitTest {
 
+    private static final String SECRET = "identity-unit-test-secret-at-least-thirty-two-bytes";
     private static final String ISSUER = "identity-test-issuer";
     private static final String AUDIENCE = "identity-test-audience";
     private static final String KEY_ID = "identity-key-01";
@@ -170,5 +171,29 @@ class TokenServiceUnitTest {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> verifierService.validateAccessToken(tokenPayload.token()));
         assertEquals("Token is invalid", ex.getMessage());
+    }
+
+    @Test
+    void jwksShouldExposeRsaSigningMetadata() {
+        KeyPair keyPair = generateRsaKeyPair();
+        TokenService tokenService = tokenService(keyPair, KEY_ID, 15, 7);
+
+        TokenService.JwksDocument jwks = tokenService.getJwksDocument();
+        assertEquals(1, jwks.keys().size());
+        TokenService.JwkKey key = jwks.keys().get(0);
+        assertEquals(KEY_ID, key.kid());
+        assertEquals("RSA", key.kty());
+        assertEquals("RS256", key.alg());
+        assertEquals("sig", key.use());
+        assertNotNull(key.n());
+        assertNotNull(key.e());
+    }
+
+    @Test
+    void jwksShouldRejectSymmetricMode() {
+        TokenService tokenService = new TokenService(SECRET, "", "", "", ISSUER, AUDIENCE, 15, 7);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, tokenService::getJwksDocument);
+        assertEquals("JWKS requires asymmetric signing configuration", ex.getMessage());
     }
 }

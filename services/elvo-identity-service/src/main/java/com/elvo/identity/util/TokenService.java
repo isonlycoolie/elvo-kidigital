@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
@@ -166,6 +167,13 @@ public class TokenService {
         return new RefreshTokenClaims(userId, claims.getExpiration().toInstant());
     }
 
+    public JwksDocument getJwksDocument() {
+        if (!asymmetricSigningEnabled) {
+            throw new IllegalStateException("JWKS requires asymmetric signing configuration");
+        }
+        return new JwksDocument(List.of(buildRsaJwk(verificationPublicKey, signingKeyId)));
+    }
+
     private Claims parseClaims(String token) {
         try {
             if (asymmetricSigningEnabled) {
@@ -229,6 +237,24 @@ public class TokenService {
         } catch (Exception ex) {
             throw new IllegalArgumentException("Token key id is invalid", ex);
         }
+    }
+
+    private JwkKey buildRsaJwk(PublicKey publicKey, String keyId) {
+        if (!(publicKey instanceof RSAPublicKey rsaPublicKey)) {
+            throw new IllegalStateException("JWKS currently supports only RSA keys");
+        }
+        String modulus = Base64.getUrlEncoder().withoutPadding().encodeToString(toUnsignedBytes(rsaPublicKey.getModulus().toByteArray()));
+        String exponent = Base64.getUrlEncoder().withoutPadding().encodeToString(toUnsignedBytes(rsaPublicKey.getPublicExponent().toByteArray()));
+        return new JwkKey(keyId, "RSA", "RS256", "sig", modulus, exponent);
+    }
+
+    private byte[] toUnsignedBytes(byte[] value) {
+        if (value.length > 1 && value[0] == 0) {
+            byte[] normalized = new byte[value.length - 1];
+            System.arraycopy(value, 1, normalized, 0, normalized.length);
+            return normalized;
+        }
+        return value;
     }
 
     private PrivateKey parsePrivateKey(String pem) {
@@ -319,5 +345,11 @@ public class TokenService {
     }
 
     public record RefreshTokenClaims(UUID userId, Instant expiresAt) {
+    }
+
+    public record JwksDocument(List<JwkKey> keys) {
+    }
+
+    public record JwkKey(String kid, String kty, String alg, String use, String n, String e) {
     }
 }
