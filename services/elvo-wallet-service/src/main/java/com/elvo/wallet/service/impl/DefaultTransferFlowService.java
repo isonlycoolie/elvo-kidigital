@@ -185,10 +185,6 @@ public class DefaultTransferFlowService implements TransferFlowService {
         credit = transactionLifecycleService.initialize(credit, "Transfer initiated", correlationId(), transferReference);
 
         try {
-            transactionLifecycleService.transition(debit, Transaction.TransactionStatus.PENDING,
-                "Transfer debit queued", correlationId(), null, null);
-            transactionLifecycleService.transition(credit, Transaction.TransactionStatus.PENDING,
-                "Transfer credit queued", correlationId(), null, null);
             transactionLifecycleService.transition(debit, Transaction.TransactionStatus.PROCESSING,
                 "Posting transfer debit", correlationId(), null, null);
             transactionLifecycleService.transition(credit, Transaction.TransactionStatus.PROCESSING,

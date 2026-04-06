@@ -350,6 +350,64 @@ class WalletFlowServiceTests {
         verify(walletRepository, never()).findByIdForUpdate(any());
     }
 
+        @Test
+        void transferShouldFollowLifecycleStateFlow() {
+                Wallet sourceWallet = new Wallet();
+                ReflectionTestUtils.setField(sourceWallet, "id", UUID.randomUUID());
+                sourceWallet.setUserId(UUID.randomUUID());
+                sourceWallet.setBalance(new BigDecimal("100.00"));
+                sourceWallet.setReservedBalance(BigDecimal.ZERO);
+                sourceWallet.setStatus(Wallet.WalletStatus.ACTIVE);
+
+                Wallet targetWallet = new Wallet();
+                ReflectionTestUtils.setField(targetWallet, "id", UUID.randomUUID());
+                targetWallet.setUserId(UUID.randomUUID());
+                targetWallet.setBalance(new BigDecimal("50.00"));
+                targetWallet.setReservedBalance(BigDecimal.ZERO);
+                targetWallet.setStatus(Wallet.WalletStatus.ACTIVE);
+
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
+                when(stepUpAuthenticationService.requiresStepUpForTransfer(any())).thenReturn(false);
+                when(walletRepository.findByIdForUpdate(sourceWallet.getId())).thenReturn(Optional.of(sourceWallet));
+                when(walletRepository.findByIdForUpdate(targetWallet.getId())).thenReturn(Optional.of(targetWallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+                when(transactionRepository.findByExternalReferenceAndStatusInForUpdate(anyString(), any())).thenReturn(java.util.List.of());
+                when(transactionRepository.existsByReference(anyString())).thenReturn(false);
+
+                DefaultTransferFlowService service = new DefaultTransferFlowService(
+                                walletRepository,
+                                transactionRepository,
+                                idempotencyService,
+                                ledgerIntegrationService,
+                                limitEnforcementService,
+                                sagaOrchestrator,
+                                eventPublisher,
+                                stepUpAuthenticationService,
+                                transactionSigningChallengeService,
+                                fraudVelocityService,
+                                fieldEncryptionService,
+                                transactionLifecycleService);
+
+                WalletFlowResult result = service.process(new TransferCommand(
+                                sourceWallet.getId(),
+                                targetWallet.getId(),
+                                sourceWallet.getUserId(),
+                                new BigDecimal("20.00"),
+                                "idem-transfer-flow",
+                                "transfer-ref-flow",
+                                null,
+                                null,
+                                null));
+
+                assertThat(result.success()).isTrue();
+
+                verify(transactionLifecycleService, org.mockito.Mockito.times(2)).initialize(any(Transaction.class), anyString(), any(), any());
+                verify(transactionLifecycleService, org.mockito.Mockito.times(2)).transition(any(Transaction.class), eq(Transaction.TransactionStatus.PROCESSING), anyString(), any(), any(), any());
+                verify(transactionLifecycleService, org.mockito.Mockito.times(2)).transition(any(Transaction.class), eq(Transaction.TransactionStatus.COMPLETED), anyString(), any(), any(), any());
+                verify(transactionLifecycleService, never()).transition(any(Transaction.class), eq(Transaction.TransactionStatus.PENDING), anyString(), any(), any(), any());
+        }
+
     @Test
     void withdrawalShouldFailWhenStepUpConfirmationMissingForDeviceFreeFlow() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
