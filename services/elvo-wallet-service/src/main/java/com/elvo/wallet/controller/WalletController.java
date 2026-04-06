@@ -51,6 +51,7 @@ import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.security.FraudRulesEngine;
 import com.elvo.wallet.security.IpGeovelocityRiskService;
 import com.elvo.wallet.security.MakerCheckerApprovalService;
+import com.elvo.wallet.security.ApiAbuseProtectionService;
 import com.elvo.wallet.security.UserJwtPrincipal;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
@@ -94,6 +95,7 @@ public class WalletController {
     private final FraudRulesEngine fraudRulesEngine;
     private final MakerCheckerApprovalService makerCheckerApprovalService;
     private final SecurityAlertStreamingService securityAlertStreamingService;
+    private final ApiAbuseProtectionService apiAbuseProtectionService;
 
     public WalletController(WalletService walletService, WalletRepository walletRepository,
                           TransactionRepository transactionRepository, ReservationRepository reservationRepository,
@@ -105,7 +107,8 @@ public class WalletController {
                           IpGeovelocityRiskService ipGeovelocityRiskService,
                           FraudRulesEngine fraudRulesEngine,
                           MakerCheckerApprovalService makerCheckerApprovalService,
-                          SecurityAlertStreamingService securityAlertStreamingService) {
+                          SecurityAlertStreamingService securityAlertStreamingService,
+                          ApiAbuseProtectionService apiAbuseProtectionService) {
         this.walletService = walletService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -120,6 +123,7 @@ public class WalletController {
         this.fraudRulesEngine = fraudRulesEngine;
         this.makerCheckerApprovalService = makerCheckerApprovalService;
         this.securityAlertStreamingService = securityAlertStreamingService;
+        this.apiAbuseProtectionService = apiAbuseProtectionService;
     }
 
     /**
@@ -240,18 +244,27 @@ public class WalletController {
         Wallet wallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
 
+        String sourceIp = resolveClientIp(httpRequest);
+        String deviceId = httpRequest.getHeader("X-Device-Id");
+        ApiAbuseProtectionService.AbuseDecision abuseDecision = apiAbuseProtectionService.evaluate(userId, sourceIp, deviceId);
+        if (!abuseDecision.allowed()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, abuseDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
+        }
+
         WalletOperationRateLimitService.RateLimitResult withdrawalRateLimit = operationRateLimitService.enforce(
             WalletOperationRateLimitService.Operation.WITHDRAWAL,
             userId,
-            httpRequest.getRemoteAddr(),
-            httpRequest.getHeader("X-Device-Id"),
+            sourceIp,
+            deviceId,
             request.getTargetNumber());
         if (!withdrawalRateLimit.allowed()) {
+            apiAbuseProtectionService.recordViolation(userId, sourceIp, deviceId);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new FlowResultResponseDto(false, "Withdrawal rate limit exceeded", wallet.getId(), null, "wallet.withdrawal.failed"));
         }
 
-        String withdrawalDeviceId = httpRequest.getHeader("X-Device-Id");
+        String withdrawalDeviceId = deviceId;
         String withdrawalLocationHint = resolveLocationHint(httpRequest);
         IpGeovelocityRiskService.RiskDecision withdrawalIpDecision = ipGeovelocityRiskService.evaluate(
             userId,
@@ -350,8 +363,10 @@ public class WalletController {
                 destinationRiskService.markTrusted(userId, request.getTargetNumber());
                 AUDIT_LOG.info("wallet_withdrawal_success userId={} amount={} walletId={} transactionId={}",
                     userId, request.getAmount(), wallet.getId(), result.transactionId());
+                apiAbuseProtectionService.recordSuccess(userId, sourceIp, deviceId);
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
             } else {
+                apiAbuseProtectionService.recordViolation(userId, sourceIp, deviceId);
                 destinationRiskService.recordFailure(userId, request.getTargetNumber());
                 AUDIT_LOG.warn("wallet_withdrawal_failed userId={} amount={} reason={}",
                     userId, request.getAmount(), result.message());
@@ -380,18 +395,27 @@ public class WalletController {
         Wallet sourceWallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
 
+        String sourceIp = resolveClientIp(httpRequest);
+        String deviceId = httpRequest.getHeader("X-Device-Id");
+        ApiAbuseProtectionService.AbuseDecision abuseDecision = apiAbuseProtectionService.evaluate(userId, sourceIp, deviceId);
+        if (!abuseDecision.allowed()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, abuseDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
+        }
+
         WalletOperationRateLimitService.RateLimitResult transferRateLimit = operationRateLimitService.enforce(
             WalletOperationRateLimitService.Operation.TRANSFER,
             userId,
-            httpRequest.getRemoteAddr(),
-            httpRequest.getHeader("X-Device-Id"),
+            sourceIp,
+            deviceId,
             null);
         if (!transferRateLimit.allowed()) {
+            apiAbuseProtectionService.recordViolation(userId, sourceIp, deviceId);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new FlowResultResponseDto(false, "Transfer rate limit exceeded", sourceWallet.getId(), null, "wallet.transfer.failed"));
         }
 
-        String transferDeviceId = httpRequest.getHeader("X-Device-Id");
+        String transferDeviceId = deviceId;
         String transferLocationHint = resolveLocationHint(httpRequest);
         IpGeovelocityRiskService.RiskDecision transferIpDecision = ipGeovelocityRiskService.evaluate(
             userId,
@@ -475,8 +499,10 @@ public class WalletController {
             AUDIT_LOG.info("wallet_transfer_success userId={} sourceWalletId={} targetWalletId={} amount={} walletId={} transactionId={}",
                 userId, sourceWallet.getId(), request.getTargetWalletId(), request.getAmount(),
                 sourceWallet.getId(), result.transactionId());
+            apiAbuseProtectionService.recordSuccess(userId, sourceIp, deviceId);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } else {
+            apiAbuseProtectionService.recordViolation(userId, sourceIp, deviceId);
             AUDIT_LOG.warn("wallet_transfer_failed userId={} sourceWalletId={} targetWalletId={} amount={} reason={}",
                 userId, sourceWallet.getId(), request.getTargetWalletId(), request.getAmount(), result.message());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
@@ -554,7 +580,12 @@ public class WalletController {
             .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
 
         String deviceId = httpRequest.getHeader("X-Device-Id");
-        String sourceIp = httpRequest.getRemoteAddr();
+        String sourceIp = resolveClientIp(httpRequest);
+        ApiAbuseProtectionService.AbuseDecision abuseDecision = apiAbuseProtectionService.evaluate(userId, sourceIp, deviceId);
+        if (!abuseDecision.allowed()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, abuseDecision.reason(), wallet.getId(), null, "wallet.etc.failed"));
+        }
         WalletOperationRateLimitService.RateLimitResult etcRateLimit = operationRateLimitService.enforce(
             WalletOperationRateLimitService.Operation.ETC_REDEMPTION,
             userId,
@@ -562,6 +593,7 @@ public class WalletController {
             deviceId,
             code);
         if (!etcRateLimit.allowed()) {
+            apiAbuseProtectionService.recordViolation(userId, sourceIp, deviceId);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new FlowResultResponseDto(false, "Withdrawal-code redemption rate limit exceeded", wallet.getId(), null, "wallet.etc.failed"));
         }
@@ -570,10 +602,12 @@ public class WalletController {
         FlowResultResponseDto response = walletMapper.toFlowResultResponseDto(result);
 
         if (result.success()) {
+            apiAbuseProtectionService.recordSuccess(userId, sourceIp, deviceId);
             AUDIT_LOG.info("wallet_etc_redeemed userId={} code={} walletId={}",
                 userId, code, wallet.getId());
             return ResponseEntity.ok(response);
         } else {
+            apiAbuseProtectionService.recordViolation(userId, sourceIp, deviceId);
             AUDIT_LOG.warn("wallet_etc_redeem_failed userId={} code={} reason={}", userId, code, result.message());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }

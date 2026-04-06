@@ -151,6 +151,11 @@ elvo:
       per-ip-threshold: ${ELVO_RATE_LIMIT_PER_IP_THRESHOLD:60}
       per-device-threshold: ${ELVO_RATE_LIMIT_PER_DEVICE_THRESHOLD:40}
       per-ean-threshold: ${ELVO_RATE_LIMIT_PER_EAN_THRESHOLD:20}
+    api-abuse:
+      key-prefix: ${ELVO_API_ABUSE_KEY_PREFIX:elvo:wallet:abuse:}
+      max-violations: ${ELVO_API_ABUSE_MAX_VIOLATIONS:5}
+      violation-window-seconds: ${ELVO_API_ABUSE_VIOLATION_WINDOW_SECONDS:600}
+      block-seconds: ${ELVO_API_ABUSE_BLOCK_SECONDS:900}
     fraud:
       velocity:
         window-seconds: ${ELVO_FRAUD_VELOCITY_WINDOW_SECONDS:120}
