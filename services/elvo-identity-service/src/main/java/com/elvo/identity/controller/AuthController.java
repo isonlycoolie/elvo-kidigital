@@ -215,7 +215,6 @@ public class AuthController {
     }
 
     @PostMapping("/verify-email-otp")
-    @Transactional
     public ResponseEntity<ApiResponse<OtpVerificationResponse>> verifyEmailOtp(@Valid @RequestBody VerifyOtpRequest request) {
         User user = findUserByIdentifier(request.getIdentifier());
         if (user == null || !verificationTokenService.isValidForUser(request.getVerificationToken(), user.getId())) {
@@ -244,7 +243,6 @@ public class AuthController {
     }
 
     @PostMapping("/verify-mobile-otp")
-    @Transactional
     public ResponseEntity<ApiResponse<OtpVerificationResponse>> verifyMobileOtp(@Valid @RequestBody VerifyOtpRequest request) {
         User user = findUserByIdentifier(request.getIdentifier());
         if (user == null || !verificationTokenService.isValidForUser(request.getVerificationToken(), user.getId())) {

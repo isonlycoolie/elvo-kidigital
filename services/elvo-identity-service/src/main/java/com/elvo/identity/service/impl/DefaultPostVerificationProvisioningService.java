@@ -3,7 +3,6 @@ package com.elvo.identity.service.impl;
 import java.time.Instant;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.identity.client.ProfileProvisioningClient;
 import com.elvo.identity.client.WalletProvisioningClient;
@@ -23,17 +22,20 @@ public class DefaultPostVerificationProvisioningService implements PostVerificat
     }
 
     @Override
-    @Transactional
     public void provisionIfNeeded(User user) {
         if (user.isDownstreamProvisioned()) {
             return;
         }
 
         String keyPrefix = "identity:" + user.getId() + ":post-verification:";
-        walletProvisioningClient.createWallet(user.getId(), keyPrefix + "wallet");
-        profileProvisioningClient.createProfile(user.getId(), keyPrefix + "profile");
-        profileProvisioningClient.createDefaultPreferences(user.getId(), keyPrefix + "preferences");
-        user.setDownstreamProvisioned(true);
-        user.setDownstreamProvisionedAt(Instant.now());
+        try {
+            walletProvisioningClient.createWallet(user.getId(), keyPrefix + "wallet");
+            profileProvisioningClient.createProfile(user.getId(), keyPrefix + "profile");
+            profileProvisioningClient.createDefaultPreferences(user.getId(), keyPrefix + "preferences");
+            user.setDownstreamProvisioned(true);
+            user.setDownstreamProvisionedAt(Instant.now());
+        } catch (RuntimeException ex) {
+            throw new IllegalStateException("Post-verification provisioning failed for user " + user.getId(), ex);
+        }
     }
 }
