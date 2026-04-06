@@ -158,6 +158,14 @@ public class DefaultDepositFlowService implements DepositFlowService {
             transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.AWAITING_CONFIRMATION,
                 "Awaiting callback confirmation", correlationId(), null, null);
 
+            Transaction expiredCandidate = transactionLifecycleService.expire(transaction, "Mobile callback timed out", correlationId());
+            if (expiredCandidate != null) {
+                transaction = expiredCandidate;
+            }
+            if (transaction != null && transaction.getStatus() == Transaction.TransactionStatus.EXPIRED) {
+                return failed(wallet.getId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Mobile callback timed out");
+            }
+
             if (command.mobileCallbackReference() == null || command.mobileCallbackReference().isBlank()) {
                 return failed(wallet.getId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Mobile callback confirmation required");
             }

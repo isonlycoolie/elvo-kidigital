@@ -114,6 +114,8 @@ class WalletFlowServiceTests {
                     transaction.setStatus(nextStatus);
                     return transaction;
                 });
+        lenient().when(transactionLifecycleService.expire(any(), anyString(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(transactionRepository.findByExternalReferenceAndStatusInForUpdate(anyString(), any()))
                 .thenReturn(java.util.List.of());
         lenient().when(idempotencyService.get(anyString(), anyString(), anyString(), anyString()))
@@ -760,6 +762,54 @@ class WalletFlowServiceTests {
                 assertThat(result.message()).isEqualTo("Mobile callback reconciliation retry scheduled");
                 verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.RETRYING), anyString(), any(), any(), any());
             }
+
+        @Test
+        void mobileDepositShouldExpireWhenLifecycleMarksTransactionExpired() {
+                UUID walletId = UUID.randomUUID();
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(identityServiceClient.isUserActive(any())).thenReturn(true);
+                when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+                when(transactionRepository.existsByReference(anyString())).thenReturn(false);
+                lenient().when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                when(transactionLifecycleService.expire(any(Transaction.class), anyString(), any())).thenAnswer(invocation -> {
+                        Transaction transaction = invocation.getArgument(0);
+                        transaction.setStatus(Transaction.TransactionStatus.EXPIRED);
+                        return transaction;
+                });
+
+                DefaultDepositFlowService service = new DefaultDepositFlowService(
+                                walletRepository,
+                                transactionRepository,
+                                identityServiceClient,
+                                agentServiceClient,
+                                idempotencyService,
+                                ledgerIntegrationService,
+                                mobileMoneyCallbackSecurityService,
+                                callbackReconciliationService,
+                                limitEnforcementService,
+                                sagaOrchestrator,
+                                eventPublisher,
+                                fieldEncryptionService,
+                                transactionLifecycleService);
+
+                WalletFlowResult result = service.process(new DepositCommand(
+                                walletId,
+                                wallet.getUserId(),
+                                new BigDecimal("20.00"),
+                                WalletChannel.MOBILE,
+                                "idem-mobile-expired",
+                                "dep-mobile-expired",
+                                true,
+                                "cb-expired",
+                                "signed-callback",
+                                System.currentTimeMillis() / 1000,
+                                "10.0.0.6"));
+
+                assertThat(result.success()).isFalse();
+                assertThat(result.message()).isEqualTo("Mobile callback timed out");
+                verify(transactionLifecycleService).expire(any(Transaction.class), eq("Mobile callback timed out"), any());
+        }
 
     @Test
     void withdrawalShouldFailWhenVelocityRiskDetected() {
