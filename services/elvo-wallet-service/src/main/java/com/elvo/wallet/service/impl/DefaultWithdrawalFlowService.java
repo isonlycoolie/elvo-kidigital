@@ -269,6 +269,16 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             idempotencyService.put(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, result);
             return result;
         } catch (RuntimeException ex) {
+            if (command.mode() == WithdrawalMode.DEVICE_FREE) {
+                restoreDeviceFreeFunds(wallet, command.amount());
+                transitionSafely(transaction,
+                    Transaction.TransactionStatus.REVERSED,
+                    "Device-free withdrawal reversed after failure",
+                    "WITHDRAWAL_REVERSED",
+                    ex.getMessage());
+                return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Device-free withdrawal reversed");
+            }
+
             if (isTemporaryFailure(ex)) {
                 transitionSafely(transaction,
                     Transaction.TransactionStatus.RETRYING,
@@ -377,5 +387,14 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         } catch (RuntimeException ignored) {
             // Best effort transition in withdrawal failure path.
         }
+    }
+
+    private void restoreDeviceFreeFunds(Wallet wallet, BigDecimal amount) {
+        wallet.setBalance(wallet.getBalance().add(amount));
+        BigDecimal updatedReserved = wallet.getReservedBalance().subtract(amount);
+        if (updatedReserved.signum() < 0) {
+            updatedReserved = BigDecimal.ZERO;
+        }
+        wallet.setReservedBalance(updatedReserved);
     }
 }
