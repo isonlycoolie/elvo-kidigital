@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
+import com.elvo.wallet.audit.ImmutableAuditStorageService;
 import com.elvo.wallet.monitoring.SentryExceptionReporter;
 import com.elvo.wallet.monitoring.WalletMetricsRecorder;
 
@@ -23,11 +24,12 @@ public class WalletEventPublisher {
     private final String version;
     private final SentryExceptionReporter sentryExceptionReporter;
     private final WalletMetricsRecorder metricsRecorder;
+    private final ImmutableAuditStorageService immutableAuditStorageService;
 
     public WalletEventPublisher(RabbitTemplate rabbitTemplate,
                                 @Value("${elvo.messaging.wallet.exchange:elvo.wallet.exchange}") String exchange,
                                 @Value("${elvo.messaging.wallet.version:v1}") String version) {
-        this(rabbitTemplate, exchange, version, null, null);
+        this(rabbitTemplate, exchange, version, null, null, null);
     }
 
     @Autowired
@@ -35,12 +37,14 @@ public class WalletEventPublisher {
                                 @Value("${elvo.messaging.wallet.exchange:elvo.wallet.exchange}") String exchange,
                                 @Value("${elvo.messaging.wallet.version:v1}") String version,
                                 @Nullable SentryExceptionReporter sentryExceptionReporter,
-                                @Nullable WalletMetricsRecorder metricsRecorder) {
+                                @Nullable WalletMetricsRecorder metricsRecorder,
+                                @Nullable ImmutableAuditStorageService immutableAuditStorageService) {
         this.rabbitTemplate = rabbitTemplate;
         this.exchange = exchange;
         this.version = version;
         this.sentryExceptionReporter = sentryExceptionReporter;
         this.metricsRecorder = metricsRecorder;
+        this.immutableAuditStorageService = immutableAuditStorageService;
     }
 
     public void publish(String eventType, Map<String, Object> payload) {
@@ -51,6 +55,21 @@ public class WalletEventPublisher {
         event.put("correlationId", resolveCorrelationId());
         event.put("occurredAt", Instant.now().toString());
         event.put("payload", payload == null ? Map.of() : payload);
+
+        if (immutableAuditStorageService != null) {
+            try {
+                immutableAuditStorageService.append(
+                        String.valueOf(event.get("eventType")),
+                        String.valueOf(event.get("requestId")),
+                        String.valueOf(event.get("correlationId")),
+                        Instant.parse(String.valueOf(event.get("occurredAt"))),
+                        String.valueOf(event.get("payload"))
+                );
+            } catch (RuntimeException ex) {
+                // Preserve core transaction flow even if audit persistence is temporarily unavailable.
+            }
+        }
+
         try {
             rabbitTemplate.convertAndSend(exchange, eventType, event);
             if (metricsRecorder != null) {
