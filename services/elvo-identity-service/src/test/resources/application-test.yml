@@ -24,6 +24,8 @@ spring:
       password: test-password
 
 elvo:
+  startup:
+    validate-required-env: false
   security:
     jwt:
       secret: identity-test-jwt-secret-at-least-thirty-two-bytes-long

@@ -1,0 +1,61 @@
+version: "3.9"
+
+services:
+  identity-postgres:
+    image: postgres:16
+    container_name: elvo-identity-postgres
+    environment:
+      POSTGRES_DB: elvo_identity
+      POSTGRES_USER: elvo
+      POSTGRES_PASSWORD: elvo
+    ports:
+      - "5433:5432"
+    volumes:
+      - identity-postgres-data:/var/lib/postgresql/data
+
+  identity-redis:
+    image: redis:7
+    container_name: elvo-identity-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - identity-redis-data:/data
+
+  identity-rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: elvo-identity-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    volumes:
+      - identity-rabbitmq-data:/var/lib/rabbitmq
+
+  identity-service:
+    build:
+      context: ../../services/elvo-identity-service
+      dockerfile: Dockerfile
+    container_name: elvo-identity-service
+    depends_on:
+      - identity-postgres
+      - identity-redis
+      - identity-rabbitmq
+    env_file:
+      - ../../.env.shared
+      - ../../services/elvo-identity-service/.env
+    environment:
+      ELVO_DB_HOST: identity-postgres
+      ELVO_DB_PORT: 5432
+      ELVO_REDIS_HOST: identity-redis
+      ELVO_REDIS_PORT: 6379
+      ELVO_RABBITMQ_HOST: identity-rabbitmq
+      ELVO_RABBITMQ_PORT: 5672
+    ports:
+      - "8081:8080"
+
+volumes:
+  identity-postgres-data:
+  identity-redis-data:
+  identity-rabbitmq-data:

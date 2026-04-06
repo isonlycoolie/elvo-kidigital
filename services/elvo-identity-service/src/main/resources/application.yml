@@ -81,6 +81,8 @@ sentry:
     platform: spring-boot
 
 elvo:
+  startup:
+    validate-required-env: ${ELVO_VALIDATE_REQUIRED_ENV:true}
   communication:
     email:
       from: ${EMAIL_PROVIDER_FROM:no-reply@elvo.local}

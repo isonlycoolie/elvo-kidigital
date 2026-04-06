@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elvo-shared-env
+  namespace: elvo
+stringData:
+  ELVO_REDIS_HOST: redis
+  ELVO_REDIS_PORT: "6379"
+  ELVO_RABBITMQ_HOST: rabbitmq
+  ELVO_RABBITMQ_PORT: "5672"
+  ELVO_LOG_LEVEL_ROOT: INFO
+  ELVO_LOG_LEVEL_APP: INFO
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: elvo-identity-env
+  namespace: elvo
+stringData:
+  ELVO_DB_PASSWORD: replace_with_identity_db_password
+  ELVO_JWT_SECRET_REF: replace_with_identity_jwt_secret
+  ELVO_OTP_HASH_PEPPER: replace_with_identity_otp_pepper
+  SMS_PROVIDER_API_KEY: replace_with_sms_api_key
+  EMAIL_PROVIDER_PASSWORD: replace_with_email_password
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elvo-identity-service
+  namespace: elvo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elvo-identity-service
+  template:
+    metadata:
+      labels:
+        app: elvo-identity-service
+    spec:
+      containers:
+        - name: identity
+          image: elvo/identity-service:latest
+          envFrom:
+            - configMapRef:
+                name: elvo-shared-env
+            - secretRef:
+                name: elvo-identity-env

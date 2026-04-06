@@ -1,0 +1,11 @@
+# Environment files with secrets
+.env.local
+.env.*.local
+**/.env.local
+**/.env.*.local
+
+# Keep template env files tracked
+!.env.example
+!.env.shared
+!.env.shared.example
+!**/.env.example

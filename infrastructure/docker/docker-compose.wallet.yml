@@ -42,13 +42,16 @@ services:
       - wallet-postgres
       - wallet-redis
       - wallet-rabbitmq
+    env_file:
+      - ../../.env.shared
+      - ../../services/elvo-wallet-service/.env
     environment:
-      DB_URL: jdbc:postgresql://wallet-postgres:5432/elvo_wallet
-      DB_USER: elvo
-      DB_PASS: elvo
-      REDIS_URL: redis://wallet-redis:6379
-      RABBITMQ_URL: amqp://guest:guest@wallet-rabbitmq:5672
-      ELVO_JWT_SECRET: replace-with-strong-32-plus-char-secret
+      ELVO_DB_HOST: wallet-postgres
+      ELVO_DB_PORT: 5432
+      ELVO_REDIS_HOST: wallet-redis
+      ELVO_REDIS_PORT: 6379
+      ELVO_RABBITMQ_HOST: wallet-rabbitmq
+      ELVO_RABBITMQ_PORT: 5672
     ports:
       - "8080:8080"
 
