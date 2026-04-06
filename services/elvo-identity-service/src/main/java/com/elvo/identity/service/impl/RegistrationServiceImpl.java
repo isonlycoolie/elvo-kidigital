@@ -6,11 +6,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.identity.audit.AuditEventPublisher;
+import com.elvo.identity.dto.request.EmailRegistrationRequest;
+import com.elvo.identity.dto.request.MobileRegistrationRequest;
 import com.elvo.identity.dto.request.RegistrationRequest;
 import com.elvo.identity.dto.response.RegistrationResponse;
 import com.elvo.identity.entity.Audit;
 import com.elvo.identity.entity.User;
-import com.elvo.identity.exception.ApiResponse;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.security.SecurityHashingService;
@@ -41,29 +42,92 @@ public class RegistrationServiceImpl implements RegistrationService {
     @Override
     @Transactional
     public RegistrationResponse register(RegistrationRequest request) {
-        validateUniqueIdentity(request);
+        validateUniqueIdentity(request.getEmail(), request.getPhone());
 
-        User user = new User();
-        user.setEmail(request.getEmail().trim().toLowerCase(Locale.ROOT));
-        user.setPhone(request.getPhone().trim());
-        user.setHashedPassword(hashingService.hashPassword(request.getPassword()));
-        user.setMfaEnabled(request.isEnableMfa());
-        user.setEspEnabled(false);
-        user.setAccountStatus(User.AccountStatus.ACTIVE);
-        user.setEan(generateUniqueEan());
+        User user = buildPendingUser(
+                request.getEmail().trim().toLowerCase(Locale.ROOT),
+                request.getPhone().trim(),
+                request.getPassword(),
+                request.isEnableMfa(),
+                request.getDisplayName());
 
         User savedUser = userRepository.save(user);
+        auditRegistration(savedUser, request.getSourceIp(), request.getSourceUserAgent());
 
+        return toResponse(savedUser);
+    }
+
+    @Override
+    @Transactional
+    public RegistrationResponse registerEmail(EmailRegistrationRequest request) {
+        String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
+        validateUniqueIdentity(email, null);
+
+        User user = buildPendingUser(
+                email,
+                null,
+                request.getPassword(),
+                request.isEnableMfa(),
+                request.getDisplayName());
+
+        User savedUser = userRepository.save(user);
+        auditRegistration(savedUser, request.getSourceIp(), request.getSourceUserAgent());
+
+        return toResponse(savedUser);
+    }
+
+    @Override
+    @Transactional
+    public RegistrationResponse registerMobile(MobileRegistrationRequest request) {
+        String phone = request.getPhone().trim();
+        validateUniqueIdentity(null, phone);
+
+        User user = buildPendingUser(
+                null,
+                phone,
+                request.getPassword(),
+                request.isEnableMfa(),
+                request.getDisplayName());
+
+        User savedUser = userRepository.save(user);
+        auditRegistration(savedUser, request.getSourceIp(), request.getSourceUserAgent());
+
+        return toResponse(savedUser);
+    }
+
+    private User buildPendingUser(String email,
+                                  String phone,
+                                  String rawPassword,
+                                  boolean mfaEnabled,
+                                  String displayName) {
+        User user = new User();
+        user.setEmail(email);
+        user.setPhone(phone);
+        user.setDisplayName(displayName);
+        user.setHashedPassword(hashingService.hashPassword(rawPassword));
+        user.setMfaEnabled(mfaEnabled);
+        user.setEspEnabled(false);
+        user.setEmailVerified(false);
+        user.setMobileVerified(false);
+        user.setVerificationStatus(User.VerificationStatus.UNVERIFIED);
+        user.setAccountStatus(User.AccountStatus.PENDING_VERIFICATION);
+        user.setEan(generateUniqueEan());
+        return user;
+    }
+
+    private void auditRegistration(User savedUser, String sourceIp, String sourceUserAgent) {
         Audit audit = new Audit();
         audit.setActionType(Audit.ActionType.REGISTRATION);
         audit.setDescription("User registration completed");
         audit.setSourceType(Audit.SourceType.API);
-        audit.setSourceIp(request.getSourceIp());
-        audit.setSourceUserAgent(request.getSourceUserAgent());
+        audit.setSourceIp(sourceIp);
+        audit.setSourceUserAgent(sourceUserAgent);
         audit.setUser(savedUser);
         Audit savedAudit = auditRepository.save(audit);
         auditEventPublisher.publish(savedAudit);
+    }
 
+    private RegistrationResponse toResponse(User savedUser) {
         return new RegistrationResponse(
                 savedUser.getId(),
                 savedUser.getEan(),
@@ -72,12 +136,12 @@ public class RegistrationServiceImpl implements RegistrationService {
                 savedUser.isMfaEnabled());
     }
 
-    private void validateUniqueIdentity(RegistrationRequest request) {
-        if (userRepository.findByEmailIgnoreCase(request.getEmail()).isPresent()) {
+    private void validateUniqueIdentity(String email, String phone) {
+        if (email != null && userRepository.findByEmailIgnoreCase(email).isPresent()) {
             throw new IllegalArgumentException("Email is already registered");
         }
 
-        if (userRepository.findByPhone(request.getPhone()).isPresent()) {
+        if (phone != null && userRepository.findByPhone(phone).isPresent()) {
             throw new IllegalArgumentException("Phone is already registered");
         }
     }

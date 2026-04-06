@@ -39,10 +39,10 @@ public class User {
     @Column(name = "ean", nullable = false, length = 64)
     private String ean;
 
-    @Column(name = "email", nullable = false, length = 255)
+    @Column(name = "email", length = 255)
     private String email;
 
-    @Column(name = "phone", nullable = false, length = 32)
+    @Column(name = "phone", length = 32)
     private String phone;
 
     @Column(name = "display_name", length = 128)

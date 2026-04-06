@@ -18,8 +18,10 @@ import com.elvo.identity.audit.AuditEventPublisher;
 import com.elvo.identity.dto.request.AuthLogoutAllRequest;
 import com.elvo.identity.dto.request.AuthLogoutRequest;
 import com.elvo.identity.dto.request.AuthRefreshTokenRequest;
+import com.elvo.identity.dto.request.EmailRegistrationRequest;
 import com.elvo.identity.dto.request.ForgotPasswordRequest;
 import com.elvo.identity.dto.request.LoginRequest;
+import com.elvo.identity.dto.request.MobileRegistrationRequest;
 import com.elvo.identity.dto.request.ResendOtpRequest;
 import com.elvo.identity.dto.request.RegistrationRequest;
 import com.elvo.identity.dto.request.ResetPasswordRequest;
@@ -89,9 +91,65 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+        @Transactional
     public ResponseEntity<ApiResponse<RegistrationResponse>> register(@Valid @RequestBody RegistrationRequest request) {
         RegistrationResponse response = registrationService.register(request);
-        return ResponseEntity.ok(ApiResponse.ok("Registration successful", response));
+        User user = userRepository.findById(response.userId())
+            .orElseThrow(() -> new IllegalStateException("Registered user not found"));
+
+        if (response.email() != null && !response.email().isBlank()) {
+            otpService.issueVerificationOtp(user,
+                VerificationOtp.Channel.EMAIL,
+                VerificationOtp.Purpose.EMAIL_VERIFICATION,
+                response.email(),
+                null,
+                null);
+        }
+
+        if (response.phone() != null && !response.phone().isBlank()) {
+            otpService.issueVerificationOtp(user,
+                VerificationOtp.Channel.SMS,
+                VerificationOtp.Purpose.MOBILE_VERIFICATION,
+                response.phone(),
+                null,
+                null);
+        }
+
+        return ResponseEntity.ok(ApiResponse.ok("Registration successful. Verification required.", response));
+        }
+
+        @PostMapping("/register/email")
+        @Transactional
+        public ResponseEntity<ApiResponse<RegistrationResponse>> registerEmail(@Valid @RequestBody EmailRegistrationRequest request) {
+        RegistrationResponse response = registrationService.registerEmail(request);
+        User user = userRepository.findById(response.userId())
+            .orElseThrow(() -> new IllegalStateException("Registered user not found"));
+
+        otpService.issueVerificationOtp(user,
+            VerificationOtp.Channel.EMAIL,
+            VerificationOtp.Purpose.EMAIL_VERIFICATION,
+            response.email(),
+            null,
+            null);
+
+        return ResponseEntity.ok(ApiResponse.ok("Registration successful. Verification required.", response));
+        }
+
+        @PostMapping("/register/mobile")
+        @Transactional
+        public ResponseEntity<ApiResponse<RegistrationResponse>> registerMobile(@Valid @RequestBody MobileRegistrationRequest request) {
+        RegistrationResponse response = registrationService.registerMobile(request);
+        User user = userRepository.findById(response.userId())
+            .orElseThrow(() -> new IllegalStateException("Registered user not found"));
+
+        otpService.issueVerificationOtp(user,
+            VerificationOtp.Channel.SMS,
+            VerificationOtp.Purpose.MOBILE_VERIFICATION,
+            response.phone(),
+            null,
+            null);
+
+        return ResponseEntity.ok(ApiResponse.ok("Registration successful. Verification required.", response));
     }
 
     @PostMapping("/login")
