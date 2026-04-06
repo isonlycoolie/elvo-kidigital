@@ -1744,4 +1744,45 @@ class WalletFlowServiceTests {
         assertThat(result.success()).isTrue();
         verify(eventPublisher).publish(eq("wallet.etc.generated"), any());
     }
+
+        @Test
+        void etcRedeemShouldFollowLifecycleStateFlow() {
+                wallet.setBalance(new BigDecimal("100.00"));
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(etcCodeSecurityService.hashCode(anyString())).thenReturn("hash-etc");
+                when(etcCodeSecurityService.redact(anyString())).thenReturn("***C123");
+                when(etcBruteForceProtectionService.isBlocked(anyString(), anyString(), anyString())).thenReturn(false);
+
+                Etc etc = new Etc();
+                etc.setWallet(wallet);
+                etc.setCodeHash("hash-etc");
+                etc.setExpiresAt(Instant.now().plusSeconds(1200));
+                when(etcRepository.findByCodeHashForUpdate("hash-etc")).thenReturn(Optional.of(etc));
+                when(etcRepository.isCodeExpired(eq("hash-etc"), any())).thenReturn(false);
+                when(etcRepository.redeemCode(eq("hash-etc"), any())).thenReturn(true);
+                when(walletRepository.findByIdForUpdate(wallet.getId())).thenReturn(Optional.of(wallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+
+                DefaultEtcFlowService service = new DefaultEtcFlowService(
+                                etcRepository,
+                                walletRepository,
+                                transactionRepository,
+                                idempotencyService,
+                                ledgerIntegrationService,
+                                limitEnforcementService,
+                                eventPublisher,
+                                etcCodeSecurityService,
+                                etcCodePolicyService,
+                                etcBruteForceProtectionService,
+                                transactionLifecycleService,
+                                5);
+
+                WalletFlowResult result = service.redeem("ETC-10-ABC123", "idem-etc-redeem-flow", "device-1", "10.0.0.1");
+
+                assertThat(result.success()).isTrue();
+                InOrder order = inOrder(transactionLifecycleService);
+                order.verify(transactionLifecycleService).initialize(any(Transaction.class), anyString(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.PROCESSING), anyString(), any(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.COMPLETED), anyString(), any(), any(), any());
+        }
 }
