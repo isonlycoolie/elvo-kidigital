@@ -6,6 +6,8 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.slf4j.MDC;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +15,8 @@ import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 import com.elvo.wallet.audit.ImmutableAuditStorageService;
+import com.elvo.wallet.messaging.outbox.WalletOutboxDispatcher;
+import com.elvo.wallet.messaging.outbox.WalletOutboxService;
 import com.elvo.wallet.monitoring.SentryExceptionReporter;
 import com.elvo.wallet.monitoring.WalletMetricsRecorder;
 
@@ -25,11 +29,13 @@ public class WalletEventPublisher {
     private final SentryExceptionReporter sentryExceptionReporter;
     private final WalletMetricsRecorder metricsRecorder;
     private final ImmutableAuditStorageService immutableAuditStorageService;
+    private final WalletOutboxService outboxService;
+    private final WalletOutboxDispatcher outboxDispatcher;
 
     public WalletEventPublisher(RabbitTemplate rabbitTemplate,
                                 @Value("${elvo.messaging.wallet.exchange:elvo.wallet.exchange}") String exchange,
                                 @Value("${elvo.messaging.wallet.version:v1}") String version) {
-        this(rabbitTemplate, exchange, version, null, null, null);
+        this(rabbitTemplate, exchange, version, null, null, null, null, null);
     }
 
     @Autowired
@@ -38,13 +44,17 @@ public class WalletEventPublisher {
                                 @Value("${elvo.messaging.wallet.version:v1}") String version,
                                 @Nullable SentryExceptionReporter sentryExceptionReporter,
                                 @Nullable WalletMetricsRecorder metricsRecorder,
-                                @Nullable ImmutableAuditStorageService immutableAuditStorageService) {
+                                @Nullable ImmutableAuditStorageService immutableAuditStorageService,
+                                @Nullable WalletOutboxService outboxService,
+                                @Nullable WalletOutboxDispatcher outboxDispatcher) {
         this.rabbitTemplate = rabbitTemplate;
         this.exchange = exchange;
         this.version = version;
         this.sentryExceptionReporter = sentryExceptionReporter;
         this.metricsRecorder = metricsRecorder;
         this.immutableAuditStorageService = immutableAuditStorageService;
+        this.outboxService = outboxService;
+        this.outboxDispatcher = outboxDispatcher;
     }
 
     public void publish(String eventType, Map<String, Object> payload) {
@@ -70,6 +80,18 @@ public class WalletEventPublisher {
             }
         }
 
+        if (outboxService != null && outboxDispatcher != null) {
+            UUID outboxId = outboxService.enqueue(
+                    eventType,
+                    eventType,
+                    event,
+                    String.valueOf(event.get("requestId")),
+                    String.valueOf(event.get("correlationId")),
+                    Instant.parse(String.valueOf(event.get("occurredAt"))));
+            dispatchAfterCommit(outboxId);
+            return;
+        }
+
         try {
             rabbitTemplate.convertAndSend(exchange, eventType, event);
             if (metricsRecorder != null) {
@@ -90,6 +112,19 @@ public class WalletEventPublisher {
             }
             throw ex;
         }
+    }
+
+    private void dispatchAfterCommit(UUID outboxId) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    outboxDispatcher.dispatchById(outboxId);
+                }
+            });
+            return;
+        }
+        outboxDispatcher.dispatchById(outboxId);
     }
 
     private String resolveRequestId() {

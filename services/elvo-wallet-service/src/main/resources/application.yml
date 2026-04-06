@@ -58,6 +58,10 @@ sentry:
     platform: spring-boot
 
 elvo:
+  messaging:
+    outbox:
+      max-attempts: ${ELVO_OUTBOX_MAX_ATTEMPTS:6}
+      base-backoff-seconds: ${ELVO_OUTBOX_BASE_BACKOFF_SECONDS:2}
   clients:
     identity:
       base-url: ${ELVO_IDENTITY_INTERNAL_BASE_URL:http://localhost:8081/internal}
