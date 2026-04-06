@@ -14,13 +14,14 @@ import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
-import com.elvo.wallet.service.EacReplayProtectionService;
-import com.elvo.wallet.service.WithdrawalFlowService;
 import com.elvo.wallet.security.StepUpAuthenticationService;
 import com.elvo.wallet.security.TransactionSigningChallengeService;
+import com.elvo.wallet.security.WalletFraudVelocityService;
+import com.elvo.wallet.service.EacReplayProtectionService;
+import com.elvo.wallet.service.WithdrawalFlowService;
 import com.elvo.wallet.service.model.WalletFlowResult;
-import com.elvo.wallet.service.model.WithdrawalMode;
 import com.elvo.wallet.service.model.WithdrawalCommand;
+import com.elvo.wallet.service.model.WithdrawalMode;
 import com.elvo.wallet.service.orchestration.WalletSagaOrchestrator;
 
 @Service
@@ -39,6 +40,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     private final EacReplayProtectionService eacReplayProtectionService;
     private final StepUpAuthenticationService stepUpAuthenticationService;
     private final TransactionSigningChallengeService transactionSigningChallengeService;
+    private final WalletFraudVelocityService fraudVelocityService;
 
     public DefaultWithdrawalFlowService(WalletRepository walletRepository,
                                         TransactionRepository transactionRepository,
@@ -50,7 +52,8 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
                                         WalletEventPublisher eventPublisher,
                                         EacReplayProtectionService eacReplayProtectionService,
                                         StepUpAuthenticationService stepUpAuthenticationService,
-                                        TransactionSigningChallengeService transactionSigningChallengeService) {
+                                        TransactionSigningChallengeService transactionSigningChallengeService,
+                                        WalletFraudVelocityService fraudVelocityService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
@@ -62,6 +65,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         this.eacReplayProtectionService = eacReplayProtectionService;
         this.stepUpAuthenticationService = stepUpAuthenticationService;
         this.transactionSigningChallengeService = transactionSigningChallengeService;
+        this.fraudVelocityService = fraudVelocityService;
     }
 
     @Override
@@ -82,6 +86,10 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         WalletFlowResult duplicate = idempotencyService.get(command.idempotencyKey()).orElse(null);
         if (duplicate != null) {
             return duplicate;
+        }
+
+        if (fraudVelocityService.isSuspicious(WalletFraudVelocityService.Operation.WITHDRAWAL, command.userId(), command.amount())) {
+            return failed(command.walletId(), command.idempotencyKey(), "Velocity risk detected");
         }
 
         String sagaReference = resolveReference(command.reference(), command.idempotencyKey());

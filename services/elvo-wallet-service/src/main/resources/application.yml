@@ -110,3 +110,8 @@ elvo:
       per-ip-threshold: ${ELVO_RATE_LIMIT_PER_IP_THRESHOLD:60}
       per-device-threshold: ${ELVO_RATE_LIMIT_PER_DEVICE_THRESHOLD:40}
       per-ean-threshold: ${ELVO_RATE_LIMIT_PER_EAN_THRESHOLD:20}
+    fraud:
+      velocity:
+        window-seconds: ${ELVO_FRAUD_VELOCITY_WINDOW_SECONDS:120}
+        transfer-max-count: ${ELVO_FRAUD_VELOCITY_TRANSFER_MAX_COUNT:5}
+        withdrawal-max-count: ${ELVO_FRAUD_VELOCITY_WITHDRAWAL_MAX_COUNT:4}

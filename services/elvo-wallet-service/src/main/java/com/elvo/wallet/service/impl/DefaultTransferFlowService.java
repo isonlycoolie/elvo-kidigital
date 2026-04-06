@@ -15,6 +15,7 @@ import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.StepUpAuthenticationService;
 import com.elvo.wallet.security.TransactionSigningChallengeService;
+import com.elvo.wallet.security.WalletFraudVelocityService;
 import com.elvo.wallet.service.TransferFlowService;
 import com.elvo.wallet.service.model.TransferCommand;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -34,6 +35,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
     private final WalletEventPublisher eventPublisher;
     private final StepUpAuthenticationService stepUpAuthenticationService;
     private final TransactionSigningChallengeService transactionSigningChallengeService;
+    private final WalletFraudVelocityService fraudVelocityService;
 
     public DefaultTransferFlowService(WalletRepository walletRepository,
                                       TransactionRepository transactionRepository,
@@ -43,7 +45,8 @@ public class DefaultTransferFlowService implements TransferFlowService {
                                       WalletSagaOrchestrator sagaOrchestrator,
                                       WalletEventPublisher eventPublisher,
                                       StepUpAuthenticationService stepUpAuthenticationService,
-                                      TransactionSigningChallengeService transactionSigningChallengeService) {
+                                      TransactionSigningChallengeService transactionSigningChallengeService,
+                                      WalletFraudVelocityService fraudVelocityService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.idempotencyService = idempotencyService;
@@ -53,6 +56,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
         this.eventPublisher = eventPublisher;
         this.stepUpAuthenticationService = stepUpAuthenticationService;
         this.transactionSigningChallengeService = transactionSigningChallengeService;
+        this.fraudVelocityService = fraudVelocityService;
     }
 
     @Override
@@ -94,6 +98,10 @@ public class DefaultTransferFlowService implements TransferFlowService {
         WalletFlowResult duplicate = idempotencyService.get(command.idempotencyKey()).orElse(null);
         if (duplicate != null) {
             return duplicate;
+        }
+
+        if (fraudVelocityService.isSuspicious(WalletFraudVelocityService.Operation.TRANSFER, command.userId(), command.amount())) {
+            return failed(command.sourceWalletId(), command.idempotencyKey(), "Velocity risk detected");
         }
 
         String sagaReference = resolveReference(command.reference(), command.idempotencyKey());

@@ -1,23 +1,22 @@
 package com.elvo.wallet.service.impl;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.Mock;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -37,6 +36,7 @@ import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.security.EtcCodeSecurityService;
 import com.elvo.wallet.security.StepUpAuthenticationService;
 import com.elvo.wallet.security.TransactionSigningChallengeService;
+import com.elvo.wallet.security.WalletFraudVelocityService;
 import com.elvo.wallet.service.EacReplayProtectionService;
 import com.elvo.wallet.service.model.DepositCommand;
 import com.elvo.wallet.service.model.EtcCommand;
@@ -69,6 +69,7 @@ class WalletFlowServiceTests {
     @Mock private EtcBruteForceProtectionService etcBruteForceProtectionService;
     @Mock private StepUpAuthenticationService stepUpAuthenticationService;
     @Mock private TransactionSigningChallengeService transactionSigningChallengeService;
+        @Mock private WalletFraudVelocityService fraudVelocityService;
 
     private Wallet wallet;
 
@@ -148,7 +149,8 @@ class WalletFlowServiceTests {
                 eventPublisher,
                 eacReplayProtectionService,
                 stepUpAuthenticationService,
-                transactionSigningChallengeService);
+                transactionSigningChallengeService,
+                fraudVelocityService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),
@@ -190,7 +192,8 @@ class WalletFlowServiceTests {
                 eventPublisher,
                 eacReplayProtectionService,
                 stepUpAuthenticationService,
-                transactionSigningChallengeService);
+                transactionSigningChallengeService,
+                fraudVelocityService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),
@@ -222,7 +225,8 @@ class WalletFlowServiceTests {
                 sagaOrchestrator,
                 eventPublisher,
                 stepUpAuthenticationService,
-                transactionSigningChallengeService);
+                transactionSigningChallengeService,
+                fraudVelocityService);
 
         UUID walletId = UUID.randomUUID();
         WalletFlowResult result = service.process(new TransferCommand(
@@ -261,7 +265,8 @@ class WalletFlowServiceTests {
                 eventPublisher,
                 eacReplayProtectionService,
                 stepUpAuthenticationService,
-                transactionSigningChallengeService);
+                transactionSigningChallengeService,
+                fraudVelocityService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),
@@ -297,7 +302,8 @@ class WalletFlowServiceTests {
                 sagaOrchestrator,
                 eventPublisher,
                 stepUpAuthenticationService,
-                transactionSigningChallengeService);
+                transactionSigningChallengeService,
+                fraudVelocityService);
 
         WalletFlowResult result = service.process(new TransferCommand(
                 UUID.randomUUID(),
@@ -330,7 +336,8 @@ class WalletFlowServiceTests {
                 sagaOrchestrator,
                 eventPublisher,
                 stepUpAuthenticationService,
-                transactionSigningChallengeService);
+                transactionSigningChallengeService,
+                fraudVelocityService);
 
         WalletFlowResult result = service.process(new TransferCommand(
                 UUID.randomUUID(),
@@ -368,7 +375,8 @@ class WalletFlowServiceTests {
                 eventPublisher,
                 eacReplayProtectionService,
                 stepUpAuthenticationService,
-                transactionSigningChallengeService);
+                transactionSigningChallengeService,
+                fraudVelocityService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),
@@ -387,6 +395,75 @@ class WalletFlowServiceTests {
         assertThat(result.success()).isFalse();
         assertThat(result.message()).isEqualTo("Transaction challenge confirmation required");
         verify(walletRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    void transferShouldFailWhenVelocityRiskDetected() {
+        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(true);
+
+        DefaultTransferFlowService service = new DefaultTransferFlowService(
+                walletRepository,
+                transactionRepository,
+                idempotencyService,
+                ledgerIntegrationService,
+                limitEnforcementService,
+                sagaOrchestrator,
+                eventPublisher,
+                stepUpAuthenticationService,
+                transactionSigningChallengeService,
+                fraudVelocityService);
+
+        WalletFlowResult result = service.process(new TransferCommand(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                wallet.getUserId(),
+                new BigDecimal("25.00"),
+                "idem-velocity-1",
+                "ref-velocity-1",
+                null,
+                null,
+                null));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.message()).isEqualTo("Velocity risk detected");
+    }
+
+    @Test
+    void withdrawalShouldFailWhenVelocityRiskDetected() {
+        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(true);
+
+        DefaultWithdrawalFlowService service = new DefaultWithdrawalFlowService(
+                walletRepository,
+                transactionRepository,
+                identityServiceClient,
+                idempotencyService,
+                ledgerIntegrationService,
+                limitEnforcementService,
+                sagaOrchestrator,
+                eventPublisher,
+                eacReplayProtectionService,
+                stepUpAuthenticationService,
+                transactionSigningChallengeService,
+                fraudVelocityService);
+
+        WalletFlowResult result = service.process(new WithdrawalCommand(
+                UUID.randomUUID(),
+                wallet.getUserId(),
+                new BigDecimal("15.00"),
+                WithdrawalMode.REGISTERED_NUMBER,
+                null,
+                "esp",
+                "eac",
+                "idem-velocity-2",
+                "ref-velocity-2",
+                null,
+                null,
+                null));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.message()).isEqualTo("Velocity risk detected");
     }
 
     @Test
