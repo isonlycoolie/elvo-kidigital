@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,7 @@ import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.service.DepositFlowService;
+import com.elvo.wallet.service.TransactionLifecycleService;
 import com.elvo.wallet.service.model.DepositCommand;
 import com.elvo.wallet.service.model.WalletChannel;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -38,6 +40,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
     private final WalletSagaOrchestrator sagaOrchestrator;
     private final WalletEventPublisher eventPublisher;
     private final WalletFieldEncryptionService fieldEncryptionService;
+    private final TransactionLifecycleService transactionLifecycleService;
 
     public DefaultDepositFlowService(WalletRepository walletRepository,
                                      TransactionRepository transactionRepository,
@@ -49,7 +52,8 @@ public class DefaultDepositFlowService implements DepositFlowService {
                                      WalletLimitEnforcementService limitEnforcementService,
                                      WalletSagaOrchestrator sagaOrchestrator,
                                      WalletEventPublisher eventPublisher,
-                                     WalletFieldEncryptionService fieldEncryptionService) {
+                                     WalletFieldEncryptionService fieldEncryptionService,
+                                     TransactionLifecycleService transactionLifecycleService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
@@ -61,6 +65,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
         this.eventPublisher = eventPublisher;
         this.limitEnforcementService = limitEnforcementService;
         this.fieldEncryptionService = fieldEncryptionService;
+        this.transactionLifecycleService = transactionLifecycleService;
     }
 
     @Override
@@ -122,36 +127,66 @@ public class DefaultDepositFlowService implements DepositFlowService {
             return result;
         }
 
-        BigDecimal updatedBalance = wallet.getBalance().add(command.amount());
-        wallet.setBalance(updatedBalance);
-
+        boolean balanceApplied = false;
         Transaction transaction = new Transaction();
         transaction.setWallet(wallet);
         transaction.setAmount(command.amount());
         transaction.setType(Transaction.TransactionType.DEPOSIT);
-        transaction.setStatus(Transaction.TransactionStatus.COMPLETED);
         transaction.setReference(encryptedReference);
-        transactionRepository.save(transaction);
+        transaction.setExternalReference(resolvedReference);
+        transaction = transactionLifecycleService.initialize(transaction, "Deposit initiated", correlationId(), resolvedReference);
+        try {
+            if (command.channel() == WalletChannel.MOBILE) {
+            transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PENDING,
+                "Awaiting telecom callback", correlationId(), null, null);
+            transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.AWAITING_CONFIRMATION,
+                "Awaiting callback confirmation", correlationId(), null, null);
 
-        ledgerIntegrationService.recordDoubleEntry("deposit", wallet.getId(), command.amount(), transaction.getReference());
+            if (command.mobileCallbackReference() == null || command.mobileCallbackReference().isBlank()) {
+                transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.EXPIRED,
+                    "Mobile callback timed out", correlationId(), "CALLBACK_TIMEOUT", "Mobile callback reference is missing");
+                return failed(wallet.getId(), command.idempotencyKey(), "Mobile callback confirmation required");
+            }
 
-        if (command.channel() == WalletChannel.MOBILE && command.mobileCallbackReference() != null && !command.mobileCallbackReference().isBlank()) {
             callbackReconciliationService.scheduleRetry(command.mobileCallbackReference(), wallet.getId(), command.amount());
+            transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.RETRYING,
+                "Waiting for callback reconciliation", correlationId(), null, null);
             callbackReconciliationService.markReconciled(command.mobileCallbackReference());
-        }
+            }
 
-        emitDepositEvent(true, wallet.getId(), transaction.getReference(), command.amount(), null);
-        limitEnforcementService.record(wallet.getId(), WalletLimitEnforcementService.FlowType.DEPOSIT, command.amount());
+            transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PROCESSING,
+                "Posting deposit", correlationId(), null, null);
 
-        sagaOrchestrator.complete("deposit", wallet.getId(), command.amount(), transaction.getReference());
+            wallet.setBalance(wallet.getBalance().add(command.amount()));
+            balanceApplied = true;
+            ledgerIntegrationService.recordDoubleEntry("deposit", wallet.getId(), command.amount(), transaction.getReference());
 
-        WalletFlowResult result = WalletFlowResult.success(
+            emitDepositEvent(true, wallet.getId(), transaction.getReference(), command.amount(), null);
+            limitEnforcementService.record(wallet.getId(), WalletLimitEnforcementService.FlowType.DEPOSIT, command.amount());
+
+            transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.COMPLETED,
+                "Deposit completed", correlationId(), null, null);
+
+            sagaOrchestrator.complete("deposit", wallet.getId(), command.amount(), transaction.getReference());
+
+            WalletFlowResult result = WalletFlowResult.success(
                 "Deposit completed",
                 wallet.getId(),
                 transaction.getId(),
                 "wallet.deposit.completed");
-        idempotencyService.put(command.idempotencyKey(), result);
-        return result;
+            idempotencyService.put(command.idempotencyKey(), result);
+            return result;
+        } catch (RuntimeException ex) {
+            if (balanceApplied) {
+            wallet.setBalance(wallet.getBalance().subtract(command.amount()));
+            transitionSafely(transaction, Transaction.TransactionStatus.REVERSED,
+                "Deposit reversed after failure", "DEPOSIT_REVERSED", ex.getMessage());
+            } else {
+            transitionSafely(transaction, Transaction.TransactionStatus.FAILED,
+                "Deposit failed before posting", "DEPOSIT_FAILED", ex.getMessage());
+            }
+            return failed(wallet.getId(), command.idempotencyKey(), "Deposit processing failed");
+        }
     }
 
     private WalletFlowResult failed(UUID walletId, String idempotencyKey, String message) {
@@ -183,5 +218,21 @@ public class DefaultDepositFlowService implements DepositFlowService {
             return reference;
         }
         return "dep-" + idempotencyKey + "-" + UUID.randomUUID();
+    }
+
+    private String correlationId() {
+        return MDC.get("correlationId");
+    }
+
+    private void transitionSafely(Transaction transaction,
+                                  Transaction.TransactionStatus status,
+                                  String reason,
+                                  String failureCode,
+                                  String failureMessage) {
+        try {
+            transactionLifecycleService.transition(transaction, status, reason, correlationId(), failureCode, failureMessage);
+        } catch (RuntimeException ignored) {
+            // Best effort lifecycle transition during failure handling.
+        }
     }
 }

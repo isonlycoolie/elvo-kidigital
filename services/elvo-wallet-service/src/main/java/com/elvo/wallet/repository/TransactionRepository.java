@@ -1,6 +1,7 @@
 package com.elvo.wallet.repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +22,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
     Page<Transaction> findByWalletIdOrderByCreatedAtDesc(UUID walletId, Pageable pageable);
 
     List<Transaction> findByWalletIdOrderByCreatedAtDesc(UUID walletId);
+
+        List<Transaction> findByStatusInAndExpiresAtBefore(Collection<Transaction.TransactionStatus> statuses, Instant expiresAt);
+
+        List<Transaction> findByExternalReferenceAndStatusIn(String externalReference,
+                        Collection<Transaction.TransactionStatus> statuses);
 
     @Query("""
             select t

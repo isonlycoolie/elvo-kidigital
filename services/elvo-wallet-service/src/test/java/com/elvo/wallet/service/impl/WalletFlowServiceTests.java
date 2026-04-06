@@ -39,6 +39,7 @@ import com.elvo.wallet.security.TransactionSigningChallengeService;
 import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.security.WalletFraudVelocityService;
 import com.elvo.wallet.service.EacReplayProtectionService;
+import com.elvo.wallet.service.TransactionLifecycleService;
 import com.elvo.wallet.service.model.DepositCommand;
 import com.elvo.wallet.service.model.EtcCommand;
 import com.elvo.wallet.service.model.ReservationCommand;
@@ -72,6 +73,7 @@ class WalletFlowServiceTests {
     @Mock private TransactionSigningChallengeService transactionSigningChallengeService;
         @Mock private WalletFraudVelocityService fraudVelocityService;
         @Mock private WalletFieldEncryptionService fieldEncryptionService;
+        @Mock private TransactionLifecycleService transactionLifecycleService;
 
     private Wallet wallet;
 
@@ -86,6 +88,29 @@ class WalletFlowServiceTests {
 
                 lenient().when(fieldEncryptionService.encrypt(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
                 lenient().when(fieldEncryptionService.decrypt(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+                lenient().when(transactionLifecycleService.initialize(any(), any(), any(), any()))
+                                .thenAnswer(invocation -> {
+                                        Transaction transaction = invocation.getArgument(0);
+                                        transaction.setStatus(Transaction.TransactionStatus.INITIATED);
+                                        try {
+                                                java.lang.reflect.Field idField = Transaction.class.getDeclaredField("id");
+                                                idField.setAccessible(true);
+                                                if (idField.get(transaction) == null) {
+                                                        idField.set(transaction, UUID.randomUUID());
+                                                }
+                                        } catch (ReflectiveOperationException ignored) {
+                                        }
+                                        return transaction;
+                                });
+                lenient().when(transactionLifecycleService.transition(any(), any(), any(), any(), any(), any()))
+                                .thenAnswer(invocation -> {
+                                        Transaction transaction = invocation.getArgument(0);
+                                        Transaction.TransactionStatus nextStatus = invocation.getArgument(1);
+                                        transaction.setStatus(nextStatus);
+                                        return transaction;
+                                });
+                lenient().when(transactionRepository.findByExternalReferenceAndStatusIn(anyString(), any()))
+                                .thenReturn(java.util.List.of());
     }
 
     @Test
@@ -97,7 +122,7 @@ class WalletFlowServiceTests {
         when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
         when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
         when(transactionRepository.existsByReference(anyString())).thenReturn(false);
-        when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> {
+                lenient().when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> {
             Transaction transaction = invocation.getArgument(0);
             try {
                 java.lang.reflect.Field idField = Transaction.class.getDeclaredField("id");
@@ -119,7 +144,8 @@ class WalletFlowServiceTests {
                 limitEnforcementService,
                 sagaOrchestrator,
                 eventPublisher,
-                fieldEncryptionService);
+                fieldEncryptionService,
+                transactionLifecycleService);
 
         WalletFlowResult result = service.process(new DepositCommand(
                 walletId,
@@ -157,7 +183,8 @@ class WalletFlowServiceTests {
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
                 fraudVelocityService,
-                fieldEncryptionService);
+                fieldEncryptionService,
+                transactionLifecycleService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),
@@ -201,7 +228,8 @@ class WalletFlowServiceTests {
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
                 fraudVelocityService,
-                fieldEncryptionService);
+                fieldEncryptionService,
+                transactionLifecycleService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),
@@ -235,7 +263,8 @@ class WalletFlowServiceTests {
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
                 fraudVelocityService,
-                fieldEncryptionService);
+                fieldEncryptionService,
+                transactionLifecycleService);
 
         UUID walletId = UUID.randomUUID();
         WalletFlowResult result = service.process(new TransferCommand(
@@ -276,7 +305,8 @@ class WalletFlowServiceTests {
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
                 fraudVelocityService,
-                fieldEncryptionService);
+                fieldEncryptionService,
+                transactionLifecycleService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),
@@ -314,7 +344,8 @@ class WalletFlowServiceTests {
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
                 fraudVelocityService,
-                fieldEncryptionService);
+                fieldEncryptionService,
+                transactionLifecycleService);
 
         WalletFlowResult result = service.process(new TransferCommand(
                 UUID.randomUUID(),
@@ -349,7 +380,8 @@ class WalletFlowServiceTests {
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
                 fraudVelocityService,
-                fieldEncryptionService);
+                fieldEncryptionService,
+                transactionLifecycleService);
 
         WalletFlowResult result = service.process(new TransferCommand(
                 UUID.randomUUID(),
@@ -389,7 +421,8 @@ class WalletFlowServiceTests {
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
                 fraudVelocityService,
-                fieldEncryptionService);
+                fieldEncryptionService,
+                transactionLifecycleService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),
@@ -426,7 +459,8 @@ class WalletFlowServiceTests {
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
                 fraudVelocityService,
-                fieldEncryptionService);
+                fieldEncryptionService,
+                transactionLifecycleService);
 
         WalletFlowResult result = service.process(new TransferCommand(
                 UUID.randomUUID(),
@@ -441,6 +475,85 @@ class WalletFlowServiceTests {
 
         assertThat(result.success()).isFalse();
         assertThat(result.message()).isEqualTo("Velocity risk detected");
+    }
+
+    @Test
+    void transferShouldFailWhenAnotherTransferIsProcessing() {
+        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
+        when(stepUpAuthenticationService.requiresStepUpForTransfer(any())).thenReturn(false);
+        when(walletRepository.findByIdForUpdate(any())).thenReturn(Optional.of(wallet));
+        when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+
+        Transaction activeTx = new Transaction();
+        activeTx.setStatus(Transaction.TransactionStatus.PROCESSING);
+        when(transactionRepository.findByExternalReferenceAndStatusIn(anyString(), any())).thenReturn(java.util.List.of(activeTx));
+
+        DefaultTransferFlowService service = new DefaultTransferFlowService(
+                walletRepository,
+                transactionRepository,
+                idempotencyService,
+                ledgerIntegrationService,
+                limitEnforcementService,
+                sagaOrchestrator,
+                eventPublisher,
+                stepUpAuthenticationService,
+                transactionSigningChallengeService,
+                fraudVelocityService,
+                fieldEncryptionService,
+                transactionLifecycleService);
+
+        WalletFlowResult result = service.process(new TransferCommand(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                wallet.getUserId(),
+                new BigDecimal("20.00"),
+                "idem-transfer-lock",
+                "transfer-ref-lock",
+                null,
+                null,
+                null));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.message()).isEqualTo("Transfer is already processing");
+    }
+
+    @Test
+    void mobileDepositShouldFailWhenCallbackReferenceIsMissing() {
+        UUID walletId = UUID.randomUUID();
+        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        when(identityServiceClient.isUserActive(any())).thenReturn(true);
+        when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
+        when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+        when(transactionRepository.existsByReference(anyString())).thenReturn(false);
+
+        DefaultDepositFlowService service = new DefaultDepositFlowService(
+                walletRepository,
+                transactionRepository,
+                identityServiceClient,
+                agentServiceClient,
+                idempotencyService,
+                ledgerIntegrationService,
+                callbackReconciliationService,
+                limitEnforcementService,
+                sagaOrchestrator,
+                eventPublisher,
+                fieldEncryptionService,
+                transactionLifecycleService);
+
+        WalletFlowResult result = service.process(new DepositCommand(
+                walletId,
+                wallet.getUserId(),
+                new BigDecimal("20.00"),
+                WalletChannel.MOBILE,
+                "idem-mobile-timeout",
+                "dep-timeout",
+                true,
+                null));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.message()).isEqualTo("Mobile callback confirmation required");
+        verify(callbackReconciliationService, never()).scheduleRetry(anyString(), any(), any());
     }
 
     @Test
@@ -461,7 +574,8 @@ class WalletFlowServiceTests {
                 stepUpAuthenticationService,
                 transactionSigningChallengeService,
                 fraudVelocityService,
-                fieldEncryptionService);
+                fieldEncryptionService,
+                transactionLifecycleService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
                 UUID.randomUUID(),
@@ -551,6 +665,7 @@ class WalletFlowServiceTests {
                 etcCodeSecurityService,
                 etcCodePolicyService,
                 etcBruteForceProtectionService,
+                transactionLifecycleService,
                 5);
 
         WalletFlowResult result = service.generate(new EtcCommand(

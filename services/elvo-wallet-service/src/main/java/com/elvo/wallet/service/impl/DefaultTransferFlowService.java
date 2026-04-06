@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,7 @@ import com.elvo.wallet.security.StepUpAuthenticationService;
 import com.elvo.wallet.security.TransactionSigningChallengeService;
 import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.security.WalletFraudVelocityService;
+import com.elvo.wallet.service.TransactionLifecycleService;
 import com.elvo.wallet.service.TransferFlowService;
 import com.elvo.wallet.service.model.TransferCommand;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -38,6 +40,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
     private final TransactionSigningChallengeService transactionSigningChallengeService;
     private final WalletFraudVelocityService fraudVelocityService;
     private final WalletFieldEncryptionService fieldEncryptionService;
+    private final TransactionLifecycleService transactionLifecycleService;
 
     public DefaultTransferFlowService(WalletRepository walletRepository,
                                       TransactionRepository transactionRepository,
@@ -49,7 +52,8 @@ public class DefaultTransferFlowService implements TransferFlowService {
                                       StepUpAuthenticationService stepUpAuthenticationService,
                                       TransactionSigningChallengeService transactionSigningChallengeService,
                                       WalletFraudVelocityService fraudVelocityService,
-                                      WalletFieldEncryptionService fieldEncryptionService) {
+                                      WalletFieldEncryptionService fieldEncryptionService,
+                                      TransactionLifecycleService transactionLifecycleService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.idempotencyService = idempotencyService;
@@ -61,6 +65,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
         this.transactionSigningChallengeService = transactionSigningChallengeService;
         this.fraudVelocityService = fraudVelocityService;
         this.fieldEncryptionService = fieldEncryptionService;
+        this.transactionLifecycleService = transactionLifecycleService;
     }
 
     @Override
@@ -128,6 +133,12 @@ public class DefaultTransferFlowService implements TransferFlowService {
 
         String transferReference = resolveReference(command.reference(), command.idempotencyKey());
         String encryptedTransferReference = fieldEncryptionService.encrypt(transferReference);
+        if (!transactionRepository.findByExternalReferenceAndStatusIn(
+                transferReference,
+                transactionLifecycleService.activeStatuses()).isEmpty()) {
+            return failed(command.sourceWalletId(), command.idempotencyKey(), "Transfer is already processing");
+        }
+
         if (transactionRepository.existsByReference(encryptedTransferReference)) {
             Transaction existing = transactionRepository.findFirstByReferenceOrderByCreatedAtDesc(encryptedTransferReference);
             WalletFlowResult result = WalletFlowResult.success(
@@ -151,43 +162,65 @@ public class DefaultTransferFlowService implements TransferFlowService {
         debit.setWallet(source);
         debit.setType(Transaction.TransactionType.TRANSFER);
         debit.setAmount(command.amount());
-        debit.setStatus(Transaction.TransactionStatus.COMPLETED);
         debit.setReference(fieldEncryptionService.encrypt(transferReference + "-debit"));
-        transactionRepository.save(debit);
+        debit.setExternalReference(transferReference);
+        debit = transactionLifecycleService.initialize(debit, "Transfer initiated", correlationId(), transferReference);
 
         Transaction credit = new Transaction();
         credit.setWallet(target);
         credit.setType(Transaction.TransactionType.TRANSFER);
         credit.setAmount(command.amount());
-        credit.setStatus(Transaction.TransactionStatus.COMPLETED);
         credit.setReference(fieldEncryptionService.encrypt(transferReference + "-credit"));
-        transactionRepository.save(credit);
+        credit.setExternalReference(transferReference);
+        credit = transactionLifecycleService.initialize(credit, "Transfer initiated", correlationId(), transferReference);
 
-        ledgerIntegrationService.recordDoubleEntry("transfer", source.getId(), command.amount(), transferReference);
-        ledgerIntegrationService.recordDoubleEntry("transfer", target.getId(), command.amount(), transferReference);
+        try {
+            transactionLifecycleService.transition(debit, Transaction.TransactionStatus.PENDING,
+                "Transfer debit queued", correlationId(), null, null);
+            transactionLifecycleService.transition(credit, Transaction.TransactionStatus.PENDING,
+                "Transfer credit queued", correlationId(), null, null);
+            transactionLifecycleService.transition(debit, Transaction.TransactionStatus.PROCESSING,
+                "Posting transfer debit", correlationId(), null, null);
+            transactionLifecycleService.transition(credit, Transaction.TransactionStatus.PROCESSING,
+                "Posting transfer credit", correlationId(), null, null);
 
-        AUDIT_LOG.info("event=wallet.transfer.completed sourceWalletId={} targetWalletId={} amount={} reference={}",
+            ledgerIntegrationService.recordDoubleEntry("transfer", source.getId(), command.amount(), transferReference);
+            ledgerIntegrationService.recordDoubleEntry("transfer", target.getId(), command.amount(), transferReference);
+
+            AUDIT_LOG.info("event=wallet.transfer.completed sourceWalletId={} targetWalletId={} amount={} reference={}",
                 source.getId(),
                 target.getId(),
                 command.amount(),
                 transferReference);
-        eventPublisher.publish("wallet.transfer.completed", java.util.Map.of(
+            eventPublisher.publish("wallet.transfer.completed", java.util.Map.of(
                 "sourceWalletId", source.getId(),
                 "targetWalletId", target.getId(),
                 "amount", command.amount(),
                 "reference", transferReference));
 
-        limitEnforcementService.record(source.getId(), WalletLimitEnforcementService.FlowType.TRANSFER, command.amount());
+            limitEnforcementService.record(source.getId(), WalletLimitEnforcementService.FlowType.TRANSFER, command.amount());
 
-        sagaOrchestrator.complete("transfer", source.getId(), command.amount(), transferReference);
+            transactionLifecycleService.transition(debit, Transaction.TransactionStatus.COMPLETED,
+                "Transfer completed", correlationId(), null, null);
+            transactionLifecycleService.transition(credit, Transaction.TransactionStatus.COMPLETED,
+                "Transfer completed", correlationId(), null, null);
 
-        WalletFlowResult result = WalletFlowResult.success(
+            sagaOrchestrator.complete("transfer", source.getId(), command.amount(), transferReference);
+
+            WalletFlowResult result = WalletFlowResult.success(
                 "Transfer completed",
                 source.getId(),
                 debit.getId(),
                 "wallet.transfer.completed");
-        idempotencyService.put(command.idempotencyKey(), result);
-        return result;
+            idempotencyService.put(command.idempotencyKey(), result);
+            return result;
+        } catch (RuntimeException ex) {
+            transitionSafely(debit, Transaction.TransactionStatus.REVERSED,
+                "Transfer compensated after failure", "TRANSFER_REVERSED", ex.getMessage());
+            transitionSafely(credit, Transaction.TransactionStatus.REVERSED,
+                "Transfer compensated after failure", "TRANSFER_REVERSED", ex.getMessage());
+            return failed(command.sourceWalletId(), command.idempotencyKey(), "Transfer processing failed");
+        }
     }
 
     private WalletFlowResult failed(UUID walletId, String idempotencyKey, String message) {
@@ -211,5 +244,21 @@ public class DefaultTransferFlowService implements TransferFlowService {
     private String transferBinding(TransferCommand command) {
         String amount = command.amount() == null ? "0" : command.amount().stripTrailingZeros().toPlainString();
         return command.sourceWalletId() + ":" + command.targetWalletId() + ":" + amount;
+    }
+
+    private String correlationId() {
+        return MDC.get("correlationId");
+    }
+
+    private void transitionSafely(Transaction transaction,
+                                  Transaction.TransactionStatus status,
+                                  String reason,
+                                  String failureCode,
+                                  String failureMessage) {
+        try {
+            transactionLifecycleService.transition(transaction, status, reason, correlationId(), failureCode, failureMessage);
+        } catch (RuntimeException ignored) {
+            // Best effort lifecycle transition during failure handling.
+        }
     }
 }
