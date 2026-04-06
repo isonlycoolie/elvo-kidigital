@@ -102,7 +102,8 @@ public class AuthController {
                 throw new IllegalArgumentException("Refresh token is invalid");
             }
 
-            if (session.isRevoked() || !session.isActive() || Instant.now().isAfter(session.getExpiresAt())) {
+            Instant now = Instant.now();
+            if (session.isRevoked() || !session.isActive() || now.isAfter(session.getExpiresAt()) || now.isAfter(session.getAbsoluteExpiresAt())) {
                 throw new IllegalStateException("Session is expired or revoked");
             }
 
@@ -110,7 +111,7 @@ public class AuthController {
             revokeSessionAccessTokenIfPresent(session);
 
             TokenService.TokenPayload accessToken = tokenService.generateAccessToken(session.getUser().getId(), session.getUser().getEan());
-            TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(session.getUser().getId());
+            TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(session.getUser().getId(), session.getAbsoluteExpiresAt());
             session.setJwtToken(accessToken.token());
             session.setRefreshToken(refreshToken.token());
             session.setExpiresAt(refreshToken.expiresAt());

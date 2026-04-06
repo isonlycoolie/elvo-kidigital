@@ -53,6 +53,7 @@ public class TokenService {
     private final String audience;
     private final long accessTokenTtlMinutes;
     private final long refreshTokenTtlDays;
+    private final long sessionAbsoluteTtlDays;
 
     @Autowired
     public TokenService(@Value("${elvo.security.jwt.secret}") String jwtSecret,
@@ -63,8 +64,9 @@ public class TokenService {
                         @Value("${elvo.security.jwt.signing.previous-key-id:}") String previousSigningKeyId,
                         @Value("${elvo.security.jwt.issuer:elvo-identity-service-${spring.profiles.active:dev}}") String issuer,
                         @Value("${elvo.security.jwt.audience:elvo-wallet-service-${spring.profiles.active:dev}}") String audience,
-                        @Value("${elvo.security.jwt.access-token-ttl-minutes:15}") long accessTokenTtlMinutes,
+                        @Value("${elvo.security.jwt.access-token-ttl-minutes:5}") long accessTokenTtlMinutes,
                         @Value("${elvo.security.jwt.refresh-token-ttl-days:7}") long refreshTokenTtlDays,
+                        @Value("${elvo.security.jwt.session-absolute-ttl-days:30}") long sessionAbsoluteTtlDays,
                         SecretManagerService secretManagerService,
                         TokenRevocationChecker tokenRevocationChecker) {
         this(secretManagerService.resolve(
@@ -93,8 +95,8 @@ public class TokenService {
             audience,
             accessTokenTtlMinutes,
             refreshTokenTtlDays,
-            tokenRevocationChecker,
-            true);
+            sessionAbsoluteTtlDays,
+            tokenRevocationChecker);
     }
 
     public TokenService(String jwtSecret,
@@ -106,7 +108,8 @@ public class TokenService {
                         String issuer,
                         String audience,
                         long accessTokenTtlMinutes,
-                        long refreshTokenTtlDays) {
+                        long refreshTokenTtlDays,
+                        long sessionAbsoluteTtlDays) {
         this(jwtSecret,
             privateKeyPem,
             publicKeyPem,
@@ -117,8 +120,8 @@ public class TokenService {
             audience,
             accessTokenTtlMinutes,
             refreshTokenTtlDays,
-            jti -> false,
-            false);
+            sessionAbsoluteTtlDays,
+            jti -> false);
     }
 
     public TokenService(String jwtSecret,
@@ -128,7 +131,8 @@ public class TokenService {
                         String issuer,
                         String audience,
                         long accessTokenTtlMinutes,
-                        long refreshTokenTtlDays) {
+                        long refreshTokenTtlDays,
+                        long sessionAbsoluteTtlDays) {
         this(jwtSecret,
             privateKeyPem,
             publicKeyPem,
@@ -139,8 +143,8 @@ public class TokenService {
             audience,
             accessTokenTtlMinutes,
             refreshTokenTtlDays,
-            jti -> false,
-            false);
+            sessionAbsoluteTtlDays,
+            jti -> false);
     }
 
     private TokenService(String jwtSecret,
@@ -153,8 +157,8 @@ public class TokenService {
                          String audience,
                          long accessTokenTtlMinutes,
                          long refreshTokenTtlDays,
-                         TokenRevocationChecker tokenRevocationChecker,
-                         boolean ignored) {
+                         long sessionAbsoluteTtlDays,
+                         TokenRevocationChecker tokenRevocationChecker) {
         if (hasText(privateKeyPem) || hasText(publicKeyPem) || hasText(signingKeyId)) {
             this.signingPrivateKey = parsePrivateKey(privateKeyPem);
             this.verificationPublicKey = parsePublicKey(publicKeyPem);
@@ -178,6 +182,7 @@ public class TokenService {
         this.audience = audience;
         this.accessTokenTtlMinutes = accessTokenTtlMinutes;
         this.refreshTokenTtlDays = refreshTokenTtlDays;
+        this.sessionAbsoluteTtlDays = sessionAbsoluteTtlDays;
     }
 
     TokenService(PrivateKey signingPrivateKey,
@@ -186,7 +191,8 @@ public class TokenService {
                  String audience,
                  String signingKeyId,
                  long accessTokenTtlMinutes,
-                 long refreshTokenTtlDays) {
+                 long refreshTokenTtlDays,
+                 long sessionAbsoluteTtlDays) {
         this(signingPrivateKey,
             verificationPublicKey,
             null,
@@ -195,28 +201,8 @@ public class TokenService {
             signingKeyId,
             null,
             accessTokenTtlMinutes,
-            refreshTokenTtlDays,
-            jti -> false);
-    }
-
-    TokenService(PrivateKey signingPrivateKey,
-                 PublicKey verificationPublicKey,
-                 PublicKey previousVerificationPublicKey,
-                 String issuer,
-                 String audience,
-                 String signingKeyId,
-                 String previousSigningKeyId,
-                 long accessTokenTtlMinutes,
-                 long refreshTokenTtlDays) {
-        this(signingPrivateKey,
-            verificationPublicKey,
-            previousVerificationPublicKey,
-            issuer,
-            audience,
-            signingKeyId,
-            previousSigningKeyId,
-            accessTokenTtlMinutes,
-            refreshTokenTtlDays,
+                refreshTokenTtlDays,
+                sessionAbsoluteTtlDays,
             jti -> false);
     }
 
@@ -229,6 +215,30 @@ public class TokenService {
                  String previousSigningKeyId,
                  long accessTokenTtlMinutes,
                  long refreshTokenTtlDays,
+                 long sessionAbsoluteTtlDays) {
+        this(signingPrivateKey,
+            verificationPublicKey,
+            previousVerificationPublicKey,
+            issuer,
+            audience,
+            signingKeyId,
+            previousSigningKeyId,
+            accessTokenTtlMinutes,
+                refreshTokenTtlDays,
+                sessionAbsoluteTtlDays,
+            jti -> false);
+    }
+
+    TokenService(PrivateKey signingPrivateKey,
+                 PublicKey verificationPublicKey,
+                 PublicKey previousVerificationPublicKey,
+                 String issuer,
+                 String audience,
+                 String signingKeyId,
+                 String previousSigningKeyId,
+                 long accessTokenTtlMinutes,
+                 long refreshTokenTtlDays,
+                 long sessionAbsoluteTtlDays,
                  TokenRevocationChecker tokenRevocationChecker) {
         this.signingPrivateKey = signingPrivateKey;
         this.verificationPublicKey = verificationPublicKey;
@@ -242,6 +252,7 @@ public class TokenService {
         this.audience = audience;
         this.accessTokenTtlMinutes = accessTokenTtlMinutes;
         this.refreshTokenTtlDays = refreshTokenTtlDays;
+        this.sessionAbsoluteTtlDays = sessionAbsoluteTtlDays;
     }
 
     private void validateJwtSecret(String jwtSecret) {
@@ -276,8 +287,18 @@ public class TokenService {
     }
 
     public TokenPayload generateRefreshToken(UUID userId) {
+        return generateRefreshToken(userId, null);
+    }
+
+    public TokenPayload generateRefreshToken(UUID userId, Instant absoluteSessionExpiresAt) {
         Instant now = Instant.now();
-        Instant expiresAt = now.plusSeconds(refreshTokenTtlDays * 24 * 60 * 60);
+        Instant refreshExpiresAt = now.plusSeconds(refreshTokenTtlDays * 24 * 60 * 60);
+        Instant expiresAt = absoluteSessionExpiresAt == null || refreshExpiresAt.isBefore(absoluteSessionExpiresAt)
+                ? refreshExpiresAt
+                : absoluteSessionExpiresAt;
+        if (absoluteSessionExpiresAt != null && absoluteSessionExpiresAt.isBefore(now)) {
+            throw new IllegalStateException("Session is expired or revoked");
+        }
         var builder = Jwts.builder()
             .issuer(issuer)
             .audience().add(audience).and()
@@ -288,6 +309,10 @@ public class TokenService {
             .id(UUID.randomUUID().toString());
         String token = sign(builder);
         return new TokenPayload(token, expiresAt);
+    }
+
+    public Instant calculateSessionAbsoluteExpiry() {
+        return Instant.now().plusSeconds(sessionAbsoluteTtlDays * 24 * 60 * 60);
     }
 
     public AccessTokenClaims validateAccessToken(String token) {

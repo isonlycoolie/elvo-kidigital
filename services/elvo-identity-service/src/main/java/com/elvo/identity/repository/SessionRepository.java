@@ -52,6 +52,7 @@ public interface SessionRepository extends JpaRepository<Session, UUID> {
     @Query("""
             delete from Session s
              where s.expiresAt < :referenceTime
+                                or s.absoluteExpiresAt < :referenceTime
                 or s.sessionStatus = com.elvo.identity.entity.Session.SessionStatus.EXPIRED
             """)
     int deleteExpiredSessions(@Param("referenceTime") Instant referenceTime);

@@ -70,7 +70,8 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         Device savedDevice = deviceRepository.save(device);
 
         TokenService.TokenPayload accessToken = tokenService.generateAccessToken(user.getId(), user.getEan());
-        TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(user.getId());
+        Instant absoluteSessionExpiresAt = tokenService.calculateSessionAbsoluteExpiry();
+        TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(user.getId(), absoluteSessionExpiresAt);
 
         Session session = new Session();
         session.setUser(user);
@@ -78,6 +79,7 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         session.setJwtToken(accessToken.token());
         session.setRefreshToken(refreshToken.token());
         session.setExpiresAt(refreshToken.expiresAt());
+        session.setAbsoluteExpiresAt(absoluteSessionExpiresAt);
         session.setIpAddress(request.getSourceIp());
         session.setSessionStatus(Session.SessionStatus.ACTIVE);
         session.setActive(true);

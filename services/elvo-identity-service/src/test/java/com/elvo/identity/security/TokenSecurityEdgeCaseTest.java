@@ -1,12 +1,13 @@
 package com.elvo.identity.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.util.UUID;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.util.Base64;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
@@ -17,6 +18,7 @@ class TokenSecurityEdgeCaseTest {
     private static final String ISSUER = "identity-test-issuer";
     private static final String AUDIENCE = "identity-test-audience";
     private static final String KEY_ID = "identity-edge-key";
+    private static final long SESSION_ABSOLUTE_TTL_DAYS = 30;
 
     private TokenService tokenService(long accessMinutes, long refreshDays) {
         KeyPair keyPair = generateRsaKeyPair();
@@ -32,7 +34,8 @@ class TokenSecurityEdgeCaseTest {
                 issuer,
                 audience,
                 accessMinutes,
-                refreshDays);
+                refreshDays,
+                SESSION_ABSOLUTE_TTL_DAYS);
     }
 
     private KeyPair generateRsaKeyPair() {
@@ -69,7 +72,10 @@ class TokenSecurityEdgeCaseTest {
         TokenService tokenService = tokenService(15, 7);
         TokenService.TokenPayload tokenPayload = tokenService.generateAccessToken(UUID.randomUUID(), "ELVO-EDGE-0001");
 
-        String tampered = tokenPayload.token().substring(0, tokenPayload.token().length() - 2) + "zz";
+        String[] parts = tokenPayload.token().split("\\.");
+        String tamperedPayload = parts[1].substring(0, parts[1].length() - 1)
+            + (parts[1].endsWith("A") ? "B" : "A");
+        String tampered = parts[0] + "." + tamperedPayload + "." + parts[2];
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> tokenService.validateAccessToken(tampered));
         assertEquals("Token is invalid", ex.getMessage());
@@ -80,7 +86,9 @@ class TokenSecurityEdgeCaseTest {
         TokenService tokenService = tokenService(-1, -1);
         TokenService.TokenPayload refresh = tokenService.generateRefreshToken(UUID.randomUUID());
 
-        assertThrows(IllegalArgumentException.class, () -> tokenService.validateRefreshToken(refresh.token()));
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> tokenService.validateRefreshToken(refresh.token()));
+        assertNotNull(ex);
     }
 
     @Test

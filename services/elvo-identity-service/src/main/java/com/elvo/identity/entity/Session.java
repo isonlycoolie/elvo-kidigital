@@ -29,6 +29,7 @@ import jakarta.persistence.UniqueConstraint;
                 @Index(name = "idx_sessions_user_id", columnList = "user_id"),
                 @Index(name = "idx_sessions_device_id", columnList = "device_id"),
                 @Index(name = "idx_sessions_expires_at", columnList = "expires_at"),
+                @Index(name = "idx_sessions_absolute_expires_at", columnList = "absolute_expires_at"),
                 @Index(name = "idx_sessions_status_active", columnList = "session_status,is_active")
         }
 )
@@ -50,6 +51,9 @@ public class Session {
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
+
+    @Column(name = "absolute_expires_at", nullable = false)
+    private Instant absoluteExpiresAt;
 
     @Column(name = "ip_address", length = 45)
     private String ipAddress;
@@ -113,6 +117,14 @@ public class Session {
 
     public void setExpiresAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public Instant getAbsoluteExpiresAt() {
+        return absoluteExpiresAt;
+    }
+
+    public void setAbsoluteExpiresAt(Instant absoluteExpiresAt) {
+        this.absoluteExpiresAt = absoluteExpiresAt;
     }
 
     public String getIpAddress() {

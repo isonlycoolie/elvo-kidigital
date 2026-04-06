@@ -24,9 +24,10 @@ class TokenServiceUnitTest {
     private static final String AUDIENCE = "identity-test-audience";
     private static final String KEY_ID = "identity-key-01";
     private static final String PREVIOUS_KEY_ID = "identity-key-00";
+    private static final long SESSION_ABSOLUTE_TTL_DAYS = 30;
 
     private TokenService tokenService(KeyPair keyPair, String keyId, long accessMinutes, long refreshDays) {
-        return new TokenService(keyPair.getPrivate(), keyPair.getPublic(), ISSUER, AUDIENCE, keyId, accessMinutes, refreshDays);
+        return new TokenService(keyPair.getPrivate(), keyPair.getPublic(), ISSUER, AUDIENCE, keyId, accessMinutes, refreshDays, SESSION_ABSOLUTE_TTL_DAYS);
     }
 
     private TokenService tokenService(KeyPair keyPair, KeyPair previousKeyPair, String keyId, String previousKeyId, long accessMinutes, long refreshDays) {
@@ -39,7 +40,8 @@ class TokenServiceUnitTest {
                 keyId,
                 previousKeyId,
                 accessMinutes,
-                refreshDays);
+                refreshDays,
+                SESSION_ABSOLUTE_TTL_DAYS);
     }
 
     private KeyPair generateRsaKeyPair() {
@@ -95,7 +97,8 @@ class TokenServiceUnitTest {
         TokenService tokenService = tokenService(keyPair, KEY_ID, -1, -1);
         TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(UUID.randomUUID());
 
-        assertThrows(IllegalArgumentException.class, () -> tokenService.validateRefreshToken(refreshToken.token()));
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> tokenService.validateRefreshToken(refreshToken.token()));
+        assertNotNull(ex);
     }
 
     @Test
@@ -107,6 +110,17 @@ class TokenServiceUnitTest {
         assertDoesNotThrow(() -> tokenService.validateRefreshToken(tokenPayload.token()));
         assertNotNull(tokenPayload.expiresAt());
         assertEquals(true, tokenPayload.expiresAt().isAfter(Instant.now().minusSeconds(1)));
+    }
+
+    @Test
+    void refreshTokenShouldRespectAbsoluteSessionExpiryCap() {
+        KeyPair keyPair = generateRsaKeyPair();
+        TokenService tokenService = tokenService(keyPair, KEY_ID, 5, 7);
+        Instant absoluteSessionExpiry = Instant.now().plusSeconds(24 * 60 * 60);
+
+        TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(UUID.randomUUID(), absoluteSessionExpiry);
+
+        assertEquals(true, !refreshToken.expiresAt().isAfter(absoluteSessionExpiry));
     }
 
     @Test
@@ -199,7 +213,8 @@ class TokenServiceUnitTest {
                 AUDIENCE,
                 PREVIOUS_KEY_ID,
                 15,
-                7);
+            7,
+            SESSION_ABSOLUTE_TTL_DAYS);
         TokenService verifierService = tokenService(activeKeyPair, previousKeyPair, KEY_ID, PREVIOUS_KEY_ID, 15, 7);
 
         TokenService.TokenPayload tokenPayload = issuerService.generateAccessToken(UUID.randomUUID(), "ELVO-UNIT-ROLLOVER");
@@ -231,7 +246,7 @@ class TokenServiceUnitTest {
 
     @Test
     void jwksShouldRejectSymmetricMode() {
-        TokenService tokenService = new TokenService(SECRET, "", "", "", ISSUER, AUDIENCE, 15, 7);
+        TokenService tokenService = new TokenService(SECRET, "", "", "", ISSUER, AUDIENCE, 15, 7, SESSION_ABSOLUTE_TTL_DAYS);
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, tokenService::getJwksDocument);
         assertEquals("JWKS requires asymmetric signing configuration", ex.getMessage());
