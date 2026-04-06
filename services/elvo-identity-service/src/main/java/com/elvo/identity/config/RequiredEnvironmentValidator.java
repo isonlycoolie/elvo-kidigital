@@ -19,6 +19,7 @@ public class RequiredEnvironmentValidator {
     private final boolean rejectInsecureDefaults;
     private final Set<String> relaxedProfiles;
     private final Environment environment;
+    private final String provisioningInternalAuthToken;
     private final Map<String, String> requiredValues;
     private final Map<String, Set<String>> insecureDefaults;
 
@@ -32,11 +33,13 @@ public class RequiredEnvironmentValidator {
             @Value("${ELVO_JWT_SECRET_REF:sm://identity-jwt-secret}") String jwtSecretRef,
             @Value("${ELVO_OTP_HASH_PEPPER:change-this-otp-pepper}") String otpHashPepper,
             @Value("${SMS_PROVIDER_API_KEY:replace_with_sms_api_key}") String smsApiKey,
-            @Value("${EMAIL_PROVIDER_PASSWORD:replace_with_email_password}") String emailProviderPassword) {
+            @Value("${EMAIL_PROVIDER_PASSWORD:replace_with_email_password}") String emailProviderPassword,
+            @Value("${ELVO_PROVISIONING_INTERNAL_AUTH_TOKEN:}") String provisioningInternalAuthToken) {
         this.enabled = enabled;
         this.rejectInsecureDefaults = rejectInsecureDefaults;
         this.relaxedProfiles = parseProfiles(relaxedProfilesCsv);
         this.environment = environment;
+        this.provisioningInternalAuthToken = provisioningInternalAuthToken;
         this.requiredValues = new LinkedHashMap<>();
         this.insecureDefaults = new LinkedHashMap<>();
         requiredValues.put("ELVO_DB_PASSWORD", dbPassword);
@@ -59,6 +62,8 @@ public class RequiredEnvironmentValidator {
             return;
         }
 
+        boolean strictValidation = shouldEnforceStrictValidation();
+
         StringBuilder missing = new StringBuilder();
         requiredValues.forEach((name, value) -> {
             if (value == null || value.isBlank()) {
@@ -69,11 +74,18 @@ public class RequiredEnvironmentValidator {
             }
         });
 
+        if (strictValidation && (provisioningInternalAuthToken == null || provisioningInternalAuthToken.isBlank())) {
+            if (!missing.isEmpty()) {
+                missing.append(", ");
+            }
+            missing.append("ELVO_PROVISIONING_INTERNAL_AUTH_TOKEN");
+        }
+
         if (!missing.isEmpty()) {
             throw new IllegalStateException("Missing required environment variables: " + missing);
         }
 
-        if (rejectInsecureDefaults && shouldEnforceStrictValidation()) {
+        if (rejectInsecureDefaults && strictValidation) {
             StringBuilder insecure = new StringBuilder();
             insecureDefaults.forEach((name, defaults) -> {
                 String value = requiredValues.get(name);

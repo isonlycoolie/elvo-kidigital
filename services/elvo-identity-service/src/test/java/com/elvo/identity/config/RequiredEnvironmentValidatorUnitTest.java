@@ -23,7 +23,8 @@ class RequiredEnvironmentValidatorUnitTest {
                 "sm://identity-jwt-secret",
                 "change-this-otp-pepper",
                 "replace_with_sms_api_key",
-                "replace_with_email_password");
+                "replace_with_email_password",
+                "prod-token");
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, validator::validateRequiredVariables);
         org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("Insecure default environment values detected"));
@@ -44,7 +45,8 @@ class RequiredEnvironmentValidatorUnitTest {
                 "sm://identity-jwt-secret",
                 "change-this-otp-pepper",
                 "replace_with_sms_api_key",
-                "replace_with_email_password");
+                "replace_with_email_password",
+                "");
 
         assertDoesNotThrow(validator::validateRequiredVariables);
     }
@@ -64,9 +66,32 @@ class RequiredEnvironmentValidatorUnitTest {
                 "sm://identity-jwt-secret",
                 "",
                 "replace_with_sms_api_key",
-                "replace_with_email_password");
+                "replace_with_email_password",
+                "prod-token");
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, validator::validateRequiredVariables);
         org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().startsWith("Missing required environment variables"));
+    }
+
+    @Test
+    void shouldRejectMissingProvisioningInternalTokenInStrictProfile() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles("prod");
+
+        RequiredEnvironmentValidator validator = new RequiredEnvironmentValidator(
+                true,
+                true,
+                "dev,test,local",
+                environment,
+                "strong-db-password",
+                "strong-rmq-password",
+                "sm://identity-jwt-secret",
+                "very-strong-otp-pepper",
+                "valid-sms-key",
+                "valid-email-password",
+                "");
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, validator::validateRequiredVariables);
+        org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("ELVO_PROVISIONING_INTERNAL_AUTH_TOKEN"));
     }
 }
