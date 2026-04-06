@@ -44,6 +44,7 @@ import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.security.DeviceLocationRiskService;
 import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
@@ -78,12 +79,14 @@ public class WalletController {
     private final WalletMapper walletMapper;
     private final EtcCodePolicyService etcCodePolicyService;
     private final WalletOperationRateLimitService operationRateLimitService;
+    private final DeviceLocationRiskService deviceLocationRiskService;
 
     public WalletController(WalletService walletService, WalletRepository walletRepository,
                           TransactionRepository transactionRepository, ReservationRepository reservationRepository,
                           EtcRepository etcRepository, WalletMapper walletMapper,
                           EtcCodePolicyService etcCodePolicyService,
-                          WalletOperationRateLimitService operationRateLimitService) {
+                          WalletOperationRateLimitService operationRateLimitService,
+                          DeviceLocationRiskService deviceLocationRiskService) {
         this.walletService = walletService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -92,6 +95,7 @@ public class WalletController {
         this.walletMapper = walletMapper;
         this.etcCodePolicyService = etcCodePolicyService;
         this.operationRateLimitService = operationRateLimitService;
+        this.deviceLocationRiskService = deviceLocationRiskService;
     }
 
     /**
@@ -219,6 +223,14 @@ public class WalletController {
                 .body(new FlowResultResponseDto(false, "Withdrawal rate limit exceeded", wallet.getId(), null, "wallet.withdrawal.failed"));
         }
 
+        String withdrawalDeviceId = httpRequest.getHeader("X-Device-Id");
+        String withdrawalLocationHint = resolveLocationHint(httpRequest);
+        boolean withdrawalRisky = deviceLocationRiskService.requiresAdditionalVerification(userId, withdrawalDeviceId, withdrawalLocationHint);
+        if (withdrawalRisky && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new FlowResultResponseDto(false, "Device/location verification required", wallet.getId(), null, "wallet.withdrawal.failed"));
+        }
+
         try {
             WithdrawalMode mode = WithdrawalMode.valueOf(request.getMode());
             WithdrawalCommand command = new WithdrawalCommand(
@@ -240,6 +252,7 @@ public class WalletController {
             FlowResultResponseDto response = walletMapper.toFlowResultResponseDto(result);
 
             if (result.success()) {
+                deviceLocationRiskService.markTrusted(userId, withdrawalDeviceId, withdrawalLocationHint);
                 AUDIT_LOG.info("wallet_withdrawal_success userId={} amount={} walletId={} transactionId={}",
                     userId, request.getAmount(), wallet.getId(), result.transactionId());
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -282,6 +295,14 @@ public class WalletController {
                 .body(new FlowResultResponseDto(false, "Transfer rate limit exceeded", sourceWallet.getId(), null, "wallet.transfer.failed"));
         }
 
+        String transferDeviceId = httpRequest.getHeader("X-Device-Id");
+        String transferLocationHint = resolveLocationHint(httpRequest);
+        boolean transferRisky = deviceLocationRiskService.requiresAdditionalVerification(userId, transferDeviceId, transferLocationHint);
+        if (transferRisky && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new FlowResultResponseDto(false, "Device/location verification required", sourceWallet.getId(), null, "wallet.transfer.failed"));
+        }
+
         Wallet targetWallet = walletRepository.findById(request.getTargetWalletId())
             .orElseThrow(() -> new WalletNotFoundException("Target wallet not found: " + request.getTargetWalletId()));
 
@@ -301,6 +322,7 @@ public class WalletController {
         FlowResultResponseDto response = walletMapper.toFlowResultResponseDto(result);
 
         if (result.success()) {
+            deviceLocationRiskService.markTrusted(userId, transferDeviceId, transferLocationHint);
             AUDIT_LOG.info("wallet_transfer_success userId={} sourceWalletId={} targetWalletId={} amount={} walletId={} transactionId={}",
                 userId, sourceWallet.getId(), request.getTargetWalletId(), request.getAmount(),
                 sourceWallet.getId(), result.transactionId());
@@ -602,6 +624,24 @@ public class WalletController {
             .orElseThrow(() -> new WalletNotFoundException("Reservation not found: " + reservationId));
 
         return reservation;
+    }
+
+    private String resolveLocationHint(HttpServletRequest request) {
+        String headerLocation = request.getHeader("X-Geo-Region");
+        if (headerLocation != null && !headerLocation.isBlank()) {
+            return headerLocation.trim();
+        }
+
+        String sourceIp = request.getRemoteAddr();
+        if (sourceIp == null || sourceIp.isBlank()) {
+            return "unknown";
+        }
+
+        String[] blocks = sourceIp.split("\\.");
+        if (blocks.length >= 2) {
+            return blocks[0] + "." + blocks[1];
+        }
+        return sourceIp;
     }
 
     /**

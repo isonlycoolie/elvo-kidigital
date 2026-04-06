@@ -26,6 +26,7 @@ import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.security.DeviceLocationRiskService;
 import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
@@ -58,6 +59,9 @@ class WalletControllerTest {
 
     @MockBean
     private WalletOperationRateLimitService operationRateLimitService;
+
+    @MockBean
+    private DeviceLocationRiskService deviceLocationRiskService;
 
     @Test
     @WithMockUser(username = "11111111-1111-1111-1111-111111111111")
