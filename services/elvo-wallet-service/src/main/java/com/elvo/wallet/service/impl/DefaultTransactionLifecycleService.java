@@ -78,6 +78,10 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
             return transaction;
         }
 
+        if (!canTransition(currentStatus, nextStatus)) {
+            throw new IllegalStateException("Invalid transaction transition from " + currentStatus + " to " + nextStatus);
+        }
+
         Instant now = Instant.now();
         transaction.setPreviousStatus(currentStatus);
         transaction.setStatus(nextStatus);
