@@ -49,8 +49,8 @@ public class WalletOutboxDispatcher {
         outboxService.lockForDispatch(eventId).ifPresent(this::dispatch);
     }
 
-    public int replayDeadLetter(int batchSize) {
-        List<OutboxEvent> events = outboxService.lockBatchForReplay(Status.DEAD_LETTER, batchSize);
+    public int replayDeadLetter(int batchSize, String routingKeyPrefix) {
+        List<OutboxEvent> events = outboxService.lockBatchForReplay(Status.DEAD_LETTER, batchSize, routingKeyPrefix);
         events.forEach(this::dispatchFromDeadLetter);
         return events.size();
     }

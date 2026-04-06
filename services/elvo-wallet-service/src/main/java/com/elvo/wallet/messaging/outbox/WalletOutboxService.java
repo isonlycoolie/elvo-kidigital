@@ -130,8 +130,9 @@ public class WalletOutboxService {
     }
 
     @Transactional
-    public List<OutboxEvent> lockBatchForReplay(Status status, int limit) {
+    public List<OutboxEvent> lockBatchForReplay(Status status, int limit, String routingKeyPrefix) {
         int batchSize = Math.max(1, Math.min(limit, 200));
+        String prefix = routingKeyPrefix == null ? "" : routingKeyPrefix.trim();
         return jdbcTemplate.query("""
                 SELECT event_id,
                        event_type,
@@ -147,11 +148,13 @@ public class WalletOutboxService {
                        next_attempt_at
                 FROM wallet_event_outbox
                 WHERE status = :status
+                                    AND (:routing_key_prefix = '' OR routing_key LIKE CONCAT(:routing_key_prefix, '%'))
                 ORDER BY created_at ASC
                 LIMIT :limit
                 FOR UPDATE SKIP LOCKED
                 """, new MapSqlParameterSource()
                 .addValue("status", status.name())
+                                .addValue("routing_key_prefix", prefix)
                 .addValue("limit", batchSize), mapper());
     }
 
