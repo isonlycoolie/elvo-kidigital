@@ -155,6 +155,8 @@ elvo:
       transfer-threshold: ${ELVO_MAKER_CHECKER_TRANSFER_THRESHOLD:1000.00}
       withdrawal-threshold: ${ELVO_MAKER_CHECKER_WITHDRAWAL_THRESHOLD:750.00}
       approval-ttl-seconds: ${ELVO_MAKER_CHECKER_APPROVAL_TTL_SECONDS:86400}
+    audit:
+      signature-secret: ${ELVO_AUDIT_SIGNATURE_SECRET_REF:sm://wallet-audit-signature-secret}
     ledger:
       hash:
         key-prefix: ${ELVO_LEDGER_HASH_KEY_PREFIX:elvo:wallet:ledger:hash:}
