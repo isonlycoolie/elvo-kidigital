@@ -811,6 +811,53 @@ class WalletFlowServiceTests {
                 verify(transactionLifecycleService).expire(any(Transaction.class), eq("Mobile callback timed out"), any());
         }
 
+            @Test
+            void depositShouldTransitionToReversedWhenPostingFailsAfterBalanceApply() {
+                UUID walletId = UUID.randomUUID();
+                wallet.setBalance(new BigDecimal("100.00"));
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(identityServiceClient.isUserActive(any())).thenReturn(true);
+                when(agentServiceClient.hasAvailableFloat(any(), any())).thenReturn(true);
+                when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+                when(transactionRepository.existsByReference(anyString())).thenReturn(false);
+                lenient().when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                doThrow(new IllegalStateException("ledger unavailable"))
+                        .when(ledgerIntegrationService).recordDoubleEntry(anyString(), any(), any(), anyString());
+
+                DefaultDepositFlowService service = new DefaultDepositFlowService(
+                        walletRepository,
+                        transactionRepository,
+                        identityServiceClient,
+                        agentServiceClient,
+                        idempotencyService,
+                        ledgerIntegrationService,
+                        mobileMoneyCallbackSecurityService,
+                        callbackReconciliationService,
+                        limitEnforcementService,
+                        sagaOrchestrator,
+                        eventPublisher,
+                        fieldEncryptionService,
+                        transactionLifecycleService);
+
+                WalletFlowResult result = service.process(new DepositCommand(
+                        walletId,
+                        wallet.getUserId(),
+                        new BigDecimal("20.00"),
+                        WalletChannel.AGENT,
+                        "idem-reversal",
+                        "dep-reversal",
+                        true,
+                        null,
+                        null,
+                        null,
+                        null));
+
+                assertThat(result.success()).isFalse();
+                assertThat(wallet.getBalance()).isEqualByComparingTo("100.00");
+                verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.REVERSED), anyString(), any(), any(), any());
+            }
+
     @Test
     void withdrawalShouldFailWhenVelocityRiskDetected() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
