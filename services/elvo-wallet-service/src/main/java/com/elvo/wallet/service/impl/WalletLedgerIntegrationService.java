@@ -115,4 +115,8 @@ public class WalletLedgerIntegrationService {
             throw new IllegalStateException("SHA-256 is required for ledger hashing", ex);
         }
     }
+
+    Map<UUID, String> snapshotHashes() {
+        return Map.copyOf(fallbackLatestHashes);
+    }
 }

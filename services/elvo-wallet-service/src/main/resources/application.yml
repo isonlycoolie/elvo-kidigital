@@ -158,6 +158,8 @@ elvo:
     ledger:
       hash:
         key-prefix: ${ELVO_LEDGER_HASH_KEY_PREFIX:elvo:wallet:ledger:hash:}
+      snapshot:
+        cron: ${ELVO_LEDGER_SNAPSHOT_CRON:0 5 0 * * *}
     destination-risk:
       unusual-amount-threshold: ${ELVO_DESTINATION_RISK_UNUSUAL_AMOUNT_THRESHOLD:500.00}
       max-failures-before-block: ${ELVO_DESTINATION_RISK_MAX_FAILURES_BEFORE_BLOCK:3}
