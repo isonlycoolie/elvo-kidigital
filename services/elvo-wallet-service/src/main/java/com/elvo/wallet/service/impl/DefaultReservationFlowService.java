@@ -8,8 +8,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.entity.Reservation;
+import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.ReservationRepository;
+import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.service.ReservationFlowService;
 import com.elvo.wallet.service.model.ReservationCommand;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -19,17 +21,20 @@ public class DefaultReservationFlowService implements ReservationFlowService {
 
     private static final Logger AUDIT_LOG = LoggerFactory.getLogger("audit.wallet.flow.reservation");
 
+    private final WalletRepository walletRepository;
     private final ReservationRepository reservationRepository;
     private final WalletIdempotencyService idempotencyService;
     private final WalletLedgerIntegrationService ledgerIntegrationService;
     private final WalletEventPublisher eventPublisher;
     private final WalletLimitEnforcementService limitEnforcementService;
 
-    public DefaultReservationFlowService(ReservationRepository reservationRepository,
+    public DefaultReservationFlowService(WalletRepository walletRepository,
+                                         ReservationRepository reservationRepository,
                                          WalletIdempotencyService idempotencyService,
                                          WalletLedgerIntegrationService ledgerIntegrationService,
                                          WalletEventPublisher eventPublisher,
                                          WalletLimitEnforcementService limitEnforcementService) {
+        this.walletRepository = walletRepository;
         this.reservationRepository = reservationRepository;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
@@ -56,6 +61,19 @@ public class DefaultReservationFlowService implements ReservationFlowService {
         WalletFlowResult duplicate = findDuplicate(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, command.walletId(), "wallet.reservation.failed");
         if (duplicate != null) {
             return duplicate;
+        }
+
+        Wallet wallet = walletRepository.findByIdForUpdate(command.walletId()).orElse(null);
+        if (wallet == null) {
+            WalletFlowResult result = WalletFlowResult.failure("Wallet not found", command.walletId(), "wallet.reservation.failed");
+            idempotencyService.put(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, result);
+            return result;
+        }
+
+        if (wallet.getStatus() == Wallet.WalletStatus.FROZEN) {
+            WalletFlowResult result = WalletFlowResult.failure("Wallet is frozen", command.walletId(), "wallet.reservation.failed");
+            idempotencyService.put(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, result);
+            return result;
         }
 
         if (!limitEnforcementService.validate(command.walletId(), WalletLimitEnforcementService.FlowType.RESERVATION, command.amount())) {
@@ -136,6 +154,19 @@ public class DefaultReservationFlowService implements ReservationFlowService {
             return duplicate;
         }
 
+        Reservation reservation = reservationRepository.findById(reservationId).orElse(null);
+        if (reservation == null || reservation.getWallet() == null) {
+            WalletFlowResult result = WalletFlowResult.failure("Reservation not found", null, "wallet.reservation.failed");
+            idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
+            return result;
+        }
+
+        if (reservation.getWallet().getStatus() == Wallet.WalletStatus.FROZEN) {
+            WalletFlowResult result = WalletFlowResult.failure("Wallet is frozen", reservation.getWallet().getId(), "wallet.reservation.failed");
+            idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
+            return result;
+        }
+
         boolean confirmed = reservationRepository.confirmDebit(reservationId);
         if (!confirmed) {
             WalletFlowResult result = WalletFlowResult.failure("Reservation confirm failed", null, "wallet.reservation.failed");
@@ -143,7 +174,6 @@ public class DefaultReservationFlowService implements ReservationFlowService {
             return result;
         }
 
-        Reservation reservation = reservationRepository.findById(reservationId).orElse(null);
         UUID walletId = reservation != null && reservation.getWallet() != null ? reservation.getWallet().getId() : null;
         if (reservation != null) {
             ledgerIntegrationService.recordDoubleEntry("reservation.confirm", walletId, reservation.getAmount(), String.valueOf(reservationId));

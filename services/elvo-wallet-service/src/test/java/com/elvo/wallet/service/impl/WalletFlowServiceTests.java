@@ -600,6 +600,7 @@ class WalletFlowServiceTests {
     @Test
     void reservationCreateShouldPersistReservation() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(walletRepository.findByIdForUpdate(wallet.getId())).thenReturn(Optional.of(wallet));
         when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
         when(reservationRepository.createReservation(any(), any(), any())).thenAnswer(invocation -> {
             Reservation reservation = new Reservation();
@@ -616,6 +617,7 @@ class WalletFlowServiceTests {
         });
 
         DefaultReservationFlowService service = new DefaultReservationFlowService(
+                walletRepository,
                 reservationRepository,
                 idempotencyService,
                 ledgerIntegrationService,
@@ -637,6 +639,7 @@ class WalletFlowServiceTests {
     @Test
     void etcGenerateShouldPublishEvent() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(walletRepository.findByIdForUpdate(wallet.getId())).thenReturn(Optional.of(wallet));
         when(etcRepository.generateCode(any(), anyString(), any())).thenAnswer(invocation -> {
             Etc etc = new Etc();
             etc.setWallet(wallet);

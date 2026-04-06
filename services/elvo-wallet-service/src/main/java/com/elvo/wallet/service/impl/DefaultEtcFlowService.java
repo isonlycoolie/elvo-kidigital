@@ -95,6 +95,19 @@ public class DefaultEtcFlowService implements EtcFlowService {
             return duplicate;
         }
 
+        Wallet wallet = walletRepository.findByIdForUpdate(command.walletId()).orElse(null);
+        if (wallet == null) {
+            WalletFlowResult result = WalletFlowResult.failure("Wallet not found", command.walletId(), "wallet.etc.failed");
+            idempotencyService.put(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, result);
+            return result;
+        }
+
+        if (wallet.getStatus() == Wallet.WalletStatus.FROZEN) {
+            WalletFlowResult result = WalletFlowResult.failure("Wallet is frozen", command.walletId(), "wallet.etc.failed");
+            idempotencyService.put(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, result);
+            return result;
+        }
+
         String codeHash = etcCodeSecurityService.hashCode(command.code());
         var etc = etcRepository.generateCode(command.walletId(), codeHash, command.expiresAt());
         AUDIT_LOG.info("event=wallet.etc.generated walletId={} codeRef={} expiresAt={}",
