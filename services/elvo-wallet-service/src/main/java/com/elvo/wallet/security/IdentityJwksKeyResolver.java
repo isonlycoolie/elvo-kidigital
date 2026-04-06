@@ -118,12 +118,22 @@ public class IdentityJwksKeyResolver {
     private String resolveJwksUrl(String baseUrl) {
         String normalized = baseUrl == null ? "" : baseUrl.trim();
         if (normalized.isEmpty()) {
-            return "http://localhost:8081/.well-known/jwks.json";
+            return "https://localhost:8381/.well-known/jwks.json";
         }
         if (normalized.endsWith("/internal")) {
             normalized = normalized.substring(0, normalized.length() - "/internal".length());
         }
-        return normalized.replaceAll("/+$", "") + "/.well-known/jwks.json";
+        String finalUrl = normalized.replaceAll("/+$", "") + "/.well-known/jwks.json";
+        
+        // SECURITY: Enforce HTTPS protocol for JWKS endpoint
+        if (!finalUrl.startsWith("https://")) {
+            throw new IllegalStateException(
+                "JWKS endpoint MUST use HTTPS protocol. Received: " + finalUrl + 
+                ". Configure HTTPS identity service URL via ELVO_IDENTITY_INTERNAL_BASE_URL environment variable."
+            );
+        }
+        
+        return finalUrl;
     }
 
     private boolean hasText(String value) {

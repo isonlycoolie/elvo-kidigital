@@ -1,6 +1,7 @@
 package com.elvo.wallet.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.UUID;
 
@@ -137,16 +138,12 @@ class DefaultIdentityServiceClientTest {
     @Test
     void shouldRejectNonHttpsBaseUrlWhenTlsIsEnforced() {
         IdentityClientProperties insecureProperties = new IdentityClientProperties();
-        insecureProperties.setBaseUrl("http://identity-service/internal");
-        insecureProperties.setSourceServiceName("wallet-service");
-        insecureProperties.setClientSourceIp("wallet-service");
-        insecureProperties.setClientSourceUserAgent("wallet-service-client");
-        insecureProperties.setTokenTtlSeconds(60);
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> insecureProperties.setBaseUrl("http://identity-service/internal")
+        );
 
-        DefaultIdentityServiceClient insecureClient = new DefaultIdentityServiceClient(restTemplate, insecureProperties, internalJwtProperties);
-
-        boolean active = insecureClient.isUserActive(UUID.randomUUID());
-        assertThat(active).isFalse();
+        assertThat(ex.getMessage()).contains("must use HTTPS protocol");
     }
 
         @Test

@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "elvo.clients.identity")
 public class IdentityClientProperties {
 
-    private String baseUrl = "http://localhost:8081/internal";
+    private String baseUrl = "https://localhost:8381/internal";
     private String sourceServiceName = "wallet-service";
     private String clientSourceIp = "wallet-service";
     private String clientSourceUserAgent = "wallet-service-client";
@@ -21,6 +21,9 @@ public class IdentityClientProperties {
     }
 
     public void setBaseUrl(String baseUrl) {
+        if (baseUrl != null && !baseUrl.trim().isEmpty() && baseUrl.trim().startsWith("http://")) {
+            throw new IllegalArgumentException("Identity service baseUrl must use HTTPS protocol. Received: " + baseUrl);
+        }
         this.baseUrl = baseUrl;
     }
 
