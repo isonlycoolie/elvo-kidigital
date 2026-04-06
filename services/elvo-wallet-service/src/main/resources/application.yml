@@ -221,3 +221,10 @@ elvo:
       max-score: ${ELVO_DEVICE_TRUST_MAX_SCORE:100}
     field-encryption:
       key: ${ELVO_FIELD_ENCRYPTION_KEY:}
+  resilience:
+    dr:
+      strategy: ${ELVO_DR_STRATEGY:active-passive}
+      primary-region: ${ELVO_DR_PRIMARY_REGION:}
+      secondary-region: ${ELVO_DR_SECONDARY_REGION:}
+      max-replication-lag-seconds: ${ELVO_DR_MAX_REPLICATION_LAG_SECONDS:60}
+      observed-replication-lag-seconds: ${ELVO_DR_OBSERVED_REPLICATION_LAG_SECONDS:0}
