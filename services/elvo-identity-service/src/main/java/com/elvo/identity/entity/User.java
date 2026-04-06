@@ -143,6 +143,12 @@ public class User {
     @Column(name = "verification_deadline")
     private Instant verificationDeadline;
 
+    @Column(name = "downstream_provisioned", nullable = false)
+    private boolean downstreamProvisioned;
+
+    @Column(name = "downstream_provisioned_at")
+    private Instant downstreamProvisionedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -448,6 +454,22 @@ public class User {
 
     public void setVerificationDeadline(Instant verificationDeadline) {
         this.verificationDeadline = verificationDeadline;
+    }
+
+    public boolean isDownstreamProvisioned() {
+        return downstreamProvisioned;
+    }
+
+    public void setDownstreamProvisioned(boolean downstreamProvisioned) {
+        this.downstreamProvisioned = downstreamProvisioned;
+    }
+
+    public Instant getDownstreamProvisionedAt() {
+        return downstreamProvisionedAt;
+    }
+
+    public void setDownstreamProvisionedAt(Instant downstreamProvisionedAt) {
+        this.downstreamProvisionedAt = downstreamProvisionedAt;
     }
 
     public Instant getCreatedAt() {

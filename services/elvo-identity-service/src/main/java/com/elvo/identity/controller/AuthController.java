@@ -46,6 +46,7 @@ import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.security.TokenRevocationService;
 import com.elvo.identity.service.LoginService;
 import com.elvo.identity.service.OtpService;
+import com.elvo.identity.service.PostVerificationProvisioningService;
 import com.elvo.identity.service.RegistrationService;
 import com.elvo.identity.service.VerificationTokenService;
 import com.elvo.identity.util.TokenService;
@@ -71,6 +72,7 @@ public class AuthController {
     private final SecurityHashingService hashingService;
     private final OtpService otpService;
     private final VerificationTokenService verificationTokenService;
+    private final PostVerificationProvisioningService postVerificationProvisioningService;
 
     public AuthController(RegistrationService registrationService,
                           LoginService loginService,
@@ -82,7 +84,8 @@ public class AuthController {
                           TokenRevocationService tokenRevocationService,
                           SecurityHashingService hashingService,
                           OtpService otpService,
-                          VerificationTokenService verificationTokenService) {
+                          VerificationTokenService verificationTokenService,
+                          PostVerificationProvisioningService postVerificationProvisioningService) {
         this.registrationService = registrationService;
         this.loginService = loginService;
         this.sessionRepository = sessionRepository;
@@ -94,6 +97,7 @@ public class AuthController {
         this.hashingService = hashingService;
         this.otpService = otpService;
         this.verificationTokenService = verificationTokenService;
+        this.postVerificationProvisioningService = postVerificationProvisioningService;
     }
 
     @PostMapping("/register")
@@ -231,6 +235,7 @@ public class AuthController {
             refreshVerificationState(user);
             userRepository.save(user);
             if (user.getVerificationStatus() == User.VerificationStatus.VERIFIED) {
+                postVerificationProvisioningService.provisionIfNeeded(user);
                 verificationTokenService.invalidateForUser(user.getId());
             }
         }
@@ -259,6 +264,7 @@ public class AuthController {
             refreshVerificationState(user);
             userRepository.save(user);
             if (user.getVerificationStatus() == User.VerificationStatus.VERIFIED) {
+                postVerificationProvisioningService.provisionIfNeeded(user);
                 verificationTokenService.invalidateForUser(user.getId());
             }
         }
@@ -503,7 +509,12 @@ public class AuthController {
     }
 
     private void refreshVerificationState(User user) {
-        if (user.isEmailVerified() && user.isMobileVerified()) {
+        boolean emailRequired = user.getEmail() != null && !user.getEmail().isBlank();
+        boolean mobileRequired = user.getPhone() != null && !user.getPhone().isBlank();
+        boolean emailSatisfied = !emailRequired || user.isEmailVerified();
+        boolean mobileSatisfied = !mobileRequired || user.isMobileVerified();
+
+        if (emailSatisfied && mobileSatisfied) {
             user.setVerificationStatus(User.VerificationStatus.VERIFIED);
             user.setAccountStatus(User.AccountStatus.ACTIVE);
             return;
@@ -511,7 +522,7 @@ public class AuthController {
 
         if (user.isEmailVerified() || user.isMobileVerified()) {
             user.setVerificationStatus(User.VerificationStatus.PARTIAL);
-            user.setAccountStatus(User.AccountStatus.ACTIVE);
+            user.setAccountStatus(User.AccountStatus.PENDING_VERIFICATION);
             return;
         }
 

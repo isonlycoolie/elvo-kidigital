@@ -133,6 +133,8 @@ public class RegistrationServiceImpl implements RegistrationService {
         existing.setVerificationStatus(User.VerificationStatus.UNVERIFIED);
         existing.setAccountStatus(User.AccountStatus.PENDING_VERIFICATION);
         existing.setVerificationDeadline(Instant.now().plus(DEFAULT_VERIFICATION_DEADLINE));
+        existing.setDownstreamProvisioned(false);
+        existing.setDownstreamProvisionedAt(null);
         return existing;
     }
 
