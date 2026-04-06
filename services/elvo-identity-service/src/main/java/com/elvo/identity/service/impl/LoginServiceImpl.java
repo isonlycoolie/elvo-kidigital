@@ -13,6 +13,7 @@ import com.elvo.identity.entity.Audit;
 import com.elvo.identity.entity.Device;
 import com.elvo.identity.entity.Session;
 import com.elvo.identity.entity.User;
+import com.elvo.identity.exception.VerificationRequiredException;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.DeviceRepository;
 import com.elvo.identity.repository.SessionRepository;
@@ -62,6 +63,7 @@ public class LoginServiceImpl implements LoginService {
             securityProtectionService.ensureAccountNotLocked(user);
             validatePassword(user, request.getPassword(), request);
             validateUserStatus(user);
+            enforceChannelVerification(user, request.getIdentifier());
             validateMfaIfRequired(user, request);
 
             securityProtectionService.recordSuccessfulAuthentication(
@@ -145,6 +147,17 @@ public class LoginServiceImpl implements LoginService {
         }
     }
 
+    private void enforceChannelVerification(User user, String identifier) {
+        boolean emailLogin = identifier != null && identifier.contains("@");
+        if (emailLogin && !user.isEmailVerified()) {
+            throw new VerificationRequiredException("Email verification is required");
+        }
+
+        if (!emailLogin && !user.isMobileVerified()) {
+            throw new VerificationRequiredException("Mobile verification is required");
+        }
+    }
+
     private void validateMfaIfRequired(User user, LoginRequest request) {
         if (user.isMfaEnabled() && (request.getMfaCode() == null || request.getMfaCode().isBlank())) {
             throw new IllegalArgumentException("MFA code is required");
@@ -200,6 +213,10 @@ public class LoginServiceImpl implements LoginService {
         }
         if ("MFA code is required".equals(message)) {
             return "MFA_REQUIRED";
+        }
+        if ("Email verification is required".equals(message)
+                || "Mobile verification is required".equals(message)) {
+            return "VERIFICATION_REQUIRED";
         }
         if ("Rate limit exceeded for user".equals(message)) {
             return "RATE_LIMITED";

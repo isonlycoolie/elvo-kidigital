@@ -57,6 +57,12 @@ public class GlobalExceptionHandler {
             .body(ApiResponse.error("CONSTRAINT_VIOLATION", "Constraint validation failed", details));
         }
 
+        @ExceptionHandler(VerificationRequiredException.class)
+        public ResponseEntity<ApiResponse<Void>> handleVerificationRequired(VerificationRequiredException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("VERIFICATION_REQUIRED", ex.getMessage()));
+        }
+
         @ExceptionHandler(AuthenticationException.class)
         public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException ex, HttpServletRequest request) {
             sentryExceptionReporter.captureCriticalException(ex, request, Map.of("exceptionType", ex.getClass().getSimpleName()));
