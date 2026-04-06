@@ -1637,6 +1637,35 @@ class WalletFlowServiceTests {
                 order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.RESERVED), anyString(), any(), any(), any());
         }
 
+        @Test
+        void reservationReleaseShouldTransitionToReleasedState() {
+                UUID reservationId = UUID.randomUUID();
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(reservationRepository.releaseReservation(reservationId)).thenReturn(true);
+
+                Reservation reservation = new Reservation();
+                reservation.setWallet(wallet);
+                reservation.setAmount(new BigDecimal("8.00"));
+                when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(reservation));
+
+                DefaultReservationFlowService service = new DefaultReservationFlowService(
+                                walletRepository,
+                                reservationRepository,
+                                idempotencyService,
+                                ledgerIntegrationService,
+                                eventPublisher,
+                                limitEnforcementService,
+                                transactionLifecycleService);
+
+                WalletFlowResult result = service.release(reservationId, "idem-res-release");
+
+                assertThat(result.success()).isTrue();
+                InOrder order = inOrder(transactionLifecycleService);
+                order.verify(transactionLifecycleService).initialize(any(Transaction.class), anyString(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.RESERVED), anyString(), any(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.RELEASED), anyString(), any(), any(), any());
+        }
+
     @Test
     void etcGenerateShouldPublishEvent() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());

@@ -152,6 +152,31 @@ public class DefaultReservationFlowService implements ReservationFlowService {
         UUID walletId = reservation != null && reservation.getWallet() != null ? reservation.getWallet().getId() : null;
 
         if (reservation != null) {
+            Transaction reservationTransaction = new Transaction();
+            reservationTransaction.setWallet(reservation.getWallet());
+            reservationTransaction.setType(Transaction.TransactionType.RESERVATION);
+            reservationTransaction.setAmount(reservation.getAmount());
+            reservationTransaction.setReference(String.valueOf(reservationId));
+            reservationTransaction.setExternalReference(String.valueOf(reservationId));
+            reservationTransaction = transactionLifecycleService.initialize(
+                reservationTransaction,
+                "Reservation release initiated",
+                correlationId(),
+                String.valueOf(reservationId));
+            transactionLifecycleService.transition(
+                reservationTransaction,
+                Transaction.TransactionStatus.RESERVED,
+                "Reservation held before release",
+                correlationId(),
+                null,
+                null);
+            transactionLifecycleService.transition(
+                reservationTransaction,
+                Transaction.TransactionStatus.RELEASED,
+                "Reservation released",
+                correlationId(),
+                null,
+                null);
             ledgerIntegrationService.recordDoubleEntry("reservation.release", walletId, reservation.getAmount(), String.valueOf(reservationId));
         }
 
