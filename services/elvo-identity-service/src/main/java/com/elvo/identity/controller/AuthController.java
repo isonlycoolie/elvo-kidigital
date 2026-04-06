@@ -20,15 +20,20 @@ import com.elvo.identity.dto.request.AuthLogoutRequest;
 import com.elvo.identity.dto.request.AuthRefreshTokenRequest;
 import com.elvo.identity.dto.request.ForgotPasswordRequest;
 import com.elvo.identity.dto.request.LoginRequest;
+import com.elvo.identity.dto.request.ResendOtpRequest;
 import com.elvo.identity.dto.request.RegistrationRequest;
 import com.elvo.identity.dto.request.ResetPasswordRequest;
+import com.elvo.identity.dto.request.VerifyOtpRequest;
 import com.elvo.identity.dto.response.AuthActionResponse;
 import com.elvo.identity.dto.response.ForgotPasswordResponse;
 import com.elvo.identity.dto.response.LoginResponse;
+import com.elvo.identity.dto.response.OtpDispatchResponse;
+import com.elvo.identity.dto.response.OtpVerificationResponse;
 import com.elvo.identity.dto.response.RegistrationResponse;
 import com.elvo.identity.entity.Audit;
 import com.elvo.identity.entity.Session;
 import com.elvo.identity.entity.User;
+import com.elvo.identity.entity.VerificationOtp;
 import com.elvo.identity.exception.ApiResponse;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.SessionRepository;
@@ -36,6 +41,7 @@ import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.security.TokenRevocationService;
 import com.elvo.identity.service.LoginService;
+import com.elvo.identity.service.OtpService;
 import com.elvo.identity.service.RegistrationService;
 import com.elvo.identity.util.TokenService;
 
@@ -58,6 +64,7 @@ public class AuthController {
     private final TokenService tokenService;
     private final TokenRevocationService tokenRevocationService;
     private final SecurityHashingService hashingService;
+    private final OtpService otpService;
 
     public AuthController(RegistrationService registrationService,
                           LoginService loginService,
@@ -67,7 +74,8 @@ public class AuthController {
                           AuditEventPublisher auditEventPublisher,
                           TokenService tokenService,
                           TokenRevocationService tokenRevocationService,
-                          SecurityHashingService hashingService) {
+                          SecurityHashingService hashingService,
+                          OtpService otpService) {
         this.registrationService = registrationService;
         this.loginService = loginService;
         this.sessionRepository = sessionRepository;
@@ -77,6 +85,7 @@ public class AuthController {
         this.tokenService = tokenService;
         this.tokenRevocationService = tokenRevocationService;
         this.hashingService = hashingService;
+        this.otpService = otpService;
     }
 
     @PostMapping("/register")
@@ -89,6 +98,92 @@ public class AuthController {
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
         LoginResponse response = loginService.login(request);
         return ResponseEntity.ok(ApiResponse.ok("Login successful", response));
+    }
+
+    @PostMapping("/verify-email-otp")
+    @Transactional
+    public ResponseEntity<ApiResponse<OtpVerificationResponse>> verifyEmailOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        User user = findUserByIdentifier(request.getIdentifier());
+        if (user == null) {
+            return ResponseEntity.ok(ApiResponse.ok("Verification processed", new OtpVerificationResponse(false, "OTP_INVALID", "Verification code is invalid")));
+        }
+
+        OtpService.OtpVerificationResult result = otpService.verifyOtp(user,
+                VerificationOtp.Purpose.EMAIL_VERIFICATION,
+                request.getOtpCode(),
+                request.getRequestId());
+
+        if (result.success()) {
+            user.setEmailVerified(true);
+            user.setEmailVerifiedAt(Instant.now());
+            refreshVerificationState(user);
+            userRepository.save(user);
+        }
+
+        return ResponseEntity.ok(ApiResponse.ok("Verification processed", new OtpVerificationResponse(result.success(), result.code(), result.message())));
+    }
+
+    @PostMapping("/verify-mobile-otp")
+    @Transactional
+    public ResponseEntity<ApiResponse<OtpVerificationResponse>> verifyMobileOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        User user = findUserByIdentifier(request.getIdentifier());
+        if (user == null) {
+            return ResponseEntity.ok(ApiResponse.ok("Verification processed", new OtpVerificationResponse(false, "OTP_INVALID", "Verification code is invalid")));
+        }
+
+        OtpService.OtpVerificationResult result = otpService.verifyOtp(user,
+                VerificationOtp.Purpose.MOBILE_VERIFICATION,
+                request.getOtpCode(),
+                request.getRequestId());
+
+        if (result.success()) {
+            user.setMobileVerified(true);
+            user.setMobileVerifiedAt(Instant.now());
+            refreshVerificationState(user);
+            userRepository.save(user);
+        }
+
+        return ResponseEntity.ok(ApiResponse.ok("Verification processed", new OtpVerificationResponse(result.success(), result.code(), result.message())));
+    }
+
+    @PostMapping("/resend-email-otp")
+    @Transactional
+    public ResponseEntity<ApiResponse<OtpDispatchResponse>> resendEmailOtp(@Valid @RequestBody ResendOtpRequest request) {
+        User user = findUserByIdentifier(request.getIdentifier());
+        if (user == null) {
+            return ResponseEntity.ok(ApiResponse.ok("If the account exists, a verification code has been sent.", null));
+        }
+
+        OtpService.OtpDispatchResult dispatchResult = otpService.issueVerificationOtp(user,
+                VerificationOtp.Channel.EMAIL,
+                VerificationOtp.Purpose.EMAIL_VERIFICATION,
+                user.getEmail(),
+                request.getRequestId(),
+                null);
+
+        return ResponseEntity.ok(ApiResponse.ok(
+                "If the account exists, a verification code has been sent.",
+                new OtpDispatchResponse(dispatchResult.requestId(), dispatchResult.maskedDestination(), dispatchResult.expiresAt())));
+    }
+
+    @PostMapping("/resend-mobile-otp")
+    @Transactional
+    public ResponseEntity<ApiResponse<OtpDispatchResponse>> resendMobileOtp(@Valid @RequestBody ResendOtpRequest request) {
+        User user = findUserByIdentifier(request.getIdentifier());
+        if (user == null) {
+            return ResponseEntity.ok(ApiResponse.ok("If the account exists, a verification code has been sent.", null));
+        }
+
+        OtpService.OtpDispatchResult dispatchResult = otpService.issueVerificationOtp(user,
+                VerificationOtp.Channel.SMS,
+                VerificationOtp.Purpose.MOBILE_VERIFICATION,
+                user.getPhone(),
+                request.getRequestId(),
+                null);
+
+        return ResponseEntity.ok(ApiResponse.ok(
+                "If the account exists, a verification code has been sent.",
+                new OtpDispatchResponse(dispatchResult.requestId(), dispatchResult.maskedDestination(), dispatchResult.expiresAt())));
     }
 
     @PostMapping("/refresh-token")
@@ -272,6 +367,30 @@ public class AuthController {
         byte[] bytes = new byte[24];
         SECURE_RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private User findUserByIdentifier(String identifier) {
+        String normalized = identifier.trim().toLowerCase(Locale.ROOT);
+        return userRepository.findByEmailIgnoreCase(normalized)
+                .or(() -> userRepository.findByPhone(identifier.trim()))
+                .orElse(null);
+    }
+
+    private void refreshVerificationState(User user) {
+        if (user.isEmailVerified() && user.isMobileVerified()) {
+            user.setVerificationStatus(User.VerificationStatus.VERIFIED);
+            user.setAccountStatus(User.AccountStatus.ACTIVE);
+            return;
+        }
+
+        if (user.isEmailVerified() || user.isMobileVerified()) {
+            user.setVerificationStatus(User.VerificationStatus.PARTIAL);
+            user.setAccountStatus(User.AccountStatus.ACTIVE);
+            return;
+        }
+
+        user.setVerificationStatus(User.VerificationStatus.UNVERIFIED);
+        user.setAccountStatus(User.AccountStatus.PENDING_VERIFICATION);
     }
 
     private void auditSessionEvent(Session session, String description, String sourceIp, String sourceUserAgent) {
