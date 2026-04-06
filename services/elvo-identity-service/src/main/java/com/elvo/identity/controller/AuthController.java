@@ -32,10 +32,12 @@ import com.elvo.identity.dto.response.LoginResponse;
 import com.elvo.identity.dto.response.OtpDispatchResponse;
 import com.elvo.identity.dto.response.OtpVerificationResponse;
 import com.elvo.identity.dto.response.RegistrationResponse;
+import com.elvo.identity.dto.response.VerificationRequiredResponse;
 import com.elvo.identity.entity.Audit;
 import com.elvo.identity.entity.Session;
 import com.elvo.identity.entity.User;
 import com.elvo.identity.entity.VerificationOtp;
+import com.elvo.identity.exception.PendingVerificationException;
 import com.elvo.identity.exception.ApiResponse;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.SessionRepository;
@@ -45,6 +47,7 @@ import com.elvo.identity.security.TokenRevocationService;
 import com.elvo.identity.service.LoginService;
 import com.elvo.identity.service.OtpService;
 import com.elvo.identity.service.RegistrationService;
+import com.elvo.identity.service.VerificationTokenService;
 import com.elvo.identity.util.TokenService;
 
 import jakarta.validation.Valid;
@@ -67,6 +70,7 @@ public class AuthController {
     private final TokenRevocationService tokenRevocationService;
     private final SecurityHashingService hashingService;
     private final OtpService otpService;
+    private final VerificationTokenService verificationTokenService;
 
     public AuthController(RegistrationService registrationService,
                           LoginService loginService,
@@ -77,7 +81,8 @@ public class AuthController {
                           TokenService tokenService,
                           TokenRevocationService tokenRevocationService,
                           SecurityHashingService hashingService,
-                          OtpService otpService) {
+                          OtpService otpService,
+                          VerificationTokenService verificationTokenService) {
         this.registrationService = registrationService;
         this.loginService = loginService;
         this.sessionRepository = sessionRepository;
@@ -88,11 +93,12 @@ public class AuthController {
         this.tokenRevocationService = tokenRevocationService;
         this.hashingService = hashingService;
         this.otpService = otpService;
+        this.verificationTokenService = verificationTokenService;
     }
 
     @PostMapping("/register")
         @Transactional
-    public ResponseEntity<ApiResponse<RegistrationResponse>> register(@Valid @RequestBody RegistrationRequest request) {
+    public ResponseEntity<ApiResponse<VerificationRequiredResponse>> register(@Valid @RequestBody RegistrationRequest request) {
         RegistrationResponse response = registrationService.register(request);
         User user = userRepository.findById(response.userId())
             .orElseThrow(() -> new IllegalStateException("Registered user not found"));
@@ -121,12 +127,18 @@ public class AuthController {
                     null);
         }
 
-        return ResponseEntity.ok(ApiResponse.ok("Registration successful. Verification required.", response));
+                VerificationTokenService.VerificationToken verificationToken = verificationTokenService.issueToken(user.getId());
+                VerificationRequiredResponse payload = new VerificationRequiredResponse(
+                    "VERIFICATION_REQUIRED",
+                    "Verification code sent",
+                    verificationToken.token(),
+                    verificationToken.expiresAt());
+                return ResponseEntity.ok(ApiResponse.ok("Verification required", payload));
         }
 
         @PostMapping("/register/email")
         @Transactional
-        public ResponseEntity<ApiResponse<RegistrationResponse>> registerEmail(@Valid @RequestBody EmailRegistrationRequest request) {
+        public ResponseEntity<ApiResponse<VerificationRequiredResponse>> registerEmail(@Valid @RequestBody EmailRegistrationRequest request) {
         RegistrationResponse response = registrationService.registerEmail(request);
         User user = userRepository.findById(response.userId())
             .orElseThrow(() -> new IllegalStateException("Registered user not found"));
@@ -141,12 +153,18 @@ public class AuthController {
             request.getSourceIp(),
             null);
 
-        return ResponseEntity.ok(ApiResponse.ok("Registration successful. Verification required.", response));
+        VerificationTokenService.VerificationToken verificationToken = verificationTokenService.issueToken(user.getId());
+        VerificationRequiredResponse payload = new VerificationRequiredResponse(
+            "VERIFICATION_REQUIRED",
+            "Verification code sent",
+            verificationToken.token(),
+            verificationToken.expiresAt());
+        return ResponseEntity.ok(ApiResponse.ok("Verification required", payload));
         }
 
         @PostMapping("/register/mobile")
         @Transactional
-        public ResponseEntity<ApiResponse<RegistrationResponse>> registerMobile(@Valid @RequestBody MobileRegistrationRequest request) {
+        public ResponseEntity<ApiResponse<VerificationRequiredResponse>> registerMobile(@Valid @RequestBody MobileRegistrationRequest request) {
         RegistrationResponse response = registrationService.registerMobile(request);
         User user = userRepository.findById(response.userId())
             .orElseThrow(() -> new IllegalStateException("Registered user not found"));
@@ -161,20 +179,42 @@ public class AuthController {
             request.getSourceIp(),
             null);
 
-        return ResponseEntity.ok(ApiResponse.ok("Registration successful. Verification required.", response));
+        VerificationTokenService.VerificationToken verificationToken = verificationTokenService.issueToken(user.getId());
+        VerificationRequiredResponse payload = new VerificationRequiredResponse(
+                "VERIFICATION_REQUIRED",
+                "Verification code sent",
+                verificationToken.token(),
+                verificationToken.expiresAt());
+        return ResponseEntity.ok(ApiResponse.ok("Verification required", payload));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
-        LoginResponse response = loginService.login(request);
-        return ResponseEntity.ok(ApiResponse.ok("Login successful", response));
+    public ResponseEntity<ApiResponse<?>> login(@Valid @RequestBody LoginRequest request) {
+        try {
+            LoginResponse response = loginService.login(request);
+            return ResponseEntity.ok(ApiResponse.ok("Login successful", response));
+        } catch (PendingVerificationException ex) {
+            VerificationTokenService.VerificationToken verificationToken = verificationTokenService.issueToken(ex.getUserId());
+            VerificationRequiredResponse payload = new VerificationRequiredResponse(
+                    "VERIFICATION_REQUIRED",
+                    "Verification required to continue",
+                    verificationToken.token(),
+                    verificationToken.expiresAt());
+            return ResponseEntity.status(403).body(new ApiResponse<>(
+                    false,
+                    "VERIFICATION_REQUIRED",
+                    "Verification required to continue",
+                    payload,
+                    java.util.Map.of(),
+                    Instant.now()));
+        }
     }
 
     @PostMapping("/verify-email-otp")
     @Transactional
     public ResponseEntity<ApiResponse<OtpVerificationResponse>> verifyEmailOtp(@Valid @RequestBody VerifyOtpRequest request) {
         User user = findUserByIdentifier(request.getIdentifier());
-        if (user == null) {
+        if (user == null || !verificationTokenService.isValidForUser(request.getVerificationToken(), user.getId())) {
             return ResponseEntity.ok(ApiResponse.ok("Verification processed", new OtpVerificationResponse(false, "OTP_INVALID", "Verification code is invalid")));
         }
 
@@ -190,6 +230,9 @@ public class AuthController {
             user.setEmailVerifiedAt(Instant.now());
             refreshVerificationState(user);
             userRepository.save(user);
+            if (user.getVerificationStatus() == User.VerificationStatus.VERIFIED) {
+                verificationTokenService.invalidateForUser(user.getId());
+            }
         }
 
         return ResponseEntity.ok(ApiResponse.ok("Verification processed", new OtpVerificationResponse(result.success(), result.code(), result.message())));
@@ -199,7 +242,7 @@ public class AuthController {
     @Transactional
     public ResponseEntity<ApiResponse<OtpVerificationResponse>> verifyMobileOtp(@Valid @RequestBody VerifyOtpRequest request) {
         User user = findUserByIdentifier(request.getIdentifier());
-        if (user == null) {
+        if (user == null || !verificationTokenService.isValidForUser(request.getVerificationToken(), user.getId())) {
             return ResponseEntity.ok(ApiResponse.ok("Verification processed", new OtpVerificationResponse(false, "OTP_INVALID", "Verification code is invalid")));
         }
 
@@ -215,6 +258,9 @@ public class AuthController {
             user.setMobileVerifiedAt(Instant.now());
             refreshVerificationState(user);
             userRepository.save(user);
+            if (user.getVerificationStatus() == User.VerificationStatus.VERIFIED) {
+                verificationTokenService.invalidateForUser(user.getId());
+            }
         }
 
         return ResponseEntity.ok(ApiResponse.ok("Verification processed", new OtpVerificationResponse(result.success(), result.code(), result.message())));
@@ -224,7 +270,7 @@ public class AuthController {
     @Transactional
     public ResponseEntity<ApiResponse<OtpDispatchResponse>> resendEmailOtp(@Valid @RequestBody ResendOtpRequest request) {
         User user = findUserByIdentifier(request.getIdentifier());
-        if (user == null) {
+        if (user == null || !verificationTokenService.isValidForUser(request.getVerificationToken(), user.getId())) {
             return ResponseEntity.ok(ApiResponse.ok("If the account exists, a verification code has been sent.", null));
         }
 
@@ -247,7 +293,7 @@ public class AuthController {
     @Transactional
     public ResponseEntity<ApiResponse<OtpDispatchResponse>> resendMobileOtp(@Valid @RequestBody ResendOtpRequest request) {
         User user = findUserByIdentifier(request.getIdentifier());
-        if (user == null) {
+        if (user == null || !verificationTokenService.isValidForUser(request.getVerificationToken(), user.getId())) {
             return ResponseEntity.ok(ApiResponse.ok("If the account exists, a verification code has been sent.", null));
         }
 

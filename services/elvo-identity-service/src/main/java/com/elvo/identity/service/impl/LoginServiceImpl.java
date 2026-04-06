@@ -13,7 +13,7 @@ import com.elvo.identity.entity.Audit;
 import com.elvo.identity.entity.Device;
 import com.elvo.identity.entity.Session;
 import com.elvo.identity.entity.User;
-import com.elvo.identity.exception.VerificationRequiredException;
+import com.elvo.identity.exception.PendingVerificationException;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.DeviceRepository;
 import com.elvo.identity.repository.SessionRepository;
@@ -150,11 +150,11 @@ public class LoginServiceImpl implements LoginService {
     private void enforceChannelVerification(User user, String identifier) {
         boolean emailLogin = identifier != null && identifier.contains("@");
         if (emailLogin && !user.isEmailVerified()) {
-            throw new VerificationRequiredException("Email verification is required");
+            throw new PendingVerificationException("Email verification is required", user.getId());
         }
 
         if (!emailLogin && !user.isMobileVerified()) {
-            throw new VerificationRequiredException("Mobile verification is required");
+            throw new PendingVerificationException("Mobile verification is required", user.getId());
         }
     }
 

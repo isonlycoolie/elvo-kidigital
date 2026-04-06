@@ -16,6 +16,9 @@ public class VerifyOtpRequest {
     @Size(max = 64)
     private String requestId;
 
+    @NotBlank
+    private String verificationToken;
+
     private String sourceIp;
 
     private String sourceUserAgent;
@@ -44,6 +47,14 @@ public class VerifyOtpRequest {
 
     public void setRequestId(String requestId) {
         this.requestId = requestId;
+    }
+
+    public String getVerificationToken() {
+        return verificationToken;
+    }
+
+    public void setVerificationToken(String verificationToken) {
+        this.verificationToken = verificationToken;
     }
 
     public String getSourceIp() {
