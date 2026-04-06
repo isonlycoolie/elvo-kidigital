@@ -705,6 +705,65 @@ class WalletFlowServiceTests {
                         .transition(any(Transaction.class), eq(Transaction.TransactionStatus.COMPLETED), anyString(), any(), any(), any());
         }
 
+            @Test
+            void transferShouldTransitionToReversedWhenPostingFails() {
+                Wallet sourceWallet = new Wallet();
+                ReflectionTestUtils.setField(sourceWallet, "id", UUID.randomUUID());
+                sourceWallet.setUserId(UUID.randomUUID());
+                sourceWallet.setBalance(new BigDecimal("100.00"));
+                sourceWallet.setReservedBalance(BigDecimal.ZERO);
+                sourceWallet.setStatus(Wallet.WalletStatus.ACTIVE);
+
+                Wallet targetWallet = new Wallet();
+                ReflectionTestUtils.setField(targetWallet, "id", UUID.randomUUID());
+                targetWallet.setUserId(UUID.randomUUID());
+                targetWallet.setBalance(new BigDecimal("30.00"));
+                targetWallet.setReservedBalance(BigDecimal.ZERO);
+                targetWallet.setStatus(Wallet.WalletStatus.ACTIVE);
+
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
+                when(stepUpAuthenticationService.requiresStepUpForTransfer(any())).thenReturn(false);
+                when(walletRepository.findByIdForUpdate(sourceWallet.getId())).thenReturn(Optional.of(sourceWallet));
+                when(walletRepository.findByIdForUpdate(targetWallet.getId())).thenReturn(Optional.of(targetWallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+                when(transactionRepository.findByExternalReferenceAndStatusInForUpdate(anyString(), any())).thenReturn(java.util.List.of());
+                when(transactionRepository.existsByReference(anyString())).thenReturn(false);
+                doThrow(new RuntimeException("credit post failed"))
+                        .when(ledgerIntegrationService)
+                        .recordDoubleEntry(eq("transfer"), eq(targetWallet.getId()), eq(new BigDecimal("12.00")), anyString());
+
+                DefaultTransferFlowService service = new DefaultTransferFlowService(
+                        walletRepository,
+                        transactionRepository,
+                        idempotencyService,
+                        ledgerIntegrationService,
+                        limitEnforcementService,
+                        sagaOrchestrator,
+                        eventPublisher,
+                        stepUpAuthenticationService,
+                        transactionSigningChallengeService,
+                        fraudVelocityService,
+                        fieldEncryptionService,
+                        transactionLifecycleService);
+
+                WalletFlowResult result = service.process(new TransferCommand(
+                        sourceWallet.getId(),
+                        targetWallet.getId(),
+                        sourceWallet.getUserId(),
+                        new BigDecimal("12.00"),
+                        "idem-transfer-reversed",
+                        "transfer-reversed-ref",
+                        null,
+                        null,
+                        null));
+
+                assertThat(result.success()).isFalse();
+                assertThat(result.message()).isEqualTo("Transfer processing failed");
+                verify(transactionLifecycleService, org.mockito.Mockito.times(2))
+                        .transition(any(Transaction.class), eq(Transaction.TransactionStatus.REVERSED), anyString(), any(), eq("TRANSFER_REVERSED"), any());
+            }
+
     @Test
     void mobileDepositShouldFailWhenCallbackReferenceIsMissing() {
         UUID walletId = UUID.randomUUID();
