@@ -11,7 +11,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.entity.Transaction;
+import com.elvo.wallet.entity.TransactionStatusHistory;
 import com.elvo.wallet.repository.TransactionRepository;
+import com.elvo.wallet.repository.TransactionStatusHistoryRepository;
 import com.elvo.wallet.service.TransactionLifecycleService;
 
 @Service
@@ -26,12 +28,14 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
             Transaction.TransactionStatus.CANCELLED);
 
     private final TransactionRepository transactionRepository;
+    private final TransactionStatusHistoryRepository transactionStatusHistoryRepository;
     private static final long DEFAULT_EXPIRY_MINUTES = 30;
 
     public DefaultTransactionLifecycleService(TransactionRepository transactionRepository,
-                                              com.elvo.wallet.repository.TransactionStatusHistoryRepository transactionStatusHistoryRepository,
+                                              TransactionStatusHistoryRepository transactionStatusHistoryRepository,
                                               long expiryMinutes) {
         this.transactionRepository = transactionRepository;
+        this.transactionStatusHistoryRepository = transactionStatusHistoryRepository;
     }
 
     @Override
@@ -56,6 +60,8 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
         }
 
         Transaction persisted = transactionRepository.save(transaction);
+    recordHistory(persisted, null, Transaction.TransactionStatus.INITIATED, persisted.getStatusReason(),
+        persisted.getCorrelationId(), persisted.getExternalReference(), null, null);
         AUDIT_LOG.info("transaction_initialized transactionId={} status={} expiresAt={} correlationId={}",
                 persisted.getId(), persisted.getStatus(), persisted.getExpiresAt(), persisted.getCorrelationId());
         return persisted;
@@ -95,6 +101,8 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
         }
 
         Transaction persisted = transactionRepository.save(transaction);
+        recordHistory(persisted, currentStatus, nextStatus, persisted.getStatusReason(), persisted.getCorrelationId(),
+            persisted.getExternalReference(), failureCode, failureMessage);
         AUDIT_LOG.info("transaction_transitioned transactionId={} fromStatus={} toStatus={} reason={} correlationId={}",
                 persisted.getId(), currentStatus, nextStatus, persisted.getStatusReason(), persisted.getCorrelationId());
         return persisted;
@@ -172,6 +180,30 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
                 Transaction.TransactionStatus.AWAITING_CONFIRMATION,
                 Transaction.TransactionStatus.RETRYING,
                 Transaction.TransactionStatus.RELEASED);
+    }
+
+    private void recordHistory(Transaction transaction,
+                               Transaction.TransactionStatus fromStatus,
+                               Transaction.TransactionStatus toStatus,
+                               String reason,
+                               String correlationId,
+                               String externalReference,
+                               String failureCode,
+                               String failureMessage) {
+        String recordedReason = reason;
+        if (failureCode != null || failureMessage != null) {
+            String failureSummary = (failureCode == null ? "" : failureCode) + (failureMessage == null ? "" : ":" + failureMessage);
+            recordedReason = recordedReason == null ? failureSummary : recordedReason + " | " + failureSummary;
+        }
+
+        TransactionStatusHistory history = new TransactionStatusHistory(
+                transaction,
+                fromStatus,
+                toStatus,
+                recordedReason,
+                correlationId,
+                externalReference);
+        transactionStatusHistoryRepository.save(history);
     }
 
     private String normalizeReason(String reason, String fallback) {
