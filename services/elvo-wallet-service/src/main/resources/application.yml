@@ -72,3 +72,15 @@ elvo:
       audience: ${ELVO_INTERNAL_JWT_AUDIENCE:elvo-wallet-service}
       required-role: ${ELVO_INTERNAL_JWT_REQUIRED_ROLE:INTERNAL_SERVICE}
       source-service-claim: ${ELVO_INTERNAL_JWT_SOURCE_SERVICE_CLAIM:sourceService}
+    internal-authz:
+      service-rules:
+        identity-service:
+          - GET:/api/v1/internal/wallets/*/balance
+        billing-service:
+          - POST:/api/v1/internal/wallets/*/reserve
+          - POST:/api/v1/internal/wallets/*/release
+          - POST:/api/v1/internal/wallets/*/confirm-debit
+        saga-service:
+          - POST:/api/v1/internal/wallets/*/reverse
+        agent-service:
+          - POST:/api/v1/internal/wallets/*/device-free-withdrawal

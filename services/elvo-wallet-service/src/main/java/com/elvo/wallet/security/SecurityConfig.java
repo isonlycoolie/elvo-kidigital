@@ -25,6 +25,12 @@ public class SecurityConfig {
     }
 
     @Bean
+    @ConfigurationProperties(prefix = "elvo.security.internal-authz")
+    public InternalServiceAuthorizationProperties internalServiceAuthorizationProperties() {
+        return new InternalServiceAuthorizationProperties();
+    }
+
+    @Bean
     public WalletBruteForceGuardService walletBruteForceGuardService() {
         return new WalletBruteForceGuardService();
     }
