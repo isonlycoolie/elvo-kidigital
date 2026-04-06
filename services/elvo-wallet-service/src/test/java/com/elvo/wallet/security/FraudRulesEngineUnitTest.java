@@ -2,6 +2,9 @@ package com.elvo.wallet.security;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -29,14 +32,14 @@ class FraudRulesEngineUnitTest {
         ObjectProvider<StringRedisTemplate> provider = org.mockito.Mockito.mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(redisTemplate);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        return new FraudRulesEngine(provider, new BigDecimal("500.00"), new BigDecimal("250.00"));
+        return new FraudRulesEngine(provider, new BigDecimal("500.00"), new BigDecimal("250.00"), 3600);
     }
 
     @SuppressWarnings("unchecked")
     private FraudRulesEngine engineWithoutRedis() {
         ObjectProvider<StringRedisTemplate> provider = org.mockito.Mockito.mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(null);
-        return new FraudRulesEngine(provider, new BigDecimal("500.00"), new BigDecimal("250.00"));
+        return new FraudRulesEngine(provider, new BigDecimal("500.00"), new BigDecimal("250.00"), 3600);
     }
 
     @Test
@@ -83,5 +86,15 @@ class FraudRulesEngineUnitTest {
 
         assertFalse(decision.blocked());
         assertFalse(decision.requiresVerification());
+    }
+
+    @Test
+    void shouldPersistUserOverrideWhenRedisIsAvailable() {
+        FraudRulesEngine engine = engineWithRedis();
+        UUID userId = UUID.randomUUID();
+
+        engine.setUserOverride(userId, "BLOCK");
+
+        verify(valueOperations).set(eq("elvo:wallet:fraud:override:user:" + userId), eq("BLOCK"), any(java.time.Duration.class));
     }
 }

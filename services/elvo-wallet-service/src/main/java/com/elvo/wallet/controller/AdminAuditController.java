@@ -18,7 +18,7 @@ import com.elvo.wallet.dto.response.AuditEventResponseDto;
 @RestController
 @RequestMapping("/api/v1/admin/audit")
 @Validated
-@PreAuthorize("hasAnyRole('ADMIN', 'AUDIT_ADMIN')")
+@PreAuthorize("hasRole('AUDIT_ADMIN')")
 public class AdminAuditController {
 
     private static final Logger AUDIT_LOG = LoggerFactory.getLogger("audit.wallet.admin.controller");

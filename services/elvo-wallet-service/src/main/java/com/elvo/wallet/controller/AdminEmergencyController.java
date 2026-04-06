@@ -22,7 +22,7 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api/v1/admin/emergency")
 @Validated
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasRole('OPERATIONS_ADMIN')")
 public class AdminEmergencyController {
 
     private final EmergencyControlService emergencyControlService;

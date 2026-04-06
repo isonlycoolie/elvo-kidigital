@@ -1,9 +1,11 @@
 package com.elvo.wallet.security;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,16 +40,35 @@ public class FraudRulesEngine {
     private final StringRedisTemplate redisTemplate;
     private final BigDecimal transferVerificationThreshold;
     private final BigDecimal withdrawalVerificationThreshold;
+    private final Duration overrideTtl;
+    private final Map<String, String> fallbackOverrides = new ConcurrentHashMap<>();
 
     public FraudRulesEngine(
             ObjectProvider<StringRedisTemplate> redisTemplateProvider,
             @Value("${elvo.security.fraud.rules.transfer-verification-threshold:500.00}") BigDecimal transferVerificationThreshold,
-            @Value("${elvo.security.fraud.rules.withdrawal-verification-threshold:250.00}") BigDecimal withdrawalVerificationThreshold) {
+            @Value("${elvo.security.fraud.rules.withdrawal-verification-threshold:250.00}") BigDecimal withdrawalVerificationThreshold,
+            @Value("${elvo.security.fraud.rules.override-ttl-seconds:86400}") long overrideTtlSeconds) {
         this.redisTemplate = redisTemplateProvider.getIfAvailable();
         this.transferVerificationThreshold = transferVerificationThreshold == null
                 ? new BigDecimal("500.00") : transferVerificationThreshold;
         this.withdrawalVerificationThreshold = withdrawalVerificationThreshold == null
                 ? new BigDecimal("250.00") : withdrawalVerificationThreshold;
+        this.overrideTtl = Duration.ofSeconds(Math.max(300L, overrideTtlSeconds));
+    }
+
+    public void setUserOverride(UUID userId, String decision) {
+        if (userId == null || decision == null || decision.isBlank()) {
+            return;
+        }
+        writeOverride(USER_OVERRIDE_PREFIX + userId, decision.trim().toUpperCase(Locale.ROOT));
+    }
+
+    public void setTargetOverride(String targetIdentifier, String decision) {
+        String normalizedTarget = normalize(targetIdentifier);
+        if (normalizedTarget == null || decision == null || decision.isBlank()) {
+            return;
+        }
+        writeOverride(TARGET_OVERRIDE_PREFIX + normalizedTarget, decision.trim().toUpperCase(Locale.ROOT));
     }
 
     public FraudDecision evaluate(Operation operation, UUID userId, BigDecimal amount, String targetIdentifier) {
@@ -81,13 +102,24 @@ public class FraudRulesEngine {
 
     private String readOverride(String key) {
         if (redisTemplate == null || key == null || key.isBlank()) {
-            return null;
+            return fallbackOverrides.get(key);
         }
         try {
             return redisTemplate.opsForValue().get(key);
         } catch (RuntimeException ex) {
-            return null;
+            return fallbackOverrides.get(key);
         }
+    }
+
+    private void writeOverride(String key, String value) {
+        if (redisTemplate != null) {
+            try {
+                redisTemplate.opsForValue().set(key, value, overrideTtl);
+                return;
+            } catch (RuntimeException ignored) {
+            }
+        }
+        fallbackOverrides.put(key, value);
     }
 
     private FraudDecision evaluateOverride(String value) {
