@@ -84,6 +84,8 @@ elvo:
   communication:
     email:
       from: ${EMAIL_PROVIDER_FROM:no-reply@elvo.local}
+    sms:
+      retry-max-attempts: ${ELVO_SMS_RETRY_MAX_ATTEMPTS:3}
   monitoring:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:elvo-identity-service}
