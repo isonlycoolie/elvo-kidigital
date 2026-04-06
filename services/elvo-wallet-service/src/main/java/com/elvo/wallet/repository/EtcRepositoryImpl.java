@@ -105,6 +105,39 @@ public class EtcRepositoryImpl implements EtcRepositoryCustom {
     }
 
     @Override
+    public int registerFailedAttempt(String codeHash, int maxAttempts) {
+        Etc etc = entityManager.createQuery(
+                        "select e from Etc e where e.codeHash = :codeHash",
+                        Etc.class)
+                .setParameter("codeHash", codeHash)
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultStream()
+                .findFirst()
+                .orElse(null);
+
+        if (etc == null) {
+            return 0;
+        }
+
+        int current = Math.max(0, etc.getFailedAttemptCount());
+        int updated = current + 1;
+        etc.setFailedAttemptCount(updated);
+        if (updated >= maxAttempts && etc.getStatus() == Etc.EtcStatus.GENERATED) {
+            etc.setStatus(Etc.EtcStatus.EXPIRED);
+        }
+
+        AUDIT_LOG.warn("etc_failed_attempt etcId={} walletId={} codeHash={} failedAttempts={} maxAttempts={} status={}",
+                etc.getId(),
+                etc.getWallet() != null ? etc.getWallet().getId() : null,
+                etc.getCodeHash(),
+                updated,
+                maxAttempts,
+                etc.getStatus());
+
+        return updated;
+    }
+
+    @Override
     public int expireGeneratedCodes(Instant currentTime) {
         Objects.requireNonNull(currentTime, "currentTime must not be null");
 

@@ -118,8 +118,8 @@ public class WalletServiceImpl implements WalletService {
     }
 
     @Override
-    public WalletFlowResult redeemEtc(String code, String idempotencyKey) {
-        WalletFlowResult result = etcFlowService.redeem(code, idempotencyKey);
+    public WalletFlowResult redeemEtc(String code, String idempotencyKey, String deviceId, String sourceIp) {
+        WalletFlowResult result = etcFlowService.redeem(code, idempotencyKey, deviceId, sourceIp);
         metricsRecorder.recordTransaction("etc_redeem", result.success());
         return result;
     }

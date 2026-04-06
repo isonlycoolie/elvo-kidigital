@@ -11,6 +11,8 @@ public interface EtcRepositoryCustom {
 
     boolean redeemCode(String codeHash, Instant currentTime);
 
+    int registerFailedAttempt(String codeHash, int maxAttempts);
+
     int expireGeneratedCodes(Instant currentTime);
 
     boolean isCodeExpired(String codeHash, Instant currentTime);

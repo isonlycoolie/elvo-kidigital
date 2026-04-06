@@ -25,7 +25,7 @@ public interface WalletService {
 
     WalletFlowResult generateEtc(EtcCommand command);
 
-    WalletFlowResult redeemEtc(String code, String idempotencyKey);
+    WalletFlowResult redeemEtc(String code, String idempotencyKey, String deviceId, String sourceIp);
 
     WalletFlowResult freezeWallet(UUID walletId, String reason);
 

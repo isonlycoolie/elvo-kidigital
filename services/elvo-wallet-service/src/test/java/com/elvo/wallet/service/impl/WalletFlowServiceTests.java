@@ -31,6 +31,7 @@ import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.security.EtcBruteForceProtectionService;
 import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.security.EtcCodeSecurityService;
 import com.elvo.wallet.service.EacReplayProtectionService;
@@ -62,6 +63,7 @@ class WalletFlowServiceTests {
     @Mock private EacReplayProtectionService eacReplayProtectionService;
     @Mock private EtcCodeSecurityService etcCodeSecurityService;
     @Mock private EtcCodePolicyService etcCodePolicyService;
+    @Mock private EtcBruteForceProtectionService etcBruteForceProtectionService;
 
     private Wallet wallet;
 
@@ -257,7 +259,9 @@ class WalletFlowServiceTests {
                 limitEnforcementService,
             eventPublisher,
             etcCodeSecurityService,
-            etcCodePolicyService);
+                etcCodePolicyService,
+                etcBruteForceProtectionService,
+                5);
 
         WalletFlowResult result = service.generate(new EtcCommand(wallet.getId(), wallet.getUserId(), "ETC-10-ABC123", Instant.now().plusSeconds(3600), "idem-5"));
 

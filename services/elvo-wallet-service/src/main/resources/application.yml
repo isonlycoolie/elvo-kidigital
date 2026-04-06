@@ -91,3 +91,8 @@ elvo:
       hash-pepper: ${ELVO_ETC_HASH_PEPPER:elvo-wallet-etc-pepper}
       min-secure-length: ${ELVO_ETC_MIN_SECURE_LENGTH:12}
       max-expiry-window-seconds: ${ELVO_ETC_MAX_EXPIRY_WINDOW_SECONDS:900}
+      bruteforce:
+        max-attempts-per-code: ${ELVO_ETC_MAX_ATTEMPTS_PER_CODE:5}
+        max-attempts-per-device: ${ELVO_ETC_MAX_ATTEMPTS_PER_DEVICE:10}
+        max-attempts-per-ip: ${ELVO_ETC_MAX_ATTEMPTS_PER_IP:20}
+        window-seconds: ${ELVO_ETC_BRUTEFORCE_WINDOW_SECONDS:900}

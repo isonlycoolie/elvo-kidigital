@@ -58,6 +58,7 @@ import com.elvo.wallet.service.model.WithdrawalMode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/wallets")
@@ -338,7 +339,8 @@ public class WalletController {
     @PostMapping("/withdrawal-codes/{code}/redeem")
     public ResponseEntity<FlowResultResponseDto> redeemWithdrawalCode(
             @PathVariable String code,
-            @Valid @RequestBody EtcRedeemRequestDto request) {
+            @Valid @RequestBody EtcRedeemRequestDto request,
+            HttpServletRequest httpRequest) {
         
         UUID userId = getCurrentUserId();
         AUDIT_LOG.info("wallet_controller_redeem_withdrawal_code userId={} code={}", userId, code);
@@ -346,7 +348,9 @@ public class WalletController {
         Wallet wallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
 
-        WalletFlowResult result = walletService.redeemEtc(code, request.getIdempotencyKey());
+        String deviceId = httpRequest.getHeader("X-Device-Id");
+        String sourceIp = httpRequest.getRemoteAddr();
+        WalletFlowResult result = walletService.redeemEtc(code, request.getIdempotencyKey(), deviceId, sourceIp);
         FlowResultResponseDto response = walletMapper.toFlowResultResponseDto(result);
 
         if (result.success()) {

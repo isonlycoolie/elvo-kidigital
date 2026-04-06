@@ -7,5 +7,5 @@ public interface EtcFlowService {
 
     WalletFlowResult generate(EtcCommand command);
 
-    WalletFlowResult redeem(String code, String idempotencyKey);
+    WalletFlowResult redeem(String code, String idempotencyKey, String deviceId, String sourceIp);
 }

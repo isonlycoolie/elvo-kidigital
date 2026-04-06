@@ -14,6 +14,7 @@ import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.security.EtcBruteForceProtectionService;
 import com.elvo.wallet.security.EtcCodeSecurityService;
 import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.service.EtcFlowService;
@@ -34,6 +35,8 @@ public class DefaultEtcFlowService implements EtcFlowService {
     private final WalletEventPublisher eventPublisher;
     private final EtcCodeSecurityService etcCodeSecurityService;
     private final EtcCodePolicyService etcCodePolicyService;
+    private final EtcBruteForceProtectionService etcBruteForceProtectionService;
+    private final int maxFailedAttemptsPerCode;
 
     public DefaultEtcFlowService(EtcRepository etcRepository,
                                  WalletRepository walletRepository,
@@ -43,7 +46,9 @@ public class DefaultEtcFlowService implements EtcFlowService {
                                  WalletLimitEnforcementService limitEnforcementService,
                                  WalletEventPublisher eventPublisher,
                                  EtcCodeSecurityService etcCodeSecurityService,
-                                 EtcCodePolicyService etcCodePolicyService) {
+                                 EtcCodePolicyService etcCodePolicyService,
+                                 EtcBruteForceProtectionService etcBruteForceProtectionService,
+                                 @org.springframework.beans.factory.annotation.Value("${elvo.security.etc.bruteforce.max-attempts-per-code:5}") int maxFailedAttemptsPerCode) {
         this.etcRepository = etcRepository;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -53,6 +58,8 @@ public class DefaultEtcFlowService implements EtcFlowService {
         this.limitEnforcementService = limitEnforcementService;
         this.etcCodeSecurityService = etcCodeSecurityService;
         this.etcCodePolicyService = etcCodePolicyService;
+        this.etcBruteForceProtectionService = etcBruteForceProtectionService;
+        this.maxFailedAttemptsPerCode = maxFailedAttemptsPerCode;
     }
 
     @Override
@@ -97,15 +104,26 @@ public class DefaultEtcFlowService implements EtcFlowService {
 
     @Override
     @Transactional
-    public WalletFlowResult redeem(String code, String idempotencyKey) {
+    public WalletFlowResult redeem(String code, String idempotencyKey, String deviceId, String sourceIp) {
         WalletFlowResult duplicate = idempotencyService.get(idempotencyKey).orElse(null);
         if (duplicate != null) {
             return duplicate;
         }
 
         String codeHash = etcCodeSecurityService.hashCode(code);
+        if (etcBruteForceProtectionService.isBlocked(codeHash, deviceId, sourceIp)) {
+            emitFraudEvent("ETC brute-force threshold exceeded", code, deviceId, sourceIp, null);
+            WalletFlowResult result = WalletFlowResult.failure("ETC redemption temporarily blocked", null, "wallet.etc.failed");
+            idempotencyService.put(idempotencyKey, result);
+            return result;
+        }
+
         var etc = etcRepository.findByCodeHashForUpdate(codeHash).orElse(null);
         if (etc == null) {
+            boolean thresholdHit = etcBruteForceProtectionService.registerFailure(codeHash, deviceId, sourceIp);
+            if (thresholdHit) {
+                emitFraudEvent("ETC brute-force threshold exceeded", code, deviceId, sourceIp, null);
+            }
             eventPublisher.publish("wallet.etc.failed", java.util.Map.of(
                     "reason", "ETC code not found",
                     "codeRef", etcCodeSecurityService.redact(code)));
@@ -115,6 +133,11 @@ public class DefaultEtcFlowService implements EtcFlowService {
         }
 
         if (etcRepository.isCodeExpired(codeHash, Instant.now())) {
+            int attempts = etcRepository.registerFailedAttempt(codeHash, maxFailedAttemptsPerCode);
+            boolean thresholdHit = etcBruteForceProtectionService.registerFailure(codeHash, deviceId, sourceIp);
+            if (thresholdHit || attempts >= maxFailedAttemptsPerCode) {
+                emitFraudEvent("ETC expired or brute-force attempts", code, deviceId, sourceIp, etc.getWallet().getId());
+            }
             etcRepository.expireGeneratedCodes(Instant.now());
             WalletFlowResult result = WalletFlowResult.failure("ETC code has expired", etc.getWallet().getId(), "wallet.etc.failed");
             idempotencyService.put(idempotencyKey, result);
@@ -123,10 +146,17 @@ public class DefaultEtcFlowService implements EtcFlowService {
 
         boolean redeemed = etcRepository.redeemCode(codeHash, Instant.now());
         if (!redeemed) {
+            int attempts = etcRepository.registerFailedAttempt(codeHash, maxFailedAttemptsPerCode);
+            boolean thresholdHit = etcBruteForceProtectionService.registerFailure(codeHash, deviceId, sourceIp);
+            if (thresholdHit || attempts >= maxFailedAttemptsPerCode) {
+                emitFraudEvent("ETC brute-force threshold exceeded", code, deviceId, sourceIp, etc.getWallet().getId());
+            }
             WalletFlowResult result = WalletFlowResult.failure("ETC code cannot be redeemed", etc.getWallet().getId(), "wallet.etc.failed");
             idempotencyService.put(idempotencyKey, result);
             return result;
         }
+
+        etcBruteForceProtectionService.clearOnSuccess(codeHash, deviceId, sourceIp);
 
         Wallet wallet = walletRepository.findByIdForUpdate(etc.getWallet().getId()).orElse(null);
         if (wallet == null || wallet.getStatus() == Wallet.WalletStatus.FROZEN) {
@@ -169,6 +199,16 @@ public class DefaultEtcFlowService implements EtcFlowService {
                 "wallet.etc.redeemed");
         idempotencyService.put(idempotencyKey, result);
         return result;
+    }
+
+    private void emitFraudEvent(String reason, String code, String deviceId, String sourceIp, java.util.UUID walletId) {
+        eventPublisher.publish("wallet.etc.fraud.detected", java.util.Map.of(
+                "reason", reason,
+                "walletId", walletId == null ? "unknown" : walletId,
+                "codeRef", etcCodeSecurityService.redact(code),
+                "deviceId", deviceId == null ? "unknown" : deviceId,
+                "sourceIp", sourceIp == null ? "unknown" : sourceIp
+        ));
     }
 
     private BigDecimal resolveRedeemAmount(String code) {
