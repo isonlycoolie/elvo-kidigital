@@ -16,13 +16,13 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.core.env.Environment;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -39,6 +39,7 @@ import com.elvo.wallet.security.DeviceLocationRiskService;
 import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.security.FraudRulesEngine;
 import com.elvo.wallet.security.IpGeovelocityRiskService;
+import com.elvo.wallet.security.MakerCheckerApprovalService;
 import com.elvo.wallet.security.SecretManagerService;
 import com.elvo.wallet.security.UserJwtPrincipal;
 import com.elvo.wallet.security.WalletFieldEncryptionService;
@@ -90,6 +91,9 @@ class WalletControllerTest {
 
     @MockBean
     private FraudRulesEngine fraudRulesEngine;
+
+    @MockBean
+    private MakerCheckerApprovalService makerCheckerApprovalService;
     
     @MockBean
     private WalletFieldEncryptionService fieldEncryptionService;
@@ -105,6 +109,8 @@ class WalletControllerTest {
             .thenReturn(new IpGeovelocityRiskService.RiskDecision(false, false, null));
         when(fraudRulesEngine.evaluate(any(), any(), any(), any()))
             .thenReturn(FraudRulesEngine.FraudDecision.allow());
+        when(makerCheckerApprovalService.evaluate(any(), any(), any(), any()))
+            .thenReturn(MakerCheckerApprovalService.ApprovalDecision.allow());
     }
 
     @AfterEach

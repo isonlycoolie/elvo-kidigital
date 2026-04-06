@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.elvo.wallet.dto.request.InternalReservationActionRequestDto;
+import com.elvo.wallet.dto.request.MakerCheckerDecisionRequestDto;
 import com.elvo.wallet.dto.request.ReservationRequestDto;
 import com.elvo.wallet.dto.response.BalanceResponseDto;
 import com.elvo.wallet.dto.response.FlowResultResponseDto;
@@ -24,6 +25,7 @@ import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.mapper.WalletMapper;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
+import com.elvo.wallet.security.MakerCheckerApprovalService;
 import com.elvo.wallet.service.WalletService;
 import com.elvo.wallet.service.model.ReservationCommand;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -43,15 +45,18 @@ public class InternalWalletController {
     private final WalletService walletService;
     private final WalletMapper walletMapper;
         private final WalletOperationRateLimitService operationRateLimitService;
+        private final MakerCheckerApprovalService makerCheckerApprovalService;
 
         public InternalWalletController(WalletRepository walletRepository,
                                                                         WalletService walletService,
                                                                         WalletMapper walletMapper,
-                                                                        WalletOperationRateLimitService operationRateLimitService) {
+                                                                        WalletOperationRateLimitService operationRateLimitService,
+                                                                        MakerCheckerApprovalService makerCheckerApprovalService) {
         this.walletRepository = walletRepository;
         this.walletService = walletService;
         this.walletMapper = walletMapper;
                 this.operationRateLimitService = operationRateLimitService;
+                this.makerCheckerApprovalService = makerCheckerApprovalService;
     }
 
     @GetMapping("/{userId}/balance")
@@ -141,6 +146,20 @@ public class InternalWalletController {
                 userId, wallet.getId(), request.getReservationId(), result.success(), result.message());
         return toResponse(result);
     }
+
+        @PostMapping("/approvals/{approvalId}/decision")
+        public ResponseEntity<FlowResultResponseDto> decideApproval(
+                        @PathVariable String approvalId,
+                        @Valid @RequestBody MakerCheckerDecisionRequestDto request
+        ) {
+                makerCheckerApprovalService.recordDecision(approvalId, request.isApproved(), request.getReason());
+                AUDIT_LOG.info("internal_wallet_maker_checker_decision approvalId={} approved={} reason={}",
+                                approvalId,
+                                request.isApproved(),
+                                request.getReason());
+                String message = request.isApproved() ? "Approval decision recorded" : "Rejection decision recorded";
+                return ResponseEntity.ok(new FlowResultResponseDto(true, message, null, null, "wallet.maker_checker.decision_recorded"));
+        }
 
     private Wallet walletByUser(UUID userId) {
         return walletRepository.findByUserId(userId)

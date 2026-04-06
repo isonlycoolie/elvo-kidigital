@@ -49,6 +49,7 @@ import com.elvo.wallet.security.DeviceLocationRiskService;
 import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.security.FraudRulesEngine;
 import com.elvo.wallet.security.IpGeovelocityRiskService;
+import com.elvo.wallet.security.MakerCheckerApprovalService;
 import com.elvo.wallet.security.UserJwtPrincipal;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
@@ -90,6 +91,7 @@ public class WalletController {
     private final DestinationRiskService destinationRiskService;
     private final IpGeovelocityRiskService ipGeovelocityRiskService;
     private final FraudRulesEngine fraudRulesEngine;
+    private final MakerCheckerApprovalService makerCheckerApprovalService;
 
     public WalletController(WalletService walletService, WalletRepository walletRepository,
                           TransactionRepository transactionRepository, ReservationRepository reservationRepository,
@@ -99,7 +101,8 @@ public class WalletController {
                           DeviceLocationRiskService deviceLocationRiskService,
                           DestinationRiskService destinationRiskService,
                           IpGeovelocityRiskService ipGeovelocityRiskService,
-                          FraudRulesEngine fraudRulesEngine) {
+                          FraudRulesEngine fraudRulesEngine,
+                          MakerCheckerApprovalService makerCheckerApprovalService) {
         this.walletService = walletService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -112,6 +115,7 @@ public class WalletController {
         this.destinationRiskService = destinationRiskService;
         this.ipGeovelocityRiskService = ipGeovelocityRiskService;
         this.fraudRulesEngine = fraudRulesEngine;
+        this.makerCheckerApprovalService = makerCheckerApprovalService;
     }
 
     /**
@@ -290,6 +294,21 @@ public class WalletController {
                 .body(new FlowResultResponseDto(false, withdrawalFraudDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
         }
 
+        MakerCheckerApprovalService.ApprovalDecision withdrawalApprovalDecision = makerCheckerApprovalService.evaluate(
+            MakerCheckerApprovalService.Operation.WITHDRAWAL,
+            userId,
+            request.getAmount(),
+            httpRequest.getHeader("X-Approval-Token"));
+        if (withdrawalApprovalDecision.rejected()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new FlowResultResponseDto(false, withdrawalApprovalDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
+        }
+        if (withdrawalApprovalDecision.pending()) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(new FlowResultResponseDto(false, withdrawalApprovalDecision.reason(), wallet.getId(),
+                    UUID.fromString(withdrawalApprovalDecision.approvalId()), "wallet.withdrawal.pending_approval"));
+        }
+
         try {
             WithdrawalMode mode = WithdrawalMode.valueOf(request.getMode());
             WithdrawalCommand command = new WithdrawalCommand(
@@ -388,6 +407,21 @@ public class WalletController {
         if (transferFraudDecision.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new FlowResultResponseDto(false, transferFraudDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
+        }
+
+        MakerCheckerApprovalService.ApprovalDecision transferApprovalDecision = makerCheckerApprovalService.evaluate(
+            MakerCheckerApprovalService.Operation.TRANSFER,
+            userId,
+            request.getAmount(),
+            httpRequest.getHeader("X-Approval-Token"));
+        if (transferApprovalDecision.rejected()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new FlowResultResponseDto(false, transferApprovalDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
+        }
+        if (transferApprovalDecision.pending()) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(new FlowResultResponseDto(false, transferApprovalDecision.reason(), sourceWallet.getId(),
+                    UUID.fromString(transferApprovalDecision.approvalId()), "wallet.transfer.pending_approval"));
         }
 
         Wallet targetWallet = walletRepository.findById(request.getTargetWalletId())

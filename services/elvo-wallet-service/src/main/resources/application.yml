@@ -150,6 +150,11 @@ elvo:
       rules:
         transfer-verification-threshold: ${ELVO_FRAUD_RULES_TRANSFER_VERIFICATION_THRESHOLD:500.00}
         withdrawal-verification-threshold: ${ELVO_FRAUD_RULES_WITHDRAWAL_VERIFICATION_THRESHOLD:250.00}
+    maker-checker:
+      enabled: ${ELVO_MAKER_CHECKER_ENABLED:true}
+      transfer-threshold: ${ELVO_MAKER_CHECKER_TRANSFER_THRESHOLD:1000.00}
+      withdrawal-threshold: ${ELVO_MAKER_CHECKER_WITHDRAWAL_THRESHOLD:750.00}
+      approval-ttl-seconds: ${ELVO_MAKER_CHECKER_APPROVAL_TTL_SECONDS:86400}
     destination-risk:
       unusual-amount-threshold: ${ELVO_DESTINATION_RISK_UNUSUAL_AMOUNT_THRESHOLD:500.00}
       max-failures-before-block: ${ELVO_DESTINATION_RISK_MAX_FAILURES_BEFORE_BLOCK:3}
