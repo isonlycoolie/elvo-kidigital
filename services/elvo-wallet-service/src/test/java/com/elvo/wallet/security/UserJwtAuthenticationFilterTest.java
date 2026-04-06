@@ -33,10 +33,12 @@ class UserJwtAuthenticationFilterTest {
     private static final String ISSUER = "elvo-identity-service";
     private static final String AUDIENCE = "elvo-platform";
     private static final String KEY_ID = "identity-key-01";
+    private static final String PREVIOUS_KEY_ID = "identity-key-00";
 
     private UserJwtProperties properties;
     private UserJwtAuthenticationFilter filter;
     private KeyPair keyPair;
+    private KeyPair previousKeyPair;
     private UserTokenRevocationChecker tokenRevocationChecker;
 
     @BeforeEach
@@ -46,9 +48,12 @@ class UserJwtAuthenticationFilterTest {
         properties.setIssuer(ISSUER);
         properties.setAudience(AUDIENCE);
         properties.setSigningKeyId(KEY_ID);
+        properties.setPreviousSigningKeyId(PREVIOUS_KEY_ID);
 
         keyPair = generateRsaKeyPair();
         properties.setSigningPublicKeyPem(toPublicPem(keyPair));
+        previousKeyPair = generateRsaKeyPair();
+        properties.setPreviousSigningPublicKeyPem(toPublicPem(previousKeyPair));
 
         tokenRevocationChecker = mock(UserTokenRevocationChecker.class);
         when(tokenRevocationChecker.isRevoked(anyString())).thenReturn(false);
@@ -131,10 +136,29 @@ class UserJwtAuthenticationFilterTest {
         assertThat(response.getContentAsString()).contains("Token is revoked");
     }
 
+    @Test
+    void shouldAuthenticateTokenSignedWithPreviousRolloverKey() throws Exception {
+        UUID userId = UUID.randomUUID();
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/wallets/me/balance");
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token(previousKeyPair, PREVIOUS_KEY_ID, userId, "ACCESS"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = (req, res) -> { };
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isNotEqualTo(403);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        assertThat(authentication).isNotNull();
+    }
+
     private String token(UUID userId, String tokenType) {
+        return token(keyPair, KEY_ID, userId, tokenType);
+    }
+
+    private String token(KeyPair signingKeyPair, String keyId, UUID userId, String tokenType) {
         return Jwts.builder()
                 .issuer(ISSUER)
-                .header().keyId(KEY_ID).and()
+                .header().keyId(keyId).and()
                 .audience().add(AUDIENCE).and()
                 .subject(userId.toString())
             .id(UUID.randomUUID().toString())
@@ -144,7 +168,7 @@ class UserJwtAuthenticationFilterTest {
                 .claim("roles", List.of("USER"))
                 .claim("scopes", List.of("wallet:read"))
                 .claim("tokenType", tokenType)
-                .signWith(keyPair.getPrivate(), io.jsonwebtoken.Jwts.SIG.RS256)
+                .signWith(signingKeyPair.getPrivate(), io.jsonwebtoken.Jwts.SIG.RS256)
                 .compact();
     }
 

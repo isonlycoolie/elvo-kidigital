@@ -23,9 +23,23 @@ class TokenServiceUnitTest {
     private static final String ISSUER = "identity-test-issuer";
     private static final String AUDIENCE = "identity-test-audience";
     private static final String KEY_ID = "identity-key-01";
+    private static final String PREVIOUS_KEY_ID = "identity-key-00";
 
     private TokenService tokenService(KeyPair keyPair, String keyId, long accessMinutes, long refreshDays) {
         return new TokenService(keyPair.getPrivate(), keyPair.getPublic(), ISSUER, AUDIENCE, keyId, accessMinutes, refreshDays);
+    }
+
+    private TokenService tokenService(KeyPair keyPair, KeyPair previousKeyPair, String keyId, String previousKeyId, long accessMinutes, long refreshDays) {
+        return new TokenService(
+                keyPair.getPrivate(),
+                keyPair.getPublic(),
+                previousKeyPair.getPublic(),
+                ISSUER,
+                AUDIENCE,
+                keyId,
+                previousKeyId,
+                accessMinutes,
+                refreshDays);
     }
 
     private KeyPair generateRsaKeyPair() {
@@ -174,19 +188,45 @@ class TokenServiceUnitTest {
     }
 
     @Test
-    void jwksShouldExposeRsaSigningMetadata() {
-        KeyPair keyPair = generateRsaKeyPair();
-        TokenService tokenService = tokenService(keyPair, KEY_ID, 15, 7);
+    void validateAccessTokenShouldAcceptPreviousSigningKeyDuringRollover() {
+        KeyPair activeKeyPair = generateRsaKeyPair();
+        KeyPair previousKeyPair = generateRsaKeyPair();
+
+        TokenService issuerService = new TokenService(
+                previousKeyPair.getPrivate(),
+                previousKeyPair.getPublic(),
+                ISSUER,
+                AUDIENCE,
+                PREVIOUS_KEY_ID,
+                15,
+                7);
+        TokenService verifierService = tokenService(activeKeyPair, previousKeyPair, KEY_ID, PREVIOUS_KEY_ID, 15, 7);
+
+        TokenService.TokenPayload tokenPayload = issuerService.generateAccessToken(UUID.randomUUID(), "ELVO-UNIT-ROLLOVER");
+        TokenService.AccessTokenClaims claims = verifierService.validateAccessToken(tokenPayload.token());
+
+        assertEquals("ELVO-UNIT-ROLLOVER", claims.ean());
+    }
+
+    @Test
+    void jwksShouldExposeActiveAndPreviousSigningMetadata() {
+        KeyPair activeKeyPair = generateRsaKeyPair();
+        KeyPair previousKeyPair = generateRsaKeyPair();
+        TokenService tokenService = tokenService(activeKeyPair, previousKeyPair, KEY_ID, PREVIOUS_KEY_ID, 15, 7);
 
         TokenService.JwksDocument jwks = tokenService.getJwksDocument();
-        assertEquals(1, jwks.keys().size());
-        TokenService.JwkKey key = jwks.keys().get(0);
-        assertEquals(KEY_ID, key.kid());
-        assertEquals("RSA", key.kty());
-        assertEquals("RS256", key.alg());
-        assertEquals("sig", key.use());
-        assertNotNull(key.n());
-        assertNotNull(key.e());
+        assertEquals(2, jwks.keys().size());
+        TokenService.JwkKey active = jwks.keys().get(0);
+        TokenService.JwkKey previous = jwks.keys().get(1);
+        assertEquals(KEY_ID, active.kid());
+        assertEquals(PREVIOUS_KEY_ID, previous.kid());
+        assertEquals("RSA", active.kty());
+        assertEquals("RS256", active.alg());
+        assertEquals("sig", active.use());
+        assertNotNull(active.n());
+        assertNotNull(active.e());
+        assertNotNull(previous.n());
+        assertNotNull(previous.e());
     }
 
     @Test

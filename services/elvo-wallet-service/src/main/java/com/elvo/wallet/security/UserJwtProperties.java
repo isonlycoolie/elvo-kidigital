@@ -7,6 +7,8 @@ public class UserJwtProperties {
     private String audience = "elvo-platform";
     private String signingPublicKeyPem = "";
     private String signingKeyId = "";
+    private String previousSigningPublicKeyPem = "";
+    private String previousSigningKeyId = "";
 
     public String getSecret() {
         return secret;
@@ -46,5 +48,21 @@ public class UserJwtProperties {
 
     public void setSigningKeyId(String signingKeyId) {
         this.signingKeyId = signingKeyId;
+    }
+
+    public String getPreviousSigningPublicKeyPem() {
+        return previousSigningPublicKeyPem;
+    }
+
+    public void setPreviousSigningPublicKeyPem(String previousSigningPublicKeyPem) {
+        this.previousSigningPublicKeyPem = previousSigningPublicKeyPem;
+    }
+
+    public String getPreviousSigningKeyId() {
+        return previousSigningKeyId;
+    }
+
+    public void setPreviousSigningKeyId(String previousSigningKeyId) {
+        this.previousSigningKeyId = previousSigningKeyId;
     }
 }

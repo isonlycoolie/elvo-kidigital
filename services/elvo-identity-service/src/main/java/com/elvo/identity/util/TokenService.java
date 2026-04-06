@@ -44,7 +44,9 @@ public class TokenService {
     private final SecretKey signingKey;
     private final PrivateKey signingPrivateKey;
     private final PublicKey verificationPublicKey;
+    private final PublicKey previousVerificationPublicKey;
     private final String signingKeyId;
+    private final String previousSigningKeyId;
     private final boolean asymmetricSigningEnabled;
     private final TokenRevocationChecker tokenRevocationChecker;
     private final String issuer;
@@ -55,7 +57,9 @@ public class TokenService {
     public TokenService(@Value("${elvo.security.jwt.secret}") String jwtSecret,
                         @Value("${elvo.security.jwt.signing.private-key-pem:}") String privateKeyPem,
                         @Value("${elvo.security.jwt.signing.public-key-pem:}") String publicKeyPem,
+                        @Value("${elvo.security.jwt.signing.previous-public-key-pem:}") String previousPublicKeyPem,
                         @Value("${elvo.security.jwt.signing.key-id:}") String signingKeyId,
+                        @Value("${elvo.security.jwt.signing.previous-key-id:}") String previousSigningKeyId,
                         @Value("${elvo.security.jwt.issuer:elvo-identity-service}") String issuer,
                         @Value("${elvo.security.jwt.audience:elvo-platform}") String audience,
                         @Value("${elvo.security.jwt.access-token-ttl-minutes:15}") long accessTokenTtlMinutes,
@@ -77,13 +81,43 @@ public class TokenService {
                 publicKeyPem,
                 "ELVO_JWT_SIGNING_PUBLIC_KEY_PEM",
                 null),
+            secretManagerService.resolve(
+                "identity-jwt-signing-previous-public-key",
+                previousPublicKeyPem,
+                "ELVO_JWT_SIGNING_PREVIOUS_PUBLIC_KEY_PEM",
+                null),
             signingKeyId,
+            previousSigningKeyId,
             issuer,
             audience,
             accessTokenTtlMinutes,
             refreshTokenTtlDays,
             tokenRevocationChecker,
             true);
+    }
+
+    public TokenService(String jwtSecret,
+                        String privateKeyPem,
+                        String publicKeyPem,
+                        String previousPublicKeyPem,
+                        String signingKeyId,
+                        String previousSigningKeyId,
+                        String issuer,
+                        String audience,
+                        long accessTokenTtlMinutes,
+                        long refreshTokenTtlDays) {
+        this(jwtSecret,
+            privateKeyPem,
+            publicKeyPem,
+            previousPublicKeyPem,
+            signingKeyId,
+            previousSigningKeyId,
+            issuer,
+            audience,
+            accessTokenTtlMinutes,
+            refreshTokenTtlDays,
+            jti -> false,
+            false);
     }
 
     public TokenService(String jwtSecret,
@@ -97,7 +131,9 @@ public class TokenService {
         this(jwtSecret,
             privateKeyPem,
             publicKeyPem,
+            null,
             signingKeyId,
+            null,
             issuer,
             audience,
             accessTokenTtlMinutes,
@@ -109,7 +145,9 @@ public class TokenService {
     private TokenService(String jwtSecret,
                          String privateKeyPem,
                          String publicKeyPem,
+                         String previousPublicKeyPem,
                          String signingKeyId,
+                         String previousSigningKeyId,
                          String issuer,
                          String audience,
                          long accessTokenTtlMinutes,
@@ -120,6 +158,8 @@ public class TokenService {
             this.signingPrivateKey = parsePrivateKey(privateKeyPem);
             this.verificationPublicKey = parsePublicKey(publicKeyPem);
             this.signingKeyId = requireText(signingKeyId, "elvo.security.jwt.signing.key-id must be configured");
+            this.previousVerificationPublicKey = hasText(previousPublicKeyPem) ? parsePublicKey(previousPublicKeyPem) : null;
+            this.previousSigningKeyId = hasText(previousSigningKeyId) ? requireText(previousSigningKeyId, "elvo.security.jwt.signing.previous-key-id must be configured") : null;
             this.signingKey = null;
             this.asymmetricSigningEnabled = true;
         } else {
@@ -127,7 +167,9 @@ public class TokenService {
             this.signingKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
             this.signingPrivateKey = null;
             this.verificationPublicKey = null;
+            this.previousVerificationPublicKey = null;
             this.signingKeyId = null;
+            this.previousSigningKeyId = null;
             this.asymmetricSigningEnabled = false;
         }
         this.tokenRevocationChecker = tokenRevocationChecker;
@@ -146,9 +188,11 @@ public class TokenService {
                  long refreshTokenTtlDays) {
         this(signingPrivateKey,
             verificationPublicKey,
+            null,
             issuer,
             audience,
             signingKeyId,
+            null,
             accessTokenTtlMinutes,
             refreshTokenTtlDays,
             jti -> false);
@@ -156,15 +200,40 @@ public class TokenService {
 
     TokenService(PrivateKey signingPrivateKey,
                  PublicKey verificationPublicKey,
+                 PublicKey previousVerificationPublicKey,
                  String issuer,
                  String audience,
                  String signingKeyId,
+                 String previousSigningKeyId,
+                 long accessTokenTtlMinutes,
+                 long refreshTokenTtlDays) {
+        this(signingPrivateKey,
+            verificationPublicKey,
+            previousVerificationPublicKey,
+            issuer,
+            audience,
+            signingKeyId,
+            previousSigningKeyId,
+            accessTokenTtlMinutes,
+            refreshTokenTtlDays,
+            jti -> false);
+    }
+
+    TokenService(PrivateKey signingPrivateKey,
+                 PublicKey verificationPublicKey,
+                 PublicKey previousVerificationPublicKey,
+                 String issuer,
+                 String audience,
+                 String signingKeyId,
+                 String previousSigningKeyId,
                  long accessTokenTtlMinutes,
                  long refreshTokenTtlDays,
                  TokenRevocationChecker tokenRevocationChecker) {
         this.signingPrivateKey = signingPrivateKey;
         this.verificationPublicKey = verificationPublicKey;
         this.signingKeyId = requireText(signingKeyId, "signing key id must be configured");
+        this.previousVerificationPublicKey = previousVerificationPublicKey;
+        this.previousSigningKeyId = previousSigningKeyId;
         this.signingKey = null;
         this.asymmetricSigningEnabled = true;
         this.tokenRevocationChecker = tokenRevocationChecker;
@@ -255,18 +324,24 @@ public class TokenService {
         if (!asymmetricSigningEnabled) {
             throw new IllegalStateException("JWKS requires asymmetric signing configuration");
         }
-        return new JwksDocument(List.of(buildRsaJwk(verificationPublicKey, signingKeyId)));
+        if (previousVerificationPublicKey == null) {
+            return new JwksDocument(List.of(buildRsaJwk(verificationPublicKey, signingKeyId)));
+        }
+        return new JwksDocument(List.of(
+                buildRsaJwk(verificationPublicKey, signingKeyId),
+                buildRsaJwk(previousVerificationPublicKey, requireText(previousSigningKeyId, "elvo.security.jwt.signing.previous-key-id must be configured"))));
     }
 
     private Claims parseClaims(String token) {
         try {
             if (asymmetricSigningEnabled) {
                 String keyId = resolveKeyId(token);
-                if (!signingKeyId.equals(keyId)) {
+                PublicKey verificationKey = resolveVerificationKey(keyId);
+                if (verificationKey == null) {
                     throw new IllegalArgumentException("Token key id is invalid");
                 }
                 return Jwts.parser()
-                        .verifyWith(verificationPublicKey)
+                        .verifyWith(verificationKey)
                         .requireIssuer(issuer)
                         .requireAudience(audience)
                         .build()
@@ -321,6 +396,16 @@ public class TokenService {
         } catch (Exception ex) {
             throw new IllegalArgumentException("Token key id is invalid", ex);
         }
+    }
+
+    private PublicKey resolveVerificationKey(String keyId) {
+        if (signingKeyId.equals(keyId)) {
+            return verificationPublicKey;
+        }
+        if (previousVerificationPublicKey != null && previousSigningKeyId != null && previousSigningKeyId.equals(keyId)) {
+            return previousVerificationPublicKey;
+        }
+        return null;
     }
 
     private JwkKey buildRsaJwk(PublicKey publicKey, String keyId) {

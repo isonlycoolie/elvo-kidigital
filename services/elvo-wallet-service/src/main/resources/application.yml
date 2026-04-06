@@ -80,6 +80,8 @@ elvo:
       signing:
         key-id: ${ELVO_JWT_SIGNING_KEY_ID:}
         public-key-pem: ${ELVO_JWT_SIGNING_PUBLIC_KEY_REF:sm://wallet-user-jwt-signing-public-key}
+        previous-key-id: ${ELVO_JWT_PREVIOUS_SIGNING_KEY_ID:}
+        previous-public-key-pem: ${ELVO_JWT_PREVIOUS_SIGNING_PUBLIC_KEY_REF:sm://wallet-user-jwt-signing-previous-public-key}
       access-token-ttl-minutes: ${ELVO_JWT_ACCESS_TTL_MINUTES:15}
       refresh-token-ttl-days: ${ELVO_JWT_REFRESH_TTL_DAYS:7}
     internal-jwt:

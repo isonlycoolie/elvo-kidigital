@@ -45,6 +45,9 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
     private final UserTokenRevocationChecker tokenRevocationChecker;
     private final String resolvedJwtSecret;
     private final String resolvedSigningPublicKeyPem;
+    private final String resolvedPreviousSigningPublicKeyPem;
+    private final String resolvedSigningKeyId;
+    private final String resolvedPreviousSigningKeyId;
 
     public UserJwtAuthenticationFilter(UserJwtProperties jwtProperties, ObjectMapper objectMapper) {
         this(jwtProperties, objectMapper, jti -> false, null);
@@ -66,6 +69,9 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
         if (secretManagerService == null) {
             this.resolvedJwtSecret = jwtProperties.getSecret();
             this.resolvedSigningPublicKeyPem = jwtProperties.getSigningPublicKeyPem();
+            this.resolvedPreviousSigningPublicKeyPem = jwtProperties.getPreviousSigningPublicKeyPem();
+            this.resolvedSigningKeyId = jwtProperties.getSigningKeyId();
+            this.resolvedPreviousSigningKeyId = jwtProperties.getPreviousSigningKeyId();
         } else {
             this.resolvedJwtSecret = secretManagerService.resolve(
                     "wallet-user-jwt-secret",
@@ -77,6 +83,13 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
                     jwtProperties.getSigningPublicKeyPem(),
                     "ELVO_JWT_SIGNING_PUBLIC_KEY_PEM",
                     null);
+            this.resolvedPreviousSigningPublicKeyPem = secretManagerService.resolve(
+                    "wallet-user-jwt-signing-previous-public-key",
+                    jwtProperties.getPreviousSigningPublicKeyPem(),
+                    "ELVO_JWT_SIGNING_PREVIOUS_PUBLIC_KEY_PEM",
+                    null);
+            this.resolvedSigningKeyId = jwtProperties.getSigningKeyId();
+            this.resolvedPreviousSigningKeyId = jwtProperties.getPreviousSigningKeyId();
         }
     }
 
@@ -139,13 +152,10 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
 
     private Claims parseClaims(String token) {
         if (hasText(resolvedSigningPublicKeyPem)) {
-            PublicKey publicKey = parsePublicKey(resolvedSigningPublicKeyPem);
-            String configuredKeyId = jwtProperties.getSigningKeyId();
-            if (hasText(configuredKeyId)) {
-                String tokenKeyId = resolveKeyId(token);
-                if (!configuredKeyId.equals(tokenKeyId)) {
-                    throw new IllegalArgumentException("Token key id is invalid");
-                }
+            String tokenKeyId = resolveKeyId(token);
+            PublicKey publicKey = resolvePublicKey(tokenKeyId);
+            if (publicKey == null) {
+                throw new IllegalArgumentException("Token key id is invalid");
             }
 
             return Jwts.parser()
@@ -210,6 +220,24 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
         } catch (Exception ex) {
             throw new IllegalStateException("Invalid user JWT public key configuration", ex);
         }
+    }
+
+    private PublicKey resolvePublicKey(String tokenKeyId) {
+        if (!hasText(tokenKeyId)) {
+            return parsePublicKey(resolvedSigningPublicKeyPem);
+        }
+        if (!hasText(resolvedSigningKeyId)) {
+            return parsePublicKey(resolvedSigningPublicKeyPem);
+        }
+        if (resolvedSigningKeyId.equals(tokenKeyId)) {
+            return parsePublicKey(resolvedSigningPublicKeyPem);
+        }
+        if (hasText(resolvedPreviousSigningPublicKeyPem)
+                && hasText(resolvedPreviousSigningKeyId)
+                && resolvedPreviousSigningKeyId.equals(tokenKeyId)) {
+            return parsePublicKey(resolvedPreviousSigningPublicKeyPem);
+        }
+        return null;
     }
 
     private String resolveKeyId(String token) {
