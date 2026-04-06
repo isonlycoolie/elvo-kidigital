@@ -86,6 +86,11 @@ elvo:
       from: ${EMAIL_PROVIDER_FROM:no-reply@elvo.local}
     sms:
       retry-max-attempts: ${ELVO_SMS_RETRY_MAX_ATTEMPTS:3}
+  clients:
+    provisioning:
+      wallet-base-url: ${ELVO_WALLET_PROVISIONING_BASE_URL:http://localhost:8082/internal}
+      profile-base-url: ${ELVO_PROFILE_PROVISIONING_BASE_URL:http://localhost:8083/internal}
+      source-service-name: ${ELVO_PROVISIONING_SOURCE_SERVICE:identity-service}
   monitoring:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:elvo-identity-service}
