@@ -1,7 +1,6 @@
 package com.elvo.identity.service;
 
 import java.time.Instant;
-import java.util.UUID;
 
 import com.elvo.identity.entity.User;
 import com.elvo.identity.entity.VerificationOtp;

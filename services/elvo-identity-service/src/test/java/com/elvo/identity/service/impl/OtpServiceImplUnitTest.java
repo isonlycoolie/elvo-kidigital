@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -93,6 +94,7 @@ class OtpServiceImplUnitTest {
         assertTrue(result.requestId() != null && !result.requestId().isBlank());
         verify(emailSenderService).sendVerificationOtp(eq("user@example.com"), eq("123456"), eq(Duration.ofMinutes(5)), eq(result.requestId()));
         verify(smsSenderService, never()).sendVerificationOtp(any(), any(), any(), any());
+        verify(auditEventPublisher, atLeastOnce()).publish(any(Audit.class));
     }
 
     @Test
