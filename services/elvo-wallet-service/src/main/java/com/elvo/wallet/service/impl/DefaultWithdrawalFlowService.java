@@ -223,23 +223,39 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PROCESSING,
             "Posting withdrawal", correlationId(), null, null);
 
-        ledgerIntegrationService.recordDoubleEntry("withdrawal", wallet.getId(), command.amount(), transaction.getReference());
+        try {
+            ledgerIntegrationService.recordDoubleEntry("withdrawal", wallet.getId(), command.amount(), transaction.getReference());
 
-        emitWithdrawalEvent(true, wallet.getId(), transaction.getReference(), command.amount(), null);
-        limitEnforcementService.record(wallet.getId(), WalletLimitEnforcementService.FlowType.WITHDRAWAL, command.amount());
+            emitWithdrawalEvent(true, wallet.getId(), transaction.getReference(), command.amount(), null);
+            limitEnforcementService.record(wallet.getId(), WalletLimitEnforcementService.FlowType.WITHDRAWAL, command.amount());
 
-        transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.COMPLETED,
-            "Withdrawal completed", correlationId(), null, null);
+            transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.COMPLETED,
+                "Withdrawal completed", correlationId(), null, null);
 
-        sagaOrchestrator.complete("withdrawal", wallet.getId(), command.amount(), transaction.getReference());
+            sagaOrchestrator.complete("withdrawal", wallet.getId(), command.amount(), transaction.getReference());
 
-        WalletFlowResult result = WalletFlowResult.success(
-                "Withdrawal completed",
-                wallet.getId(),
-                transaction.getId(),
-                "wallet.withdrawal.completed");
-        idempotencyService.put(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, result);
-        return result;
+            WalletFlowResult result = WalletFlowResult.success(
+                    "Withdrawal completed",
+                    wallet.getId(),
+                    transaction.getId(),
+                    "wallet.withdrawal.completed");
+            idempotencyService.put(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, result);
+            return result;
+        } catch (RuntimeException ex) {
+            if (isTemporaryFailure(ex)) {
+                transitionSafely(transaction,
+                    Transaction.TransactionStatus.RETRYING,
+                    "Temporary withdrawal posting failure; retry scheduled",
+                    "WITHDRAWAL_RETRYING",
+                    ex.getMessage());
+            }
+            transitionSafely(transaction,
+                Transaction.TransactionStatus.FAILED,
+                "Withdrawal processing failed",
+                "WITHDRAWAL_PROCESSING_FAILED",
+                ex.getMessage());
+            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Withdrawal processing failed");
+        }
     }
 
     private WalletFlowResult failed(UUID walletId,
@@ -311,5 +327,28 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
 
     private boolean isExpiredEac(String message) {
         return message != null && message.toLowerCase().contains("expired");
+    }
+
+    private boolean isTemporaryFailure(RuntimeException exception) {
+        if (exception == null || exception.getMessage() == null) {
+            return false;
+        }
+        String message = exception.getMessage().toLowerCase();
+        return message.contains("timeout")
+                || message.contains("temporary")
+                || message.contains("unavailable")
+                || message.contains("retry");
+    }
+
+    private void transitionSafely(Transaction transaction,
+                                  Transaction.TransactionStatus nextStatus,
+                                  String reason,
+                                  String failureCode,
+                                  String failureMessage) {
+        try {
+            transactionLifecycleService.transition(transaction, nextStatus, reason, correlationId(), failureCode, failureMessage);
+        } catch (RuntimeException ignored) {
+            // Best effort transition in withdrawal failure path.
+        }
     }
 }
