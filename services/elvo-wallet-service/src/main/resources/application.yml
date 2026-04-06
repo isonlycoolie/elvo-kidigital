@@ -151,5 +151,10 @@ elvo:
       unusual-amount-threshold: ${ELVO_DESTINATION_RISK_UNUSUAL_AMOUNT_THRESHOLD:500.00}
       max-failures-before-block: ${ELVO_DESTINATION_RISK_MAX_FAILURES_BEFORE_BLOCK:3}
       failure-window-seconds: ${ELVO_DESTINATION_RISK_FAILURE_WINDOW_SECONDS:900}
+    device-trust:
+      key-prefix: ${ELVO_DEVICE_TRUST_KEY_PREFIX:elvo:wallet:device-trust:}
+      risk-threshold: ${ELVO_DEVICE_TRUST_RISK_THRESHOLD:60}
+      ttl-days: ${ELVO_DEVICE_TRUST_TTL_DAYS:30}
+      max-score: ${ELVO_DEVICE_TRUST_MAX_SCORE:100}
     field-encryption:
       key: ${ELVO_FIELD_ENCRYPTION_KEY:}
