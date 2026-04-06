@@ -580,6 +580,7 @@ class WalletFlowServiceTests {
                 InOrder order = inOrder(transactionLifecycleService);
                 order.verify(transactionLifecycleService).initialize(any(Transaction.class), anyString(), any(), any());
                 order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.AWAITING_CONFIRMATION), anyString(), any(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.RESERVED), anyString(), any(), any(), any());
                 order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.PROCESSING), anyString(), any(), any(), any());
                 order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.COMPLETED), anyString(), any(), any(), any());
         }

@@ -185,6 +185,9 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         }
 
         wallet.setBalance(updatedBalance);
+        if (command.mode() == WithdrawalMode.DEVICE_FREE) {
+            wallet.setReservedBalance(wallet.getReservedBalance().add(command.amount()));
+        }
 
         String resolvedReference = resolveReference(command.reference(), command.idempotencyKey());
         Transaction transaction = new Transaction();
@@ -223,11 +226,16 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         if (command.mode() == WithdrawalMode.DEVICE_FREE) {
             transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.AWAITING_CONFIRMATION,
                 "Waiting for device-free withdrawal confirmation", correlationId(), null, null);
+            transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.RESERVED,
+                "Funds reserved for device-free payout", correlationId(), null, null);
         }
         transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PROCESSING,
             "Posting withdrawal", correlationId(), null, null);
 
         try {
+            if (command.mode() == WithdrawalMode.DEVICE_FREE) {
+                wallet.setReservedBalance(wallet.getReservedBalance().subtract(command.amount()));
+            }
             ledgerIntegrationService.recordDoubleEntry("withdrawal", wallet.getId(), command.amount(), transaction.getReference());
 
             emitWithdrawalEvent(true, wallet.getId(), transaction.getReference(), command.amount(), null);
