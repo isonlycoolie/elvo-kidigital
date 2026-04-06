@@ -11,6 +11,7 @@ import java.util.UUID;
 import javax.crypto.SecretKey;
 
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -38,6 +39,7 @@ public class DefaultIdentityServiceClient implements IdentityServiceClient {
     private final InternalServiceJwtProperties internalJwtProperties;
     private final String internalJwtSecret;
 
+    @Autowired
     public DefaultIdentityServiceClient(RestTemplateBuilder restTemplateBuilder,
                                         IdentityClientProperties properties,
                                         InternalServiceJwtProperties internalJwtProperties,

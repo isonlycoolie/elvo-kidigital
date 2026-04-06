@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
@@ -27,6 +28,7 @@ public class IdentityJwksKeyResolver {
     private final URI jwksUri;
     private volatile CachedJwks cachedJwks = CachedJwks.empty();
 
+    @Autowired
     public IdentityJwksKeyResolver(RestTemplateBuilder restTemplateBuilder, IdentityClientProperties properties) {
         this(restTemplateBuilder.build(), properties);
     }

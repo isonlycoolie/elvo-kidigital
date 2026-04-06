@@ -14,6 +14,7 @@ import java.util.UUID;
 import javax.crypto.SecretKey;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.elvo.identity.security.SecretManagerService;
@@ -24,7 +25,6 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.Jwts.SIG;
 import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.security.SignatureException;
 import io.jsonwebtoken.io.Decoders;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
@@ -54,14 +54,15 @@ public class TokenService {
     private final long accessTokenTtlMinutes;
     private final long refreshTokenTtlDays;
 
+    @Autowired
     public TokenService(@Value("${elvo.security.jwt.secret}") String jwtSecret,
                         @Value("${elvo.security.jwt.signing.private-key-pem:}") String privateKeyPem,
                         @Value("${elvo.security.jwt.signing.public-key-pem:}") String publicKeyPem,
                         @Value("${elvo.security.jwt.signing.previous-public-key-pem:}") String previousPublicKeyPem,
                         @Value("${elvo.security.jwt.signing.key-id:}") String signingKeyId,
                         @Value("${elvo.security.jwt.signing.previous-key-id:}") String previousSigningKeyId,
-                        @Value("${elvo.security.jwt.issuer:elvo-identity-service}") String issuer,
-                        @Value("${elvo.security.jwt.audience:elvo-platform}") String audience,
+                        @Value("${elvo.security.jwt.issuer:elvo-identity-service-${spring.profiles.active:dev}}") String issuer,
+                        @Value("${elvo.security.jwt.audience:elvo-wallet-service-${spring.profiles.active:dev}}") String audience,
                         @Value("${elvo.security.jwt.access-token-ttl-minutes:15}") long accessTokenTtlMinutes,
                         @Value("${elvo.security.jwt.refresh-token-ttl-days:7}") long refreshTokenTtlDays,
                         SecretManagerService secretManagerService,

@@ -3,8 +3,8 @@ package com.elvo.wallet.security;
 public class UserJwtProperties {
 
     private String secret = "";
-    private String issuer = "elvo-identity-service";
-    private String audience = "elvo-platform";
+    private String issuer = "";
+    private String audience = "";
     private String signingPublicKeyPem = "";
     private String signingKeyId = "";
     private String previousSigningPublicKeyPem = "";

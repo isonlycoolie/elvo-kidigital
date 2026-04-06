@@ -73,8 +73,8 @@ elvo:
   security:
     jwt:
       secret: ${ELVO_JWT_SECRET_REF:sm://wallet-user-jwt-secret}
-      issuer: ${ELVO_JWT_ISSUER:elvo-identity-service}
-      audience: ${ELVO_JWT_AUDIENCE:elvo-platform}
+      issuer: ${ELVO_JWT_ISSUER:elvo-identity-service-${spring.profiles.active:dev}}
+      audience: ${ELVO_JWT_AUDIENCE:elvo-wallet-service-${spring.profiles.active:dev}}
       revocation:
         key-prefix: ${ELVO_JWT_REVOCATION_KEY_PREFIX:elvo:jwt:revoked:}
       signing:
@@ -86,8 +86,8 @@ elvo:
       refresh-token-ttl-days: ${ELVO_JWT_REFRESH_TTL_DAYS:7}
     internal-jwt:
       secret: ${ELVO_INTERNAL_JWT_SECRET_REF:sm://wallet-internal-jwt-secret}
-      issuer: ${ELVO_INTERNAL_JWT_ISSUER:elvo-internal-auth}
-      audience: ${ELVO_INTERNAL_JWT_AUDIENCE:elvo-wallet-service}
+      issuer: ${ELVO_INTERNAL_JWT_ISSUER:elvo-wallet-service-internal-${spring.profiles.active:dev}}
+      audience: ${ELVO_INTERNAL_JWT_AUDIENCE:elvo-wallet-service-internal-${spring.profiles.active:dev}}
       required-role: ${ELVO_INTERNAL_JWT_REQUIRED_ROLE:INTERNAL_SERVICE}
       source-service-claim: ${ELVO_INTERNAL_JWT_SOURCE_SERVICE_CLAIM:sourceService}
       service-identity-claim: ${ELVO_INTERNAL_JWT_SERVICE_IDENTITY_CLAIM:serviceIdentity}
@@ -130,8 +130,8 @@ elvo:
       transfer-threshold: ${ELVO_STEP_UP_TRANSFER_THRESHOLD:500.00}
     transaction-challenge:
       secret: ${ELVO_TX_CHALLENGE_SECRET_REF:sm://wallet-transaction-challenge-secret}
-      issuer: ${ELVO_TX_CHALLENGE_ISSUER:elvo-wallet-service}
-      audience: ${ELVO_TX_CHALLENGE_AUDIENCE:wallet-transaction-challenge}
+      issuer: ${ELVO_TX_CHALLENGE_ISSUER:elvo-wallet-service-transaction-${spring.profiles.active:dev}}
+      audience: ${ELVO_TX_CHALLENGE_AUDIENCE:wallet-transaction-challenge-${spring.profiles.active:dev}}
       ttl-seconds: ${ELVO_TX_CHALLENGE_TTL_SECONDS:300}
     transaction-lifecycle:
       expiry-minutes: ${ELVO_TRANSACTION_LIFECYCLE_EXPIRY_MINUTES:30}

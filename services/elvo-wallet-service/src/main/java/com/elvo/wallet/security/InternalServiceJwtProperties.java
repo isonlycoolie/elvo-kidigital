@@ -3,8 +3,8 @@ package com.elvo.wallet.security;
 public class InternalServiceJwtProperties {
 
     private String secret = "";
-    private String issuer = "elvo-internal-auth";
-    private String audience = "elvo-wallet-service";
+    private String issuer = "";
+    private String audience = "";
     private String requiredRole = "INTERNAL_SERVICE";
     private String sourceServiceClaim = "sourceService";
     private String serviceIdentityClaim = "serviceIdentity";
