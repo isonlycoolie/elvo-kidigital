@@ -51,6 +51,7 @@ import com.elvo.wallet.security.UserJwtPrincipal;
 import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
+import com.elvo.wallet.service.impl.WalletLimitEnforcementService;
 import com.elvo.wallet.service.model.WalletFlowResult;
 
 @WebMvcTest(WalletController.class)
@@ -121,6 +122,9 @@ class WalletControllerTest {
 
     @MockBean
     private WalletMetricsRecorder walletMetricsRecorder;
+
+    @MockBean
+    private WalletLimitEnforcementService walletLimitEnforcementService;
 
     @BeforeEach
     void setUpAuthenticatedUser() {

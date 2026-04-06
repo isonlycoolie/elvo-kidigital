@@ -59,6 +59,7 @@ import com.elvo.wallet.security.SanctionsScreeningService;
 import com.elvo.wallet.security.UserJwtPrincipal;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
+import com.elvo.wallet.service.impl.WalletLimitEnforcementService;
 import com.elvo.wallet.service.model.DepositCommand;
 import com.elvo.wallet.service.model.EtcCommand;
 import com.elvo.wallet.service.model.ReservationCommand;
@@ -104,6 +105,7 @@ public class WalletController {
     private final SanctionsScreeningService sanctionsScreeningService;
     private final AmlCaseWorkflowService amlCaseWorkflowService;
     private final WalletMetricsRecorder walletMetricsRecorder;
+    private final WalletLimitEnforcementService walletLimitEnforcementService;
 
     public WalletController(WalletService walletService, WalletRepository walletRepository,
                           TransactionRepository transactionRepository, ReservationRepository reservationRepository,
@@ -120,7 +122,8 @@ public class WalletController {
                           EmergencyControlService emergencyControlService,
                           SanctionsScreeningService sanctionsScreeningService,
                           AmlCaseWorkflowService amlCaseWorkflowService,
-                          WalletMetricsRecorder walletMetricsRecorder) {
+                          WalletMetricsRecorder walletMetricsRecorder,
+                          WalletLimitEnforcementService walletLimitEnforcementService) {
         this.walletService = walletService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -140,6 +143,7 @@ public class WalletController {
         this.sanctionsScreeningService = sanctionsScreeningService;
         this.amlCaseWorkflowService = amlCaseWorkflowService;
         this.walletMetricsRecorder = walletMetricsRecorder;
+        this.walletLimitEnforcementService = walletLimitEnforcementService;
     }
 
     /**
@@ -691,17 +695,7 @@ public class WalletController {
         Wallet wallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
 
-        // Get limits and usage from limit enforcement service
-        // These are hardcoded defaults; in production would be configurable
-        LimitsResponseDto limits = new LimitsResponseDto(
-            java.math.BigDecimal.valueOf(5000),  // daily
-            java.math.BigDecimal.valueOf(50000), // monthly
-            java.math.BigDecimal.valueOf(2000),  // transfer
-            java.math.BigDecimal.valueOf(1000),  // withdrawal
-            java.math.BigDecimal.valueOf(10000), // deposit
-            java.math.BigDecimal.ZERO,           // daily used (would fetch from service)
-            java.math.BigDecimal.ZERO            // monthly used (would fetch from service)
-        );
+        LimitsResponseDto limits = walletLimitEnforcementService.getLimits(wallet.getId());
 
         return ResponseEntity.ok(limits);
     }

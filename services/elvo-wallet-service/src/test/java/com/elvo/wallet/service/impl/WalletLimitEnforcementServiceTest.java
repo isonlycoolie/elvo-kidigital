@@ -40,4 +40,23 @@ class WalletLimitEnforcementServiceTest {
 
         assertThat(valid).isTrue();
     }
+
+    @Test
+    void getLimitsShouldReturnConfiguredValues() {
+        WalletLimitEnforcementService configured = new WalletLimitEnforcementService(
+            new BigDecimal("7000.00"),
+            new BigDecimal("70000.00"),
+            new BigDecimal("3000.00"),
+            new BigDecimal("1500.00"),
+            new BigDecimal("12000.00")
+        );
+
+        var limits = configured.getLimits(UUID.randomUUID());
+
+        assertThat(limits.getDailyLimit()).isEqualByComparingTo("7000.00");
+        assertThat(limits.getMonthlyLimit()).isEqualByComparingTo("70000.00");
+        assertThat(limits.getTransferLimit()).isEqualByComparingTo("3000.00");
+        assertThat(limits.getWithdrawalLimit()).isEqualByComparingTo("1500.00");
+        assertThat(limits.getDepositLimit()).isEqualByComparingTo("12000.00");
+    }
 }
