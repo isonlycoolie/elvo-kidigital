@@ -1,5 +1,5 @@
 -- ELVO Wallet PostgreSQL hardening
--- Task 31: row-level security + least-privilege roles
+-- Row-level security + least-privilege roles
 -- Execute as a privileged database administrator.
 
 BEGIN;
@@ -57,6 +57,11 @@ GRANT SELECT ON withdrawal_codes TO elvo_wallet_ro;
 GRANT SELECT ON ledger_entries TO elvo_wallet_ro;
 GRANT SELECT ON audit_logs TO elvo_wallet_ro;
 GRANT SELECT ON wallet_audit_events TO elvo_wallet_ro;
+
+-- Task 32 hardening: ledger tables are append-only for production runtime roles.
+REVOKE UPDATE, DELETE, TRUNCATE ON ledger_entries FROM PUBLIC;
+REVOKE UPDATE, DELETE, TRUNCATE ON ledger_entries FROM elvo_wallet_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON ledger_entries FROM elvo_wallet_ro;
 
 -- sequences required for inserts (BIGSERIAL tables)
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO elvo_wallet_app;
