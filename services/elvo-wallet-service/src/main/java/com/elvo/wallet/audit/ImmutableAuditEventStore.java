@@ -31,6 +31,16 @@ public class ImmutableAuditEventStore {
         entityManager.persist(record);
     }
 
+    @Transactional(readOnly = true)
+    public List<AuditEventRecord> findRecent(int limit) {
+        int boundedLimit = Math.max(1, Math.min(limit, 200));
+        return entityManager.createQuery(
+                        "select r from AuditEventRecord r order by r.createdAt desc",
+                        AuditEventRecord.class)
+                .setMaxResults(boundedLimit)
+                .getResultList();
+    }
+
     String computeRecordHash(AuditEventRecord record) {
         String source = String.join("|",
                 safe(record.getEventType()),
