@@ -75,6 +75,36 @@ class TransactionLifecycleServiceTests {
     }
 
     @Test
+    void shouldRejectInvalidStateMatrixTransitions() {
+        assertThat(service.canTransition(Transaction.TransactionStatus.PENDING, Transaction.TransactionStatus.COMPLETED)).isFalse();
+        assertThat(service.canTransition(Transaction.TransactionStatus.AWAITING_CONFIRMATION, Transaction.TransactionStatus.RESERVED)).isFalse();
+        assertThat(service.canTransition(Transaction.TransactionStatus.RETRYING, Transaction.TransactionStatus.REVERSED)).isFalse();
+        assertThat(service.canTransition(Transaction.TransactionStatus.RELEASED, Transaction.TransactionStatus.PROCESSING)).isFalse();
+        assertThat(service.canTransition(Transaction.TransactionStatus.FAILED, Transaction.TransactionStatus.COMPLETED)).isFalse();
+    }
+
+    @Test
+    void terminalStatesShouldRejectFurtherTransitions() {
+        for (Transaction.TransactionStatus terminal : List.of(
+                Transaction.TransactionStatus.COMPLETED,
+                Transaction.TransactionStatus.FAILED,
+                Transaction.TransactionStatus.REVERSED,
+                Transaction.TransactionStatus.EXPIRED,
+                Transaction.TransactionStatus.CANCELLED)) {
+            Transaction transaction = newTransaction(terminal);
+            assertThatThrownBy(() -> service.transition(
+                    transaction,
+                    Transaction.TransactionStatus.PROCESSING,
+                    "invalid retry",
+                    "corr-terminal",
+                    null,
+                    null))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Invalid transaction transition from " + terminal + " to PROCESSING");
+        }
+    }
+
+    @Test
     void transitionShouldPersistValidStateChange() {
         Transaction transaction = newTransaction(Transaction.TransactionStatus.INITIATED);
         when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
