@@ -220,6 +220,10 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
                 return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, replayCheck.message());
             }
         }
+        if (command.mode() == WithdrawalMode.DEVICE_FREE) {
+            transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.AWAITING_CONFIRMATION,
+                "Waiting for device-free withdrawal confirmation", correlationId(), null, null);
+        }
         transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PROCESSING,
             "Posting withdrawal", correlationId(), null, null);
 
