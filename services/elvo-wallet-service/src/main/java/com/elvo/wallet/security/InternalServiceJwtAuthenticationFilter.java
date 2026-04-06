@@ -31,6 +31,7 @@ public class InternalServiceJwtAuthenticationFilter extends OncePerRequestFilter
 
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String INTERNAL_PATH_PREFIX = "/api/v1/internal/wallets/";
+    private static final String SOURCE_SERVICE_HEADER = "X-Source-Service";
 
     private final InternalServiceJwtProperties jwtProperties;
     private final InternalServiceAuthorizationMatrix authorizationMatrix;
@@ -64,10 +65,28 @@ public class InternalServiceJwtAuthenticationFilter extends OncePerRequestFilter
         try {
             Claims claims = parseClaims(token);
             String sourceService = claims.get(jwtProperties.getSourceServiceClaim(), String.class);
+            String serviceIdentity = claims.get(jwtProperties.getServiceIdentityClaim(), String.class);
+            String sourceServiceHeader = request.getHeader(SOURCE_SERVICE_HEADER);
             Collection<? extends GrantedAuthority> authorities = extractAuthorities(claims);
 
             if (sourceService == null || sourceService.isBlank()) {
                 forbidden(response, "Missing source service claim");
+                return;
+            }
+
+            if (serviceIdentity == null || serviceIdentity.isBlank()) {
+                forbidden(response, "Missing service identity claim");
+                return;
+            }
+
+            if (!sourceService.equalsIgnoreCase(serviceIdentity)) {
+                forbidden(response, "Service identity claim does not match source service claim");
+                return;
+            }
+
+            if (sourceServiceHeader != null && !sourceServiceHeader.isBlank()
+                    && !sourceService.equalsIgnoreCase(sourceServiceHeader.trim())) {
+                forbidden(response, "Source service header does not match signed token claim");
                 return;
             }
 

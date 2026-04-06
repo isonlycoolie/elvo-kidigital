@@ -47,7 +47,8 @@ import io.jsonwebtoken.security.Keys;
         "elvo.security.internal-jwt.issuer=elvo-internal-auth",
         "elvo.security.internal-jwt.audience=elvo-wallet-service",
         "elvo.security.internal-jwt.required-role=INTERNAL_SERVICE",
-        "elvo.security.internal-jwt.source-service-claim=sourceService"
+    "elvo.security.internal-jwt.source-service-claim=sourceService",
+    "elvo.security.internal-jwt.service-identity-claim=serviceIdentity"
 })
 class InternalWalletControllerSecurityTest {
 
@@ -117,6 +118,7 @@ class InternalWalletControllerSecurityTest {
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusSeconds(300)))
                 .claim("sourceService", sourceService)
+                .claim("serviceIdentity", sourceService)
                 .claim("roles", List.of("INTERNAL_SERVICE"))
                 .signWith(key)
                 .compact();

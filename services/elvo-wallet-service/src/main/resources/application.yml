@@ -72,6 +72,7 @@ elvo:
       audience: ${ELVO_INTERNAL_JWT_AUDIENCE:elvo-wallet-service}
       required-role: ${ELVO_INTERNAL_JWT_REQUIRED_ROLE:INTERNAL_SERVICE}
       source-service-claim: ${ELVO_INTERNAL_JWT_SOURCE_SERVICE_CLAIM:sourceService}
+      service-identity-claim: ${ELVO_INTERNAL_JWT_SERVICE_IDENTITY_CLAIM:serviceIdentity}
     internal-authz:
       service-rules:
         identity-service:

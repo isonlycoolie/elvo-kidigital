@@ -7,6 +7,7 @@ public class InternalServiceJwtProperties {
     private String audience = "elvo-wallet-service";
     private String requiredRole = "INTERNAL_SERVICE";
     private String sourceServiceClaim = "sourceService";
+    private String serviceIdentityClaim = "serviceIdentity";
 
     public String getSecret() {
         return secret;
@@ -46,5 +47,13 @@ public class InternalServiceJwtProperties {
 
     public void setSourceServiceClaim(String sourceServiceClaim) {
         this.sourceServiceClaim = sourceServiceClaim;
+    }
+
+    public String getServiceIdentityClaim() {
+        return serviceIdentityClaim;
+    }
+
+    public void setServiceIdentityClaim(String serviceIdentityClaim) {
+        this.serviceIdentityClaim = serviceIdentityClaim;
     }
 }
