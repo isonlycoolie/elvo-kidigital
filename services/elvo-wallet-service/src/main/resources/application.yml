@@ -115,3 +115,7 @@ elvo:
         window-seconds: ${ELVO_FRAUD_VELOCITY_WINDOW_SECONDS:120}
         transfer-max-count: ${ELVO_FRAUD_VELOCITY_TRANSFER_MAX_COUNT:5}
         withdrawal-max-count: ${ELVO_FRAUD_VELOCITY_WITHDRAWAL_MAX_COUNT:4}
+    destination-risk:
+      unusual-amount-threshold: ${ELVO_DESTINATION_RISK_UNUSUAL_AMOUNT_THRESHOLD:500.00}
+      max-failures-before-block: ${ELVO_DESTINATION_RISK_MAX_FAILURES_BEFORE_BLOCK:3}
+      failure-window-seconds: ${ELVO_DESTINATION_RISK_FAILURE_WINDOW_SECONDS:900}

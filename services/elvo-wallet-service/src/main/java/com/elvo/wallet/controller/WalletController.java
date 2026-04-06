@@ -44,6 +44,7 @@ import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.security.DestinationRiskService;
 import com.elvo.wallet.security.DeviceLocationRiskService;
 import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
@@ -80,13 +81,15 @@ public class WalletController {
     private final EtcCodePolicyService etcCodePolicyService;
     private final WalletOperationRateLimitService operationRateLimitService;
     private final DeviceLocationRiskService deviceLocationRiskService;
+    private final DestinationRiskService destinationRiskService;
 
     public WalletController(WalletService walletService, WalletRepository walletRepository,
                           TransactionRepository transactionRepository, ReservationRepository reservationRepository,
                           EtcRepository etcRepository, WalletMapper walletMapper,
                           EtcCodePolicyService etcCodePolicyService,
                           WalletOperationRateLimitService operationRateLimitService,
-                          DeviceLocationRiskService deviceLocationRiskService) {
+                          DeviceLocationRiskService deviceLocationRiskService,
+                          DestinationRiskService destinationRiskService) {
         this.walletService = walletService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -96,6 +99,7 @@ public class WalletController {
         this.etcCodePolicyService = etcCodePolicyService;
         this.operationRateLimitService = operationRateLimitService;
         this.deviceLocationRiskService = deviceLocationRiskService;
+        this.destinationRiskService = destinationRiskService;
     }
 
     /**
@@ -231,6 +235,19 @@ public class WalletController {
                 .body(new FlowResultResponseDto(false, "Device/location verification required", wallet.getId(), null, "wallet.withdrawal.failed"));
         }
 
+        DestinationRiskService.DestinationRiskDecision destinationRisk = destinationRiskService.evaluate(
+            userId,
+            request.getTargetNumber(),
+            request.getAmount());
+        if (destinationRisk.blocked()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, destinationRisk.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
+        }
+        if (destinationRisk.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new FlowResultResponseDto(false, destinationRisk.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
+        }
+
         try {
             WithdrawalMode mode = WithdrawalMode.valueOf(request.getMode());
             WithdrawalCommand command = new WithdrawalCommand(
@@ -253,10 +270,12 @@ public class WalletController {
 
             if (result.success()) {
                 deviceLocationRiskService.markTrusted(userId, withdrawalDeviceId, withdrawalLocationHint);
+                destinationRiskService.markTrusted(userId, request.getTargetNumber());
                 AUDIT_LOG.info("wallet_withdrawal_success userId={} amount={} walletId={} transactionId={}",
                     userId, request.getAmount(), wallet.getId(), result.transactionId());
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
             } else {
+                destinationRiskService.recordFailure(userId, request.getTargetNumber());
                 AUDIT_LOG.warn("wallet_withdrawal_failed userId={} amount={} reason={}",
                     userId, request.getAmount(), result.message());
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
