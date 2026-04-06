@@ -26,6 +26,7 @@ import jakarta.persistence.UniqueConstraint;
         },
         indexes = {
                 @Index(name = "idx_users_account_status", columnList = "account_status"),
+            @Index(name = "idx_users_verification_status", columnList = "verification_status"),
                 @Index(name = "idx_users_created_at", columnList = "created_at")
         }
 )
@@ -52,6 +53,22 @@ public class User {
 
     @Column(name = "mfa_enabled", nullable = false)
     private boolean mfaEnabled;
+
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
+    @Column(name = "mobile_verified", nullable = false)
+    private boolean mobileVerified;
+
+    @Column(name = "email_verified_at")
+    private Instant emailVerifiedAt;
+
+    @Column(name = "mobile_verified_at")
+    private Instant mobileVerifiedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "verification_status", nullable = false, length = 32)
+    private VerificationStatus verificationStatus = VerificationStatus.UNVERIFIED;
 
     @Column(name = "esp_enabled", nullable = false)
     private boolean espEnabled;
@@ -139,6 +156,12 @@ public class User {
         DISABLED
     }
 
+    public enum VerificationStatus {
+        UNVERIFIED,
+        PARTIAL,
+        VERIFIED
+    }
+
     public UUID getId() {
         return id;
     }
@@ -189,6 +212,46 @@ public class User {
 
     public void setMfaEnabled(boolean mfaEnabled) {
         this.mfaEnabled = mfaEnabled;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
+    }
+
+    public void setEmailVerified(boolean emailVerified) {
+        this.emailVerified = emailVerified;
+    }
+
+    public boolean isMobileVerified() {
+        return mobileVerified;
+    }
+
+    public void setMobileVerified(boolean mobileVerified) {
+        this.mobileVerified = mobileVerified;
+    }
+
+    public Instant getEmailVerifiedAt() {
+        return emailVerifiedAt;
+    }
+
+    public void setEmailVerifiedAt(Instant emailVerifiedAt) {
+        this.emailVerifiedAt = emailVerifiedAt;
+    }
+
+    public Instant getMobileVerifiedAt() {
+        return mobileVerifiedAt;
+    }
+
+    public void setMobileVerifiedAt(Instant mobileVerifiedAt) {
+        this.mobileVerifiedAt = mobileVerifiedAt;
+    }
+
+    public VerificationStatus getVerificationStatus() {
+        return verificationStatus;
+    }
+
+    public void setVerificationStatus(VerificationStatus verificationStatus) {
+        this.verificationStatus = verificationStatus;
     }
 
     public boolean isEspEnabled() {
