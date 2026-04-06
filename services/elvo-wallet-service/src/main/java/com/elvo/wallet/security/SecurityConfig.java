@@ -95,6 +95,33 @@ public class SecurityConfig {
         return new WalletBruteForceAuthenticationEntryPoint(guardService);
     }
 
+    /**
+     * Security filter chain configuration for Wallet Service.
+     * 
+     * CSRF PROTECTION DISABLED BY DESIGN:
+     * 
+     * This is a stateless REST API with JWT authentication. CSRF protection is intentionally disabled because:
+     * 
+     * 1. All authenticated requests use Bearer token in Authorization header (not cookies)
+     * 2. CSRF attacks require cookie-based state, which is not used here
+     * 3. Token-in-header authentication pattern is inherently CSRF-resistant
+     * 4. See UserJwtAuthenticationFilter for token extraction logic
+     * 
+     * CSRF vulnerabilities are prevented through:
+     * - Token-based authentication (immune to CSRF)
+     * - Stateless session handling (SessionCreationPolicy.STATELESS)
+     * - Content-Type validation on requests
+     * - CORS configuration restricting cross-origin requests
+     * 
+     * If future modifications introduce:
+     * - Session-based authentication
+     * - Cookie-based state management
+     * - Form submissions
+     * 
+     * Then CSRF protection MUST be re-enabled via .csrf(Customizer.withDefaults())
+     * 
+     * See: docs/security/elvo-wallet-service-security.md#csrf-protection-posture
+     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
             UserJwtAuthenticationFilter userJwtAuthenticationFilter,
