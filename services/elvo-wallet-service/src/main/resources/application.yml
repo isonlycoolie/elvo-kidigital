@@ -169,6 +169,9 @@ elvo:
       compensation:
         max-attempts: ${ELVO_SAGA_COMPENSATION_MAX_ATTEMPTS:3}
         base-backoff-ms: ${ELVO_SAGA_COMPENSATION_BASE_BACKOFF_MS:250}
+    serializable-retry:
+      max-attempts: ${ELVO_SERIALIZABLE_RETRY_MAX_ATTEMPTS:4}
+      base-backoff-ms: ${ELVO_SERIALIZABLE_RETRY_BASE_BACKOFF_MS:100}
     ledger:
       hash:
         key-prefix: ${ELVO_LEDGER_HASH_KEY_PREFIX:elvo:wallet:ledger:hash:}

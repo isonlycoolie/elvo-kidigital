@@ -32,6 +32,7 @@ public class WalletServiceImpl implements WalletService {
     private final WalletExecutionLockManager lockManager;
     private final WalletMetricsRecorder metricsRecorder;
     private final WalletFreezeValidationMiddleware walletFreezeValidationMiddleware;
+    private final SerializableTransactionRetryExecutor serializableRetryExecutor;
 
     public WalletServiceImpl(DepositFlowService depositFlowService,
                              WithdrawalFlowService withdrawalFlowService,
@@ -41,7 +42,8 @@ public class WalletServiceImpl implements WalletService {
                              WalletLifecycleService walletLifecycleService,
                              WalletExecutionLockManager lockManager,
                              WalletMetricsRecorder metricsRecorder,
-                             WalletFreezeValidationMiddleware walletFreezeValidationMiddleware) {
+                             WalletFreezeValidationMiddleware walletFreezeValidationMiddleware,
+                             SerializableTransactionRetryExecutor serializableRetryExecutor) {
         this.depositFlowService = depositFlowService;
         this.withdrawalFlowService = withdrawalFlowService;
         this.transferFlowService = transferFlowService;
@@ -51,6 +53,7 @@ public class WalletServiceImpl implements WalletService {
         this.lockManager = lockManager;
         this.metricsRecorder = metricsRecorder;
         this.walletFreezeValidationMiddleware = walletFreezeValidationMiddleware;
+        this.serializableRetryExecutor = serializableRetryExecutor;
     }
 
     @Override
@@ -61,7 +64,8 @@ public class WalletServiceImpl implements WalletService {
         if (blocked != null) {
             return blocked;
         }
-        WalletFlowResult result = withWalletLock(command.walletId(), () -> depositFlowService.process(command));
+        WalletFlowResult result = serializableRetryExecutor.execute(
+            () -> withWalletLock(command.walletId(), () -> depositFlowService.process(command)));
         metricsRecorder.recordTransaction("deposit", result.success());
         if (result.success()) {
             metricsRecorder.recordBalanceChange("deposit", "credit", command.amount());
@@ -77,7 +81,8 @@ public class WalletServiceImpl implements WalletService {
         if (blocked != null) {
             return blocked;
         }
-        WalletFlowResult result = withWalletLock(command.walletId(), () -> withdrawalFlowService.process(command));
+        WalletFlowResult result = serializableRetryExecutor.execute(
+            () -> withWalletLock(command.walletId(), () -> withdrawalFlowService.process(command)));
         metricsRecorder.recordTransaction("withdrawal", result.success());
         if (result.success()) {
             metricsRecorder.recordBalanceChange("withdrawal", "debit", command.amount());
@@ -105,7 +110,8 @@ public class WalletServiceImpl implements WalletService {
                 : command.targetWalletId();
         UUID right = left.equals(command.sourceWalletId()) ? command.targetWalletId() : command.sourceWalletId();
 
-        WalletFlowResult result = withWalletLock(left, () -> withWalletLock(right, () -> transferFlowService.process(command)));
+        WalletFlowResult result = serializableRetryExecutor.execute(
+            () -> withWalletLock(left, () -> withWalletLock(right, () -> transferFlowService.process(command))));
         metricsRecorder.recordTransaction("transfer", result.success());
         if (result.success()) {
             metricsRecorder.recordBalanceChange("transfer", "debit", command.amount());
@@ -122,7 +128,8 @@ public class WalletServiceImpl implements WalletService {
         if (blocked != null) {
             return blocked;
         }
-        WalletFlowResult result = withWalletLock(command.walletId(), () -> reservationFlowService.create(command));
+        WalletFlowResult result = serializableRetryExecutor.execute(
+            () -> withWalletLock(command.walletId(), () -> reservationFlowService.create(command)));
         metricsRecorder.recordReservation("create", result.success());
         if (result.success()) {
             metricsRecorder.recordBalanceChange("reservation", "reserve", command.amount());
@@ -152,7 +159,8 @@ public class WalletServiceImpl implements WalletService {
         if (blocked != null) {
             return blocked;
         }
-        WalletFlowResult result = withWalletLock(command.walletId(), () -> etcFlowService.generate(command));
+        WalletFlowResult result = serializableRetryExecutor.execute(
+            () -> withWalletLock(command.walletId(), () -> etcFlowService.generate(command)));
         metricsRecorder.recordTransaction("etc_generate", result.success());
         return result;
     }
