@@ -95,6 +95,13 @@ elvo:
       wallet-base-url: ${ELVO_WALLET_PROVISIONING_BASE_URL:http://localhost:8082/internal}
       profile-base-url: ${ELVO_PROFILE_PROVISIONING_BASE_URL:http://localhost:8083/internal}
       source-service-name: ${ELVO_PROVISIONING_SOURCE_SERVICE:identity-service}
+      internal-auth-token: ${ELVO_PROVISIONING_INTERNAL_AUTH_TOKEN:}
+      connect-timeout-ms: ${ELVO_PROVISIONING_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${ELVO_PROVISIONING_READ_TIMEOUT_MS:3000}
+      max-attempts: ${ELVO_PROVISIONING_MAX_ATTEMPTS:3}
+      retry-backoff-ms: ${ELVO_PROVISIONING_RETRY_BACKOFF_MS:150}
+      retry-backoff-multiplier: ${ELVO_PROVISIONING_RETRY_BACKOFF_MULTIPLIER:2.0}
+      retry-max-backoff-ms: ${ELVO_PROVISIONING_RETRY_MAX_BACKOFF_MS:1000}
   monitoring:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:elvo-identity-service}
