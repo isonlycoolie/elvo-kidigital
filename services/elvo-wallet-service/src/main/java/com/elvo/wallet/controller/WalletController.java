@@ -216,7 +216,8 @@ public class WalletController {
                 request.getIdempotencyKey(),
                 reference,
                 request.getStepUpMethod(),
-                request.getStepUpToken()
+                request.getStepUpToken(),
+                request.getTransactionChallengeToken()
             );
 
             WalletFlowResult result = walletService.processWithdrawal(command);
@@ -264,7 +265,8 @@ public class WalletController {
             request.getIdempotencyKey(),
             reference,
             request.getStepUpMethod(),
-            request.getStepUpToken()
+            request.getStepUpToken(),
+            request.getTransactionChallengeToken()
         );
 
         WalletFlowResult result = walletService.processTransfer(command);

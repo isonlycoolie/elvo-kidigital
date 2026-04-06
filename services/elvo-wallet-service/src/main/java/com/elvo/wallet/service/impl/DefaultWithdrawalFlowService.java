@@ -17,6 +17,7 @@ import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.service.EacReplayProtectionService;
 import com.elvo.wallet.service.WithdrawalFlowService;
 import com.elvo.wallet.security.StepUpAuthenticationService;
+import com.elvo.wallet.security.TransactionSigningChallengeService;
 import com.elvo.wallet.service.model.WalletFlowResult;
 import com.elvo.wallet.service.model.WithdrawalMode;
 import com.elvo.wallet.service.model.WithdrawalCommand;
@@ -37,6 +38,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     private final WalletEventPublisher eventPublisher;
     private final EacReplayProtectionService eacReplayProtectionService;
     private final StepUpAuthenticationService stepUpAuthenticationService;
+    private final TransactionSigningChallengeService transactionSigningChallengeService;
 
     public DefaultWithdrawalFlowService(WalletRepository walletRepository,
                                         TransactionRepository transactionRepository,
@@ -47,7 +49,8 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
                                         WalletSagaOrchestrator sagaOrchestrator,
                                         WalletEventPublisher eventPublisher,
                                         EacReplayProtectionService eacReplayProtectionService,
-                                        StepUpAuthenticationService stepUpAuthenticationService) {
+                                        StepUpAuthenticationService stepUpAuthenticationService,
+                                        TransactionSigningChallengeService transactionSigningChallengeService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
@@ -58,6 +61,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         this.sagaOrchestrator = sagaOrchestrator;
         this.eacReplayProtectionService = eacReplayProtectionService;
         this.stepUpAuthenticationService = stepUpAuthenticationService;
+        this.transactionSigningChallengeService = transactionSigningChallengeService;
     }
 
     @Override
@@ -93,6 +97,15 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         }
 
         boolean requiresStepUp = stepUpAuthenticationService.requiresStepUpForWithdrawal(command.amount(), command.mode());
+        if (requiresStepUp && !transactionSigningChallengeService.isValidChallenge(
+            command.transactionChallengeToken(),
+            command.userId(),
+            "WITHDRAWAL",
+            command.amount(),
+            command.targetNumber())) {
+            return failed(command.walletId(), command.idempotencyKey(), "Transaction challenge confirmation required");
+        }
+
         if (requiresStepUp && !stepUpAuthenticationService.isValidConfirmation(
                 command.stepUpMethod(),
                 command.stepUpToken(),

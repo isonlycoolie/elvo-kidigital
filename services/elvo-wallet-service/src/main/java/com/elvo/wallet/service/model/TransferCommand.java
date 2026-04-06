@@ -11,6 +11,7 @@ public record TransferCommand(
         String idempotencyKey,
         String reference,
         String stepUpMethod,
-        String stepUpToken
+        String stepUpToken,
+        String transactionChallengeToken
 ) {
 }

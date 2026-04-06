@@ -14,6 +14,7 @@ import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.StepUpAuthenticationService;
+import com.elvo.wallet.security.TransactionSigningChallengeService;
 import com.elvo.wallet.service.TransferFlowService;
 import com.elvo.wallet.service.model.TransferCommand;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -32,6 +33,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
     private final WalletSagaOrchestrator sagaOrchestrator;
     private final WalletEventPublisher eventPublisher;
     private final StepUpAuthenticationService stepUpAuthenticationService;
+    private final TransactionSigningChallengeService transactionSigningChallengeService;
 
     public DefaultTransferFlowService(WalletRepository walletRepository,
                                       TransactionRepository transactionRepository,
@@ -40,7 +42,8 @@ public class DefaultTransferFlowService implements TransferFlowService {
                                       WalletLimitEnforcementService limitEnforcementService,
                                       WalletSagaOrchestrator sagaOrchestrator,
                                       WalletEventPublisher eventPublisher,
-                                      StepUpAuthenticationService stepUpAuthenticationService) {
+                                      StepUpAuthenticationService stepUpAuthenticationService,
+                                      TransactionSigningChallengeService transactionSigningChallengeService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.idempotencyService = idempotencyService;
@@ -49,6 +52,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
         this.sagaOrchestrator = sagaOrchestrator;
         this.eventPublisher = eventPublisher;
         this.stepUpAuthenticationService = stepUpAuthenticationService;
+        this.transactionSigningChallengeService = transactionSigningChallengeService;
     }
 
     @Override
@@ -70,11 +74,20 @@ public class DefaultTransferFlowService implements TransferFlowService {
             return WalletFlowResult.failure("Idempotency key is required", command.sourceWalletId(), "wallet.transfer.failed");
         }
 
-        if (stepUpAuthenticationService.requiresStepUpForTransfer(command.amount())
-                && !stepUpAuthenticationService.isValidConfirmation(
-                        command.stepUpMethod(),
-                        command.stepUpToken(),
-                        transferBinding(command))) {
+        boolean requiresStepUp = stepUpAuthenticationService.requiresStepUpForTransfer(command.amount());
+        if (requiresStepUp && !transactionSigningChallengeService.isValidChallenge(
+                command.transactionChallengeToken(),
+                command.userId(),
+                "TRANSFER",
+                command.amount(),
+                command.targetWalletId() == null ? null : command.targetWalletId().toString())) {
+            return failed(command.sourceWalletId(), command.idempotencyKey(), "Transaction challenge confirmation required");
+        }
+
+        if (requiresStepUp && !stepUpAuthenticationService.isValidConfirmation(
+                command.stepUpMethod(),
+                command.stepUpToken(),
+                transferBinding(command))) {
             return failed(command.sourceWalletId(), command.idempotencyKey(), "Step-up authentication required");
         }
 

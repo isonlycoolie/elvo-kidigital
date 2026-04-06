@@ -53,6 +53,10 @@ public class WithdrawalRequestDto {
     @Pattern(regexp = "^[A-Za-z0-9._:-]*$", message = "Step-up token may only contain letters, numbers, dot, underscore, colon, and hyphen")
     private String stepUpToken;
 
+    @Size(max = 2048, message = "Transaction challenge token must be 2048 characters or fewer")
+    @Pattern(regexp = "^[A-Za-z0-9._-]*$", message = "Transaction challenge token may only contain URL-safe JWT characters")
+    private String transactionChallengeToken;
+
     public WithdrawalRequestDto() {
     }
 
@@ -137,5 +141,13 @@ public class WithdrawalRequestDto {
 
     public void setStepUpToken(String stepUpToken) {
         this.stepUpToken = stepUpToken;
+    }
+
+    public String getTransactionChallengeToken() {
+        return transactionChallengeToken;
+    }
+
+    public void setTransactionChallengeToken(String transactionChallengeToken) {
+        this.transactionChallengeToken = transactionChallengeToken;
     }
 }

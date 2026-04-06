@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,6 +36,7 @@ import com.elvo.wallet.security.EtcBruteForceProtectionService;
 import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.security.EtcCodeSecurityService;
 import com.elvo.wallet.security.StepUpAuthenticationService;
+import com.elvo.wallet.security.TransactionSigningChallengeService;
 import com.elvo.wallet.service.EacReplayProtectionService;
 import com.elvo.wallet.service.model.DepositCommand;
 import com.elvo.wallet.service.model.EtcCommand;
@@ -67,6 +68,7 @@ class WalletFlowServiceTests {
     @Mock private EtcCodePolicyService etcCodePolicyService;
     @Mock private EtcBruteForceProtectionService etcBruteForceProtectionService;
     @Mock private StepUpAuthenticationService stepUpAuthenticationService;
+    @Mock private TransactionSigningChallengeService transactionSigningChallengeService;
 
     private Wallet wallet;
 
@@ -112,7 +114,15 @@ class WalletFlowServiceTests {
                 sagaOrchestrator,
                 eventPublisher);
 
-        WalletFlowResult result = service.process(new DepositCommand(walletId, wallet.getUserId(), new BigDecimal("20.00"), WalletChannel.MOBILE, "idem-1", "ref-1", true, "cb-1"));
+        WalletFlowResult result = service.process(new DepositCommand(
+                walletId,
+                wallet.getUserId(),
+                new BigDecimal("20.00"),
+                WalletChannel.MOBILE,
+                "idem-1",
+                "ref-1",
+                true,
+                "cb-1"));
 
         assertThat(result.success()).isTrue();
         verify(eventPublisher).publish(eq("wallet.deposit.completed"), any());
@@ -137,55 +147,69 @@ class WalletFlowServiceTests {
                 sagaOrchestrator,
                 eventPublisher,
                 eacReplayProtectionService,
-                stepUpAuthenticationService);
+                stepUpAuthenticationService,
+                transactionSigningChallengeService);
 
-        WalletFlowResult result = service.process(new WithdrawalCommand(UUID.randomUUID(), wallet.getUserId(), new BigDecimal("10.00"), WithdrawalMode.DEVICE_FREE, "0900000000", "esp", "eac", "idem-2", "ref-2", null, null));
+        WalletFlowResult result = service.process(new WithdrawalCommand(
+                UUID.randomUUID(),
+                wallet.getUserId(),
+                new BigDecimal("10.00"),
+                WithdrawalMode.DEVICE_FREE,
+                "0900000000",
+                "esp",
+                "eac",
+                "idem-2",
+                "ref-2",
+                null,
+                null,
+                null));
 
         assertThat(result.success()).isFalse();
         verify(walletRepository, never()).findByIdForUpdate(any());
         verify(eventPublisher).publish(eq("wallet.withdrawal.failed"), any());
     }
 
-        @Test
-        void withdrawalShouldFailWhenEacReplayDetected() {
+    @Test
+    void withdrawalShouldFailWhenEacReplayDetected() {
         when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
         when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
-            when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(false);
+        when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(false);
         when(eacReplayProtectionService.validateAndConsume(any(), anyString(), anyString()))
-            .thenReturn(EacReplayProtectionService.EacValidationResult.deny("EAC replay detected"));
+                .thenReturn(EacReplayProtectionService.EacValidationResult.deny("EAC replay detected"));
 
         DefaultWithdrawalFlowService service = new DefaultWithdrawalFlowService(
-            walletRepository,
-            transactionRepository,
-            identityServiceClient,
-            idempotencyService,
-            ledgerIntegrationService,
-            limitEnforcementService,
-            sagaOrchestrator,
-            eventPublisher,
-            eacReplayProtectionService,
-            stepUpAuthenticationService);
+                walletRepository,
+                transactionRepository,
+                identityServiceClient,
+                idempotencyService,
+                ledgerIntegrationService,
+                limitEnforcementService,
+                sagaOrchestrator,
+                eventPublisher,
+                eacReplayProtectionService,
+                stepUpAuthenticationService,
+                transactionSigningChallengeService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
-            UUID.randomUUID(),
-            wallet.getUserId(),
-            new BigDecimal("10.00"),
-            WithdrawalMode.DEVICE_FREE,
-            "0900000000",
-            "esp",
-            "eac",
-            "idem-22",
-            "ref-22",
-            null,
-            null
-        ));
+                UUID.randomUUID(),
+                wallet.getUserId(),
+                new BigDecimal("10.00"),
+                WithdrawalMode.DEVICE_FREE,
+                "0900000000",
+                "esp",
+                "eac",
+                "idem-22",
+                "ref-22",
+                null,
+                null,
+                null));
 
         assertThat(result.success()).isFalse();
         assertThat(result.message()).isEqualTo("EAC replay detected");
         verify(walletRepository, never()).findByIdForUpdate(any());
-        }
+    }
 
     @Test
     void transferShouldRejectSelfTransfer() {
@@ -196,86 +220,174 @@ class WalletFlowServiceTests {
                 ledgerIntegrationService,
                 limitEnforcementService,
                 sagaOrchestrator,
-            eventPublisher,
-            stepUpAuthenticationService);
+                eventPublisher,
+                stepUpAuthenticationService,
+                transactionSigningChallengeService);
 
         UUID walletId = UUID.randomUUID();
-        WalletFlowResult result = service.process(new TransferCommand(walletId, walletId, wallet.getUserId(), new BigDecimal("10.00"), "idem-3", "ref-3", null, null));
+        WalletFlowResult result = service.process(new TransferCommand(
+                walletId,
+                walletId,
+                wallet.getUserId(),
+                new BigDecimal("10.00"),
+                "idem-3",
+                "ref-3",
+                null,
+                null,
+                null));
 
         assertThat(result.success()).isFalse();
         verify(walletRepository, never()).findByIdForUpdate(any());
     }
 
-        @Test
-        void withdrawalShouldFailWhenStepUpConfirmationMissingForDeviceFreeFlow() {
+    @Test
+    void withdrawalShouldFailWhenStepUpConfirmationMissingForDeviceFreeFlow() {
         when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
         when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
         when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(true);
+        when(transactionSigningChallengeService.isValidChallenge(any(), any(), anyString(), any(), anyString())).thenReturn(true);
         when(stepUpAuthenticationService.isValidConfirmation(any(), any(), any())).thenReturn(false);
 
         DefaultWithdrawalFlowService service = new DefaultWithdrawalFlowService(
-            walletRepository,
-            transactionRepository,
-            identityServiceClient,
-            idempotencyService,
-            ledgerIntegrationService,
-            limitEnforcementService,
-            sagaOrchestrator,
-            eventPublisher,
-            eacReplayProtectionService,
-            stepUpAuthenticationService);
+                walletRepository,
+                transactionRepository,
+                identityServiceClient,
+                idempotencyService,
+                ledgerIntegrationService,
+                limitEnforcementService,
+                sagaOrchestrator,
+                eventPublisher,
+                eacReplayProtectionService,
+                stepUpAuthenticationService,
+                transactionSigningChallengeService);
 
         WalletFlowResult result = service.process(new WithdrawalCommand(
-            UUID.randomUUID(),
-            wallet.getUserId(),
-            new BigDecimal("300.00"),
-            WithdrawalMode.DEVICE_FREE,
-            "0900000000",
-            "esp",
-            "eac",
-            "idem-23",
-            "ref-23",
-            "PASSWORD",
-            "invalid-token"
-        ));
+                UUID.randomUUID(),
+                wallet.getUserId(),
+                new BigDecimal("300.00"),
+                WithdrawalMode.DEVICE_FREE,
+                "0900000000",
+                "esp",
+                "eac",
+                "idem-23",
+                "ref-23",
+                "PASSWORD",
+                "invalid-token",
+                "challenge-token"));
 
         assertThat(result.success()).isFalse();
         assertThat(result.message()).isEqualTo("Step-up authentication required");
         verify(walletRepository, never()).findByIdForUpdate(any());
-        }
+    }
 
-        @Test
-        void transferShouldFailWhenStepUpConfirmationMissingForHighValueTransfer() {
+    @Test
+    void transferShouldFailWhenStepUpConfirmationMissingForHighValueTransfer() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         lenient().when(stepUpAuthenticationService.requiresStepUpForTransfer(any())).thenReturn(true);
+        lenient().when(transactionSigningChallengeService.isValidChallenge(any(), any(), anyString(), any(), anyString())).thenReturn(true);
 
         DefaultTransferFlowService service = new DefaultTransferFlowService(
-            walletRepository,
-            transactionRepository,
-            idempotencyService,
-            ledgerIntegrationService,
-            limitEnforcementService,
-            sagaOrchestrator,
-            eventPublisher,
-            stepUpAuthenticationService);
+                walletRepository,
+                transactionRepository,
+                idempotencyService,
+                ledgerIntegrationService,
+                limitEnforcementService,
+                sagaOrchestrator,
+                eventPublisher,
+                stepUpAuthenticationService,
+                transactionSigningChallengeService);
 
         WalletFlowResult result = service.process(new TransferCommand(
-            UUID.randomUUID(),
-            UUID.randomUUID(),
-            wallet.getUserId(),
-            new BigDecimal("1000.00"),
-            "idem-33",
-            "ref-33",
-            "PIN",
-            "bad-token"
-        ));
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                wallet.getUserId(),
+                new BigDecimal("1000.00"),
+                "idem-33",
+                "ref-33",
+                "PIN",
+                "bad-token",
+                "challenge-token"));
 
         assertThat(result.success()).isFalse();
         assertThat(result.message()).isEqualTo("Step-up authentication required");
         verify(walletRepository, never()).findByIdForUpdate(any());
-        }
+    }
+
+    @Test
+    void transferShouldFailWhenTransactionChallengeMissingForHighValueTransfer() {
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        lenient().when(stepUpAuthenticationService.requiresStepUpForTransfer(any())).thenReturn(true);
+        lenient().when(transactionSigningChallengeService.isValidChallenge(any(), any(), anyString(), any(), anyString())).thenReturn(false);
+
+        DefaultTransferFlowService service = new DefaultTransferFlowService(
+                walletRepository,
+                transactionRepository,
+                idempotencyService,
+                ledgerIntegrationService,
+                limitEnforcementService,
+                sagaOrchestrator,
+                eventPublisher,
+                stepUpAuthenticationService,
+                transactionSigningChallengeService);
+
+        WalletFlowResult result = service.process(new TransferCommand(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                wallet.getUserId(),
+                new BigDecimal("1000.00"),
+                "idem-34",
+                "ref-34",
+                "PIN",
+                "step-up-token",
+                null));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.message()).isEqualTo("Transaction challenge confirmation required");
+        verify(walletRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    void withdrawalShouldFailWhenTransactionChallengeMissingForHighRiskFlow() {
+        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        when(identityServiceClient.isUserActive(any())).thenReturn(true);
+        when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
+        when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
+        when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(true);
+        when(transactionSigningChallengeService.isValidChallenge(any(), any(), anyString(), any(), anyString())).thenReturn(false);
+
+        DefaultWithdrawalFlowService service = new DefaultWithdrawalFlowService(
+                walletRepository,
+                transactionRepository,
+                identityServiceClient,
+                idempotencyService,
+                ledgerIntegrationService,
+                limitEnforcementService,
+                sagaOrchestrator,
+                eventPublisher,
+                eacReplayProtectionService,
+                stepUpAuthenticationService,
+                transactionSigningChallengeService);
+
+        WalletFlowResult result = service.process(new WithdrawalCommand(
+                UUID.randomUUID(),
+                wallet.getUserId(),
+                new BigDecimal("300.00"),
+                WithdrawalMode.DEVICE_FREE,
+                "0900000000",
+                "esp",
+                "eac",
+                "idem-24",
+                "ref-24",
+                "PASSWORD",
+                "step-up-token",
+                null));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.message()).isEqualTo("Transaction challenge confirmation required");
+        verify(walletRepository, never()).findByIdForUpdate(any());
+    }
 
     @Test
     void reservationCreateShouldPersistReservation() {
@@ -302,7 +414,13 @@ class WalletFlowServiceTests {
                 eventPublisher,
                 limitEnforcementService);
 
-        WalletFlowResult result = service.create(new ReservationCommand(wallet.getId(), wallet.getUserId(), new BigDecimal("5.00"), Instant.now().plusSeconds(3600), "idem-4", "ref-4"));
+        WalletFlowResult result = service.create(new ReservationCommand(
+                wallet.getId(),
+                wallet.getUserId(),
+                new BigDecimal("5.00"),
+                Instant.now().plusSeconds(3600),
+                "idem-4",
+                "ref-4"));
 
         assertThat(result.success()).isTrue();
         verify(eventPublisher).publish(eq("wallet.reservation.created"), any());
@@ -337,13 +455,18 @@ class WalletFlowServiceTests {
                 idempotencyService,
                 ledgerIntegrationService,
                 limitEnforcementService,
-            eventPublisher,
-            etcCodeSecurityService,
+                eventPublisher,
+                etcCodeSecurityService,
                 etcCodePolicyService,
                 etcBruteForceProtectionService,
                 5);
 
-        WalletFlowResult result = service.generate(new EtcCommand(wallet.getId(), wallet.getUserId(), "ETC-10-ABC123", Instant.now().plusSeconds(3600), "idem-5"));
+        WalletFlowResult result = service.generate(new EtcCommand(
+                wallet.getId(),
+                wallet.getUserId(),
+                "ETC-10-ABC123",
+                Instant.now().plusSeconds(3600),
+                "idem-5"));
 
         assertThat(result.success()).isTrue();
         verify(eventPublisher).publish(eq("wallet.etc.generated"), any());
