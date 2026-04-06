@@ -30,6 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.exception.GlobalExceptionHandler;
 import com.elvo.wallet.mapper.WalletMapper;
+import com.elvo.wallet.monitoring.SecurityAlertStreamingService;
 import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.TransactionRepository;
@@ -94,6 +95,9 @@ class WalletControllerTest {
 
     @MockBean
     private MakerCheckerApprovalService makerCheckerApprovalService;
+
+    @MockBean
+    private SecurityAlertStreamingService securityAlertStreamingService;
     
     @MockBean
     private WalletFieldEncryptionService fieldEncryptionService;

@@ -157,6 +157,10 @@ elvo:
       approval-ttl-seconds: ${ELVO_MAKER_CHECKER_APPROVAL_TTL_SECONDS:86400}
     audit:
       signature-secret: ${ELVO_AUDIT_SIGNATURE_SECRET_REF:sm://wallet-audit-signature-secret}
+    alert-stream:
+      enabled: ${ELVO_SECURITY_ALERT_STREAM_ENABLED:true}
+      exchange: ${ELVO_SECURITY_ALERT_STREAM_EXCHANGE:elvo.wallet.security.alert.exchange}
+      routing-key: ${ELVO_SECURITY_ALERT_STREAM_ROUTING_KEY:elvo.wallet.security.alert}
     ledger:
       hash:
         key-prefix: ${ELVO_LEDGER_HASH_KEY_PREFIX:elvo:wallet:ledger:hash:}

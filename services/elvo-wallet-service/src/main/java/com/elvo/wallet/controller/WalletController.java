@@ -40,6 +40,7 @@ import com.elvo.wallet.entity.Reservation;
 import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.mapper.WalletMapper;
+import com.elvo.wallet.monitoring.SecurityAlertStreamingService;
 import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.TransactionRepository;
@@ -92,6 +93,7 @@ public class WalletController {
     private final IpGeovelocityRiskService ipGeovelocityRiskService;
     private final FraudRulesEngine fraudRulesEngine;
     private final MakerCheckerApprovalService makerCheckerApprovalService;
+    private final SecurityAlertStreamingService securityAlertStreamingService;
 
     public WalletController(WalletService walletService, WalletRepository walletRepository,
                           TransactionRepository transactionRepository, ReservationRepository reservationRepository,
@@ -102,7 +104,8 @@ public class WalletController {
                           DestinationRiskService destinationRiskService,
                           IpGeovelocityRiskService ipGeovelocityRiskService,
                           FraudRulesEngine fraudRulesEngine,
-                          MakerCheckerApprovalService makerCheckerApprovalService) {
+                          MakerCheckerApprovalService makerCheckerApprovalService,
+                          SecurityAlertStreamingService securityAlertStreamingService) {
         this.walletService = walletService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -116,6 +119,7 @@ public class WalletController {
         this.ipGeovelocityRiskService = ipGeovelocityRiskService;
         this.fraudRulesEngine = fraudRulesEngine;
         this.makerCheckerApprovalService = makerCheckerApprovalService;
+        this.securityAlertStreamingService = securityAlertStreamingService;
     }
 
     /**
@@ -254,6 +258,9 @@ public class WalletController {
             httpRequest.getRemoteAddr(),
             withdrawalLocationHint);
         if (withdrawalIpDecision.blocked()) {
+            securityAlertStreamingService.stream("wallet.security.ip.blocked", "HIGH", userId, java.util.Map.of(
+                "operation", "withdrawal",
+                "reason", withdrawalIpDecision.reason()));
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new FlowResultResponseDto(false, withdrawalIpDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
         }
@@ -286,6 +293,9 @@ public class WalletController {
             request.getAmount(),
             request.getTargetNumber());
         if (withdrawalFraudDecision.blocked()) {
+            securityAlertStreamingService.stream("wallet.security.fraud.blocked", "HIGH", userId, java.util.Map.of(
+                "operation", "withdrawal",
+                "reason", withdrawalFraudDecision.reason()));
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new FlowResultResponseDto(false, withdrawalFraudDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
         }
@@ -300,10 +310,16 @@ public class WalletController {
             request.getAmount(),
             httpRequest.getHeader("X-Approval-Token"));
         if (withdrawalApprovalDecision.rejected()) {
+            securityAlertStreamingService.stream("wallet.security.maker_checker.rejected", "MEDIUM", userId, java.util.Map.of(
+                "operation", "withdrawal",
+                "reason", withdrawalApprovalDecision.reason()));
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new FlowResultResponseDto(false, withdrawalApprovalDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
         }
         if (withdrawalApprovalDecision.pending()) {
+            securityAlertStreamingService.stream("wallet.security.maker_checker.pending", "MEDIUM", userId, java.util.Map.of(
+                "operation", "withdrawal",
+                "approvalId", withdrawalApprovalDecision.approvalId()));
             return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(new FlowResultResponseDto(false, withdrawalApprovalDecision.reason(), wallet.getId(),
                     UUID.fromString(withdrawalApprovalDecision.approvalId()), "wallet.withdrawal.pending_approval"));
@@ -382,6 +398,9 @@ public class WalletController {
             httpRequest.getRemoteAddr(),
             transferLocationHint);
         if (transferIpDecision.blocked()) {
+            securityAlertStreamingService.stream("wallet.security.ip.blocked", "HIGH", userId, java.util.Map.of(
+                "operation", "transfer",
+                "reason", transferIpDecision.reason()));
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new FlowResultResponseDto(false, transferIpDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
         }
@@ -401,6 +420,9 @@ public class WalletController {
             request.getAmount(),
             request.getTargetWalletId() == null ? null : request.getTargetWalletId().toString());
         if (transferFraudDecision.blocked()) {
+            securityAlertStreamingService.stream("wallet.security.fraud.blocked", "HIGH", userId, java.util.Map.of(
+                "operation", "transfer",
+                "reason", transferFraudDecision.reason()));
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new FlowResultResponseDto(false, transferFraudDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
         }
@@ -415,10 +437,16 @@ public class WalletController {
             request.getAmount(),
             httpRequest.getHeader("X-Approval-Token"));
         if (transferApprovalDecision.rejected()) {
+            securityAlertStreamingService.stream("wallet.security.maker_checker.rejected", "MEDIUM", userId, java.util.Map.of(
+                "operation", "transfer",
+                "reason", transferApprovalDecision.reason()));
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new FlowResultResponseDto(false, transferApprovalDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
         }
         if (transferApprovalDecision.pending()) {
+            securityAlertStreamingService.stream("wallet.security.maker_checker.pending", "MEDIUM", userId, java.util.Map.of(
+                "operation", "transfer",
+                "approvalId", transferApprovalDecision.approvalId()));
             return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(new FlowResultResponseDto(false, transferApprovalDecision.reason(), sourceWallet.getId(),
                     UUID.fromString(transferApprovalDecision.approvalId()), "wallet.transfer.pending_approval"));
