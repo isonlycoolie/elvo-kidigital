@@ -47,6 +47,7 @@ import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.DestinationRiskService;
 import com.elvo.wallet.security.DeviceLocationRiskService;
 import com.elvo.wallet.security.EtcCodePolicyService;
+import com.elvo.wallet.security.FraudRulesEngine;
 import com.elvo.wallet.security.IpGeovelocityRiskService;
 import com.elvo.wallet.security.UserJwtPrincipal;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
@@ -88,6 +89,7 @@ public class WalletController {
     private final DeviceLocationRiskService deviceLocationRiskService;
     private final DestinationRiskService destinationRiskService;
     private final IpGeovelocityRiskService ipGeovelocityRiskService;
+    private final FraudRulesEngine fraudRulesEngine;
 
     public WalletController(WalletService walletService, WalletRepository walletRepository,
                           TransactionRepository transactionRepository, ReservationRepository reservationRepository,
@@ -96,7 +98,8 @@ public class WalletController {
                           WalletOperationRateLimitService operationRateLimitService,
                           DeviceLocationRiskService deviceLocationRiskService,
                           DestinationRiskService destinationRiskService,
-                          IpGeovelocityRiskService ipGeovelocityRiskService) {
+                          IpGeovelocityRiskService ipGeovelocityRiskService,
+                          FraudRulesEngine fraudRulesEngine) {
         this.walletService = walletService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -108,6 +111,7 @@ public class WalletController {
         this.deviceLocationRiskService = deviceLocationRiskService;
         this.destinationRiskService = destinationRiskService;
         this.ipGeovelocityRiskService = ipGeovelocityRiskService;
+        this.fraudRulesEngine = fraudRulesEngine;
     }
 
     /**
@@ -272,6 +276,20 @@ public class WalletController {
                 .body(new FlowResultResponseDto(false, destinationRisk.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
         }
 
+        FraudRulesEngine.FraudDecision withdrawalFraudDecision = fraudRulesEngine.evaluate(
+            FraudRulesEngine.Operation.WITHDRAWAL,
+            userId,
+            request.getAmount(),
+            request.getTargetNumber());
+        if (withdrawalFraudDecision.blocked()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, withdrawalFraudDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
+        }
+        if (withdrawalFraudDecision.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new FlowResultResponseDto(false, withdrawalFraudDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
+        }
+
         try {
             WithdrawalMode mode = WithdrawalMode.valueOf(request.getMode());
             WithdrawalCommand command = new WithdrawalCommand(
@@ -356,6 +374,20 @@ public class WalletController {
         if (transferRisky && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new FlowResultResponseDto(false, "Device/location verification required", sourceWallet.getId(), null, "wallet.transfer.failed"));
+        }
+
+        FraudRulesEngine.FraudDecision transferFraudDecision = fraudRulesEngine.evaluate(
+            FraudRulesEngine.Operation.TRANSFER,
+            userId,
+            request.getAmount(),
+            request.getTargetWalletId() == null ? null : request.getTargetWalletId().toString());
+        if (transferFraudDecision.blocked()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, transferFraudDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
+        }
+        if (transferFraudDecision.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new FlowResultResponseDto(false, transferFraudDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
         }
 
         Wallet targetWallet = walletRepository.findById(request.getTargetWalletId())

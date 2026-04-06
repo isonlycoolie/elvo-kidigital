@@ -37,6 +37,7 @@ import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.DestinationRiskService;
 import com.elvo.wallet.security.DeviceLocationRiskService;
 import com.elvo.wallet.security.EtcCodePolicyService;
+import com.elvo.wallet.security.FraudRulesEngine;
 import com.elvo.wallet.security.IpGeovelocityRiskService;
 import com.elvo.wallet.security.SecretManagerService;
 import com.elvo.wallet.security.UserJwtPrincipal;
@@ -86,6 +87,9 @@ class WalletControllerTest {
 
     @MockBean
     private IpGeovelocityRiskService ipGeovelocityRiskService;
+
+    @MockBean
+    private FraudRulesEngine fraudRulesEngine;
     
     @MockBean
     private WalletFieldEncryptionService fieldEncryptionService;
@@ -96,6 +100,11 @@ class WalletControllerTest {
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(principal, "N/A", java.util.List.of(() -> "ROLE_USER"));
         SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        when(ipGeovelocityRiskService.evaluate(any(), any(), any()))
+            .thenReturn(new IpGeovelocityRiskService.RiskDecision(false, false, null));
+        when(fraudRulesEngine.evaluate(any(), any(), any(), any()))
+            .thenReturn(FraudRulesEngine.FraudDecision.allow());
     }
 
     @AfterEach
