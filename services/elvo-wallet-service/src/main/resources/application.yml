@@ -71,6 +71,11 @@ elvo:
       token-ttl-seconds: ${ELVO_IDENTITY_CLIENT_TOKEN_TTL_SECONDS:60}
       connect-timeout-seconds: ${ELVO_IDENTITY_CLIENT_CONNECT_TIMEOUT_SECONDS:3}
       read-timeout-seconds: ${ELVO_IDENTITY_CLIENT_READ_TIMEOUT_SECONDS:5}
+      tls:
+        enforce-https: ${ELVO_IDENTITY_TLS_ENFORCE_HTTPS:true}
+        enforce-mtls: ${ELVO_IDENTITY_TLS_ENFORCE_MTLS:true}
+        fingerprint-header: ${ELVO_IDENTITY_TLS_FINGERPRINT_HEADER:X-TLS-CERT-SHA256}
+        pinned-fingerprints: ${ELVO_IDENTITY_TLS_PINNED_FINGERPRINTS:}
   monitoring:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:wallet-service}

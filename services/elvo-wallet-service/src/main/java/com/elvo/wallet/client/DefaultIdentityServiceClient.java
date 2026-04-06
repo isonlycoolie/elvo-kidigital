@@ -7,6 +7,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import javax.crypto.SecretKey;
 
@@ -37,41 +38,61 @@ public class DefaultIdentityServiceClient implements IdentityServiceClient {
     private final RestTemplate restTemplate;
     private final IdentityClientProperties properties;
     private final InternalServiceJwtProperties internalJwtProperties;
+    private final InternalTlsProperties internalTlsProperties;
     private final String internalJwtSecret;
 
     @Autowired
     public DefaultIdentityServiceClient(RestTemplateBuilder restTemplateBuilder,
                                         IdentityClientProperties properties,
                                         InternalServiceJwtProperties internalJwtProperties,
+                                        InternalTlsProperties internalTlsProperties,
                                         SecretManagerService secretManagerService) {
         this(restTemplateBuilder
-                .setConnectTimeout(Duration.ofSeconds(properties.getConnectTimeoutSeconds()))
-                .setReadTimeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
-                .build(),
+                        .setConnectTimeout(Duration.ofSeconds(properties.getConnectTimeoutSeconds()))
+                        .setReadTimeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
+                        .additionalInterceptors((request, body, execution) -> {
+                            var response = execution.execute(request, body);
+                            validatePinnedCertificate(response.getHeaders(), internalTlsProperties);
+                            return response;
+                        })
+                        .build(),
             properties,
             internalJwtProperties,
+            internalTlsProperties,
             resolveInternalJwtSecret(secretManagerService, internalJwtProperties.getSecret()));
     }
 
     DefaultIdentityServiceClient(RestTemplate restTemplate,
                                  IdentityClientProperties properties,
                                  InternalServiceJwtProperties internalJwtProperties) {
-        this(restTemplate, properties, internalJwtProperties, internalJwtProperties.getSecret());
+        this(restTemplate, properties, internalJwtProperties, new InternalTlsProperties(), internalJwtProperties.getSecret());
+    }
+
+    DefaultIdentityServiceClient(RestTemplate restTemplate,
+                                 IdentityClientProperties properties,
+                                 InternalServiceJwtProperties internalJwtProperties,
+                                 InternalTlsProperties internalTlsProperties) {
+        this(restTemplate, properties, internalJwtProperties, internalTlsProperties, internalJwtProperties.getSecret());
     }
 
     private DefaultIdentityServiceClient(RestTemplate restTemplate,
                                          IdentityClientProperties properties,
                                          InternalServiceJwtProperties internalJwtProperties,
+                                         InternalTlsProperties internalTlsProperties,
                                          String internalJwtSecret) {
         this.restTemplate = restTemplate;
         this.properties = properties;
         this.internalJwtProperties = internalJwtProperties;
+        this.internalTlsProperties = internalTlsProperties;
         this.internalJwtSecret = internalJwtSecret;
     }
 
     @Override
     public boolean isUserActive(UUID userId) {
         if (userId == null) {
+            return false;
+        }
+        if (!isInternalTransportCompliant()) {
             return false;
         }
 
@@ -90,6 +111,9 @@ public class DefaultIdentityServiceClient implements IdentityServiceClient {
     @Override
     public boolean verifyEsp(UUID userId, String espCode) {
         if (userId == null || espCode == null || espCode.isBlank()) {
+            return false;
+        }
+        if (!isInternalTransportCompliant()) {
             return false;
         }
 
@@ -113,6 +137,9 @@ public class DefaultIdentityServiceClient implements IdentityServiceClient {
     @Override
     public boolean verifyEac(UUID userId, String eacCode) {
         if (userId == null || eacCode == null || eacCode.isBlank()) {
+            return false;
+        }
+        if (!isInternalTransportCompliant()) {
             return false;
         }
 
@@ -180,5 +207,45 @@ public class DefaultIdentityServiceClient implements IdentityServiceClient {
                 configuredSecret,
                 "ELVO_INTERNAL_JWT_SECRET",
                 null);
+    }
+
+    private boolean isInternalTransportCompliant() {
+        String baseUrl = properties.getBaseUrl();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            return false;
+        }
+
+        if (internalTlsProperties != null
+                && (internalTlsProperties.isEnforceHttps() || internalTlsProperties.isEnforceMtls())
+                && !baseUrl.toLowerCase().startsWith("https://")) {
+            return false;
+        }
+        return true;
+    }
+
+    private static void validatePinnedCertificate(HttpHeaders responseHeaders, InternalTlsProperties tlsProperties) {
+        if (tlsProperties == null || !tlsProperties.hasPinnedFingerprints()) {
+            return;
+        }
+
+        String headerName = tlsProperties.getFingerprintHeader();
+        String observed = responseHeaders.getFirst(headerName);
+        if (observed == null || observed.isBlank()) {
+            throw new RestClientException("Missing required TLS fingerprint header: " + headerName);
+        }
+
+        String normalizedObserved = normalizeFingerprint(observed);
+        boolean matched = tlsProperties.getPinnedFingerprints().stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(DefaultIdentityServiceClient::normalizeFingerprint)
+                .collect(Collectors.toSet())
+                .contains(normalizedObserved);
+        if (!matched) {
+            throw new RestClientException("TLS certificate pin validation failed");
+        }
+    }
+
+    private static String normalizeFingerprint(String fingerprint) {
+        return fingerprint.replace(":", "").trim().toLowerCase();
     }
 }

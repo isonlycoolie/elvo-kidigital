@@ -32,7 +32,7 @@ class DefaultIdentityServiceClientTest {
     @BeforeEach
     void setUp() {
         properties = new IdentityClientProperties();
-        properties.setBaseUrl("http://identity-service/internal");
+        properties.setBaseUrl("https://identity-service/internal");
         properties.setSourceServiceName("wallet-service");
         properties.setClientSourceIp("wallet-service");
         properties.setClientSourceUserAgent("wallet-service-client");
@@ -57,7 +57,7 @@ class DefaultIdentityServiceClientTest {
     void isUserActiveShouldCallIdentityInternalEndpoint() {
         UUID userId = UUID.randomUUID();
 
-        server.expect(requestTo("http://identity-service/internal/users/" + userId))
+        server.expect(requestTo("https://identity-service/internal/users/" + userId))
                 .andExpect(method(HttpMethod.GET))
                 .andExpect(header("X-Source-Service", "wallet-service"))
                 .andExpect(header(HttpHeaders.AUTHORIZATION, org.hamcrest.Matchers.startsWith("Bearer ")))
@@ -78,7 +78,7 @@ class DefaultIdentityServiceClientTest {
     void verifyEspShouldUseSignedInternalRequest() {
         UUID userId = UUID.randomUUID();
 
-        server.expect(requestTo("http://identity-service/internal/verify-esp"))
+        server.expect(requestTo("https://identity-service/internal/verify-esp"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-Source-Service", "wallet-service"))
                 .andExpect(header(HttpHeaders.AUTHORIZATION, org.hamcrest.Matchers.startsWith("Bearer ")))
@@ -106,7 +106,7 @@ class DefaultIdentityServiceClientTest {
     void verifyEacShouldReturnFalseWhenIdentityDeclines() {
         UUID userId = UUID.randomUUID();
 
-        server.expect(requestTo("http://identity-service/internal/verify-eac"))
+        server.expect(requestTo("https://identity-service/internal/verify-eac"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-Source-Service", "wallet-service"))
                 .andExpect(header(HttpHeaders.AUTHORIZATION, org.hamcrest.Matchers.startsWith("Bearer ")))
@@ -121,6 +121,21 @@ class DefaultIdentityServiceClientTest {
 
         assertThat(verified).isFalse();
         server.verify();
+    }
+
+    @Test
+    void shouldRejectNonHttpsBaseUrlWhenTlsIsEnforced() {
+        IdentityClientProperties insecureProperties = new IdentityClientProperties();
+        insecureProperties.setBaseUrl("http://identity-service/internal");
+        insecureProperties.setSourceServiceName("wallet-service");
+        insecureProperties.setClientSourceIp("wallet-service");
+        insecureProperties.setClientSourceUserAgent("wallet-service-client");
+        insecureProperties.setTokenTtlSeconds(60);
+
+        DefaultIdentityServiceClient insecureClient = new DefaultIdentityServiceClient(restTemplate, insecureProperties, internalJwtProperties);
+
+        boolean active = insecureClient.isUserActive(UUID.randomUUID());
+        assertThat(active).isFalse();
     }
 
     private ClientHttpRequestInterceptor addJsonAcceptHeader() {
