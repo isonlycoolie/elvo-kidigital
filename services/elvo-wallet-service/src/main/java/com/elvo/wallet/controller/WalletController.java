@@ -53,6 +53,7 @@ import com.elvo.wallet.security.IpGeovelocityRiskService;
 import com.elvo.wallet.security.MakerCheckerApprovalService;
 import com.elvo.wallet.security.ApiAbuseProtectionService;
 import com.elvo.wallet.security.EmergencyControlService;
+import com.elvo.wallet.security.SanctionsScreeningService;
 import com.elvo.wallet.security.UserJwtPrincipal;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
@@ -98,6 +99,7 @@ public class WalletController {
     private final SecurityAlertStreamingService securityAlertStreamingService;
     private final ApiAbuseProtectionService apiAbuseProtectionService;
     private final EmergencyControlService emergencyControlService;
+    private final SanctionsScreeningService sanctionsScreeningService;
 
     public WalletController(WalletService walletService, WalletRepository walletRepository,
                           TransactionRepository transactionRepository, ReservationRepository reservationRepository,
@@ -111,7 +113,8 @@ public class WalletController {
                           MakerCheckerApprovalService makerCheckerApprovalService,
                           SecurityAlertStreamingService securityAlertStreamingService,
                           ApiAbuseProtectionService apiAbuseProtectionService,
-                          EmergencyControlService emergencyControlService) {
+                          EmergencyControlService emergencyControlService,
+                          SanctionsScreeningService sanctionsScreeningService) {
         this.walletService = walletService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -128,6 +131,7 @@ public class WalletController {
         this.securityAlertStreamingService = securityAlertStreamingService;
         this.apiAbuseProtectionService = apiAbuseProtectionService;
         this.emergencyControlService = emergencyControlService;
+        this.sanctionsScreeningService = sanctionsScreeningService;
     }
 
     /**
@@ -197,6 +201,12 @@ public class WalletController {
         Wallet wallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
 
+        SanctionsScreeningService.ScreeningDecision sanctionsDecision = sanctionsScreeningService.evaluate(userId, null);
+        if (!sanctionsDecision.allowed()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, sanctionsDecision.reason(), wallet.getId(), null, "wallet.deposit.failed"));
+        }
+
         try {
             WalletChannel channel = WalletChannel.valueOf(request.getChannel());
             DepositCommand command = new DepositCommand(
@@ -247,6 +257,12 @@ public class WalletController {
 
         Wallet wallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
+
+        SanctionsScreeningService.ScreeningDecision sanctionsDecision = sanctionsScreeningService.evaluate(userId, request.getTargetNumber());
+        if (!sanctionsDecision.allowed()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, sanctionsDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
+        }
 
         String sourceIp = resolveClientIp(httpRequest);
         String deviceId = httpRequest.getHeader("X-Device-Id");
@@ -398,6 +414,14 @@ public class WalletController {
 
         Wallet sourceWallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
+
+        SanctionsScreeningService.ScreeningDecision sanctionsDecision = sanctionsScreeningService.evaluate(
+            userId,
+            request.getTargetWalletId() == null ? null : request.getTargetWalletId().toString());
+        if (!sanctionsDecision.allowed()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, sanctionsDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
+        }
 
         ResponseEntity<FlowResultResponseDto> emergencyBlocked = blockIfEmergencyControlTriggered(sourceWallet.getId(), "wallet.transfer.failed");
         if (emergencyBlocked != null) {

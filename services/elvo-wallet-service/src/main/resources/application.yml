@@ -172,6 +172,11 @@ elvo:
         transfer-verification-threshold: ${ELVO_FRAUD_RULES_TRANSFER_VERIFICATION_THRESHOLD:500.00}
         withdrawal-verification-threshold: ${ELVO_FRAUD_RULES_WITHDRAWAL_VERIFICATION_THRESHOLD:250.00}
         override-ttl-seconds: ${ELVO_FRAUD_RULES_OVERRIDE_TTL_SECONDS:86400}
+    sanctions:
+      enabled: ${ELVO_SANCTIONS_SCREENING_ENABLED:true}
+      fail-closed: ${ELVO_SANCTIONS_FAIL_CLOSED:true}
+      refresh-interval-seconds: ${ELVO_SANCTIONS_REFRESH_INTERVAL_SECONDS:300}
+      max-staleness-seconds: ${ELVO_SANCTIONS_MAX_STALENESS_SECONDS:1800}
     maker-checker:
       enabled: ${ELVO_MAKER_CHECKER_ENABLED:true}
       transfer-threshold: ${ELVO_MAKER_CHECKER_TRANSFER_THRESHOLD:1000.00}
