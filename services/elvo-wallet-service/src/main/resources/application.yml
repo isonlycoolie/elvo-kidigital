@@ -93,6 +93,8 @@ elvo:
         - ${ELVO_MTLS_CN_BILLING_SERVICE:billing-service}
         - ${ELVO_MTLS_CN_AGENT_SERVICE:agent-service}
         - ${ELVO_MTLS_CN_SAGA_SERVICE:saga-service}
+    correlation:
+      signature-secret: ${ELVO_CORRELATION_SIGNATURE_SECRET:${ELVO_INTERNAL_JWT_SECRET:elvo-wallet-correlation-signature-secret}}
     eac:
       replay:
         window-seconds: ${ELVO_EAC_REPLAY_WINDOW_SECONDS:300}
