@@ -12,7 +12,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import org.mockito.InOrder;
 import org.mockito.Mock;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -174,6 +176,58 @@ class WalletFlowServiceTests {
         verify(callbackReconciliationService).scheduleRetry("cb-1", wallet.getId(), new BigDecimal("20.00"));
         verify(callbackReconciliationService).markReconciled("cb-1");
     }
+
+        @Test
+        void mobileDepositShouldFollowLifecycleStateFlow() {
+                UUID walletId = UUID.randomUUID();
+                wallet.setBalance(new BigDecimal("100.00"));
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(identityServiceClient.isUserActive(any())).thenReturn(true);
+                when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+                when(transactionRepository.existsByReference(anyString())).thenReturn(false);
+                when(mobileMoneyCallbackSecurityService.isAuthenticatedCallback(anyString(), anyString(), any(), anyString())).thenReturn(true);
+                when(callbackReconciliationService.consumeOnce(anyString(), any())).thenReturn(true);
+                lenient().when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+                DefaultDepositFlowService service = new DefaultDepositFlowService(
+                                walletRepository,
+                                transactionRepository,
+                                identityServiceClient,
+                                agentServiceClient,
+                                idempotencyService,
+                                ledgerIntegrationService,
+                                mobileMoneyCallbackSecurityService,
+                                callbackReconciliationService,
+                                limitEnforcementService,
+                                sagaOrchestrator,
+                                eventPublisher,
+                                fieldEncryptionService,
+                                transactionLifecycleService);
+
+                WalletFlowResult result = service.process(new DepositCommand(
+                                walletId,
+                                wallet.getUserId(),
+                                new BigDecimal("20.00"),
+                                WalletChannel.MOBILE,
+                                "idem-mobile-flow",
+                                "ref-mobile-flow",
+                                true,
+                                "cb-mobile-flow",
+                                "signed-callback",
+                                System.currentTimeMillis() / 1000,
+                                "127.0.0.1"));
+
+                assertThat(result.success()).isTrue();
+
+                InOrder order = inOrder(transactionLifecycleService);
+                order.verify(transactionLifecycleService).initialize(any(Transaction.class), anyString(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.PENDING), anyString(), any(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.AWAITING_CONFIRMATION), anyString(), any(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.RETRYING), anyString(), any(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.PROCESSING), anyString(), any(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.COMPLETED), anyString(), any(), any(), any());
+        }
 
     @Test
     void withdrawalShouldFailWhenEspVerificationFails() {
