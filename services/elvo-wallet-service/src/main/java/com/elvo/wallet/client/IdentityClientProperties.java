@@ -14,6 +14,7 @@ public class IdentityClientProperties {
     private long tokenTtlSeconds = 60;
     private long connectTimeoutSeconds = 3;
     private long readTimeoutSeconds = 5;
+    private long kycReverificationWindowDays = 30;
 
     public String getBaseUrl() {
         return baseUrl;
@@ -69,5 +70,13 @@ public class IdentityClientProperties {
 
     public void setReadTimeoutSeconds(long readTimeoutSeconds) {
         this.readTimeoutSeconds = readTimeoutSeconds;
+    }
+
+    public long getKycReverificationWindowDays() {
+        return kycReverificationWindowDays;
+    }
+
+    public void setKycReverificationWindowDays(long kycReverificationWindowDays) {
+        this.kycReverificationWindowDays = kycReverificationWindowDays;
     }
 }

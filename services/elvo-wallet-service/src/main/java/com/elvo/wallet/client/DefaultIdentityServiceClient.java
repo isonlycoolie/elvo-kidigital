@@ -3,6 +3,7 @@ package com.elvo.wallet.client;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +35,11 @@ public class DefaultIdentityServiceClient implements IdentityServiceClient {
     private static final String DATA_KEY = "data";
     private static final String ACTIVE_KEY = "active";
     private static final String VERIFIED_KEY = "verified";
+    private static final String KYC_REVERIFICATION_REQUIRED_KEY = "reverificationRequired";
+    private static final String KYC_REVERIFICATION_REQUIRED_ALT_KEY = "reVerificationRequired";
+    private static final String KYC_DOCUMENT_EXPIRED_KEY = "documentExpired";
+    private static final String KYC_DOCUMENT_EXPIRY_AT_KEY = "documentExpiryAt";
+    private static final String KYC_DOCUMENT_EXPIRES_AT_KEY = "documentExpiresAt";
 
     private final RestTemplate restTemplate;
     private final IdentityClientProperties properties;
@@ -102,7 +108,10 @@ public class DefaultIdentityServiceClient implements IdentityServiceClient {
                     HttpMethod.GET,
                     new HttpEntity<>(buildHeaders()),
                     Map.class);
-            return readBooleanDataValue(response.getBody(), ACTIVE_KEY);
+            if (!readBooleanDataValue(response.getBody(), ACTIVE_KEY)) {
+                return false;
+            }
+            return isKycCompliant(userId);
         } catch (RestClientException ex) {
             return false;
         }
@@ -199,6 +208,71 @@ public class DefaultIdentityServiceClient implements IdentityServiceClient {
         }
         Object value = data.get(key);
         return Boolean.TRUE.equals(value);
+    }
+
+    private boolean isKycCompliant(UUID userId) {
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    properties.getBaseUrl() + "/users/" + userId + "/kyc-status",
+                    HttpMethod.GET,
+                    new HttpEntity<>(buildHeaders()),
+                    Map.class);
+            return readKycCompliance(response.getBody());
+        } catch (RestClientException ex) {
+            return false;
+        }
+    }
+
+    private boolean readKycCompliance(Map<?, ?> responseBody) {
+        if (responseBody == null) {
+            return false;
+        }
+        Object dataObj = responseBody.get(DATA_KEY);
+        if (!(dataObj instanceof Map<?, ?> data)) {
+            return false;
+        }
+
+        if (!Boolean.TRUE.equals(data.get(VERIFIED_KEY))) {
+            return false;
+        }
+
+        if (Boolean.TRUE.equals(data.get(KYC_REVERIFICATION_REQUIRED_KEY))
+                || Boolean.TRUE.equals(data.get(KYC_REVERIFICATION_REQUIRED_ALT_KEY))) {
+            return false;
+        }
+
+        if (Boolean.TRUE.equals(data.get(KYC_DOCUMENT_EXPIRED_KEY))) {
+            return false;
+        }
+
+        Instant expiryAt = parseExpiryAt(data);
+        if (expiryAt == null) {
+            return true;
+        }
+
+        Instant now = Instant.now();
+        if (!expiryAt.isAfter(now)) {
+            return false;
+        }
+
+        long reverifyWindowDays = Math.max(1, properties.getKycReverificationWindowDays());
+        return expiryAt.isAfter(now.plus(Duration.ofDays(reverifyWindowDays)));
+    }
+
+    private Instant parseExpiryAt(Map<?, ?> data) {
+        Object rawValue = data.get(KYC_DOCUMENT_EXPIRY_AT_KEY);
+        if (rawValue == null) {
+            rawValue = data.get(KYC_DOCUMENT_EXPIRES_AT_KEY);
+        }
+        if (!(rawValue instanceof String expiryText) || expiryText.isBlank()) {
+            return null;
+        }
+
+        try {
+            return Instant.parse(expiryText);
+        } catch (DateTimeParseException ex) {
+            return null;
+        }
     }
 
     private static String resolveInternalJwtSecret(SecretManagerService secretManagerService, String configuredSecret) {

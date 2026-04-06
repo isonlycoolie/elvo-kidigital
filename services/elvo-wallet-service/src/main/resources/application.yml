@@ -71,6 +71,7 @@ elvo:
       token-ttl-seconds: ${ELVO_IDENTITY_CLIENT_TOKEN_TTL_SECONDS:60}
       connect-timeout-seconds: ${ELVO_IDENTITY_CLIENT_CONNECT_TIMEOUT_SECONDS:3}
       read-timeout-seconds: ${ELVO_IDENTITY_CLIENT_READ_TIMEOUT_SECONDS:5}
+      kyc-reverification-window-days: ${ELVO_KYC_REVERIFICATION_WINDOW_DAYS:30}
       tls:
         enforce-https: ${ELVO_IDENTITY_TLS_ENFORCE_HTTPS:true}
         enforce-mtls: ${ELVO_IDENTITY_TLS_ENFORCE_MTLS:true}

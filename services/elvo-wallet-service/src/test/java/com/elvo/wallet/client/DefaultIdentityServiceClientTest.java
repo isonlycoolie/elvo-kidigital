@@ -68,6 +68,17 @@ class DefaultIdentityServiceClientTest {
                         "\"data\":{\"active\":true}" +
                         "}", MediaType.APPLICATION_JSON));
 
+        server.expect(requestTo("https://identity-service/internal/users/" + userId + "/kyc-status"))
+            .andExpect(method(HttpMethod.GET))
+            .andExpect(header("X-Source-Service", "wallet-service"))
+            .andExpect(header(HttpHeaders.AUTHORIZATION, org.hamcrest.Matchers.startsWith("Bearer ")))
+            .andRespond(withSuccess("{" +
+                "\"success\":true," +
+                "\"code\":\"SUCCESS\"," +
+                "\"message\":\"KYC status loaded\"," +
+                "\"data\":{\"verified\":true,\"reverificationRequired\":false,\"documentExpired\":false}" +
+                "}", MediaType.APPLICATION_JSON));
+
         boolean active = client.isUserActive(userId);
 
         assertThat(active).isTrue();
@@ -137,6 +148,62 @@ class DefaultIdentityServiceClientTest {
         boolean active = insecureClient.isUserActive(UUID.randomUUID());
         assertThat(active).isFalse();
     }
+
+        @Test
+        void isUserActiveShouldFailWhenKycReverificationIsRequired() {
+        UUID userId = UUID.randomUUID();
+
+        server.expect(requestTo("https://identity-service/internal/users/" + userId))
+            .andExpect(method(HttpMethod.GET))
+            .andRespond(withSuccess("{" +
+                "\"success\":true," +
+                "\"code\":\"SUCCESS\"," +
+                "\"message\":\"User loaded\"," +
+                "\"data\":{\"active\":true}" +
+                "}", MediaType.APPLICATION_JSON));
+
+        server.expect(requestTo("https://identity-service/internal/users/" + userId + "/kyc-status"))
+            .andExpect(method(HttpMethod.GET))
+            .andRespond(withSuccess("{" +
+                "\"success\":true," +
+                "\"code\":\"SUCCESS\"," +
+                "\"message\":\"KYC status loaded\"," +
+                "\"data\":{\"verified\":true,\"reverificationRequired\":true,\"documentExpired\":false}" +
+                "}", MediaType.APPLICATION_JSON));
+
+        boolean active = client.isUserActive(userId);
+
+        assertThat(active).isFalse();
+        server.verify();
+        }
+
+        @Test
+        void isUserActiveShouldFailWhenKycDocumentExpired() {
+        UUID userId = UUID.randomUUID();
+
+        server.expect(requestTo("https://identity-service/internal/users/" + userId))
+            .andExpect(method(HttpMethod.GET))
+            .andRespond(withSuccess("{" +
+                "\"success\":true," +
+                "\"code\":\"SUCCESS\"," +
+                "\"message\":\"User loaded\"," +
+                "\"data\":{\"active\":true}" +
+                "}", MediaType.APPLICATION_JSON));
+
+        server.expect(requestTo("https://identity-service/internal/users/" + userId + "/kyc-status"))
+            .andExpect(method(HttpMethod.GET))
+            .andRespond(withSuccess("{" +
+                "\"success\":true," +
+                "\"code\":\"SUCCESS\"," +
+                "\"message\":\"KYC status loaded\"," +
+                "\"data\":{\"verified\":true,\"reverificationRequired\":false,\"documentExpired\":true}" +
+                "}", MediaType.APPLICATION_JSON));
+
+        boolean active = client.isUserActive(userId);
+
+        assertThat(active).isFalse();
+        server.verify();
+        }
 
     private ClientHttpRequestInterceptor addJsonAcceptHeader() {
         return (request, body, execution) -> {
