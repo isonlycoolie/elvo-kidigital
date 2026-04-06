@@ -56,7 +56,8 @@ class RegistrationLifecycleUnitTest {
                 auditRepository,
                 eanGenerator,
                 hashingService,
-                auditEventPublisher);
+            auditEventPublisher,
+            24L);
     }
 
     @Test

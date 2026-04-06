@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,24 +25,25 @@ import com.elvo.identity.util.EanGenerator;
 @Service
 public class RegistrationServiceImpl implements RegistrationService {
 
-    private static final Duration DEFAULT_VERIFICATION_DEADLINE = Duration.ofHours(24);
-
     private final UserRepository userRepository;
     private final AuditRepository auditRepository;
     private final EanGenerator eanGenerator;
     private final SecurityHashingService hashingService;
     private final AuditEventPublisher auditEventPublisher;
+    private final Duration verificationDeadlineDuration;
 
     public RegistrationServiceImpl(UserRepository userRepository,
                                    AuditRepository auditRepository,
                                    EanGenerator eanGenerator,
                                    SecurityHashingService hashingService,
-                                   AuditEventPublisher auditEventPublisher) {
+                                   AuditEventPublisher auditEventPublisher,
+                                   @Value("${elvo.security.pending-registration.expiry-hours:24}") long pendingRegistrationExpiryHours) {
         this.userRepository = userRepository;
         this.auditRepository = auditRepository;
         this.eanGenerator = eanGenerator;
         this.hashingService = hashingService;
         this.auditEventPublisher = auditEventPublisher;
+        this.verificationDeadlineDuration = Duration.ofHours(Math.max(1, pendingRegistrationExpiryHours));
     }
 
     @Override
@@ -110,7 +112,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         user.setMobileVerified(false);
         user.setVerificationStatus(User.VerificationStatus.UNVERIFIED);
         user.setAccountStatus(User.AccountStatus.PENDING_VERIFICATION);
-        user.setVerificationDeadline(Instant.now().plus(DEFAULT_VERIFICATION_DEADLINE));
+        user.setVerificationDeadline(Instant.now().plus(verificationDeadlineDuration));
         user.setEan(generateUniqueEan());
         return user;
     }
@@ -132,7 +134,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         existing.setMobileVerifiedAt(null);
         existing.setVerificationStatus(User.VerificationStatus.UNVERIFIED);
         existing.setAccountStatus(User.AccountStatus.PENDING_VERIFICATION);
-        existing.setVerificationDeadline(Instant.now().plus(DEFAULT_VERIFICATION_DEADLINE));
+        existing.setVerificationDeadline(Instant.now().plus(verificationDeadlineDuration));
         existing.setDownstreamProvisioned(false);
         existing.setDownstreamProvisionedAt(null);
         return existing;
