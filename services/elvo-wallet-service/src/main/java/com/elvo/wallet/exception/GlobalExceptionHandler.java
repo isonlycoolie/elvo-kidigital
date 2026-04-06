@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.lang.Nullable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -76,6 +77,15 @@ public class GlobalExceptionHandler {
         captureIfPresent(ex, request, java.util.Map.of("category", "constraint"));
         return ResponseEntity.badRequest()
             .body(ApiResponse.error("CONSTRAINT_VIOLATION", ex.getMessage()));
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLockFailure(ObjectOptimisticLockingFailureException ex,
+                                                                         HttpServletRequest request) {
+        AUDIT_LOG.warn("optimistic_lock_conflict exception={}", ex.getMessage());
+        captureIfPresent(ex, request, java.util.Map.of("category", "optimistic-lock"));
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("CONCURRENCY_CONFLICT", "Wallet update conflict detected, please retry"));
     }
 
     @ExceptionHandler(Exception.class)
