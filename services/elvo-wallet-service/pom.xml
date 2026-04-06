@@ -20,6 +20,7 @@
         <java.version>17</java.version>
         <elvo.shared.version>1.0.0-SNAPSHOT</elvo.shared.version>
         <sentry.version>7.14.0</sentry.version>
+        <dependency-check.version>10.0.4</dependency-check.version>
     </properties>
 
     <dependencies>
@@ -150,6 +151,33 @@
                     <version>${elvo.shared.version}</version>
                 </dependency>
             </dependencies>
+        </profile>
+        <profile>
+            <id>security-scanning</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.owasp</groupId>
+                        <artifactId>dependency-check-maven</artifactId>
+                        <version>${dependency-check.version}</version>
+                        <configuration>
+                            <format>HTML</format>
+                            <failBuildOnCVSS>7</failBuildOnCVSS>
+                            <skipProvidedScope>true</skipProvidedScope>
+                            <skipTestScope>true</skipTestScope>
+                            <suppressionFile>${project.basedir}/dependency-check-suppressions.xml</suppressionFile>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                                <phase>verify</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
     </profiles>
 
