@@ -10,26 +10,37 @@ import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
-import javax.crypto.SecretKey;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 
 import org.junit.jupiter.api.Test;
 
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 
 class TokenServiceUnitTest {
 
-    private static final String SECRET = "identity-unit-test-secret-at-least-thirty-two-bytes";
     private static final String ISSUER = "identity-test-issuer";
     private static final String AUDIENCE = "identity-test-audience";
+    private static final String KEY_ID = "identity-key-01";
 
-    private TokenService tokenService(long accessMinutes, long refreshDays) {
-        return new TokenService(SECRET, ISSUER, AUDIENCE, accessMinutes, refreshDays);
+    private TokenService tokenService(KeyPair keyPair, String keyId, long accessMinutes, long refreshDays) {
+        return new TokenService(keyPair.getPrivate(), keyPair.getPublic(), ISSUER, AUDIENCE, keyId, accessMinutes, refreshDays);
+    }
+
+    private KeyPair generateRsaKeyPair() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return generator.generateKeyPair();
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to generate test key pair", ex);
+        }
     }
 
     @Test
     void generateAndValidateAccessTokenShouldReturnExpectedClaims() {
-        TokenService tokenService = tokenService(15, 7);
+        KeyPair keyPair = generateRsaKeyPair();
+        TokenService tokenService = tokenService(keyPair, KEY_ID, 15, 7);
         UUID userId = UUID.randomUUID();
 
         TokenService.TokenPayload payload = tokenService.generateAccessToken(userId, "ELVO-UNIT-123456");
@@ -44,7 +55,8 @@ class TokenServiceUnitTest {
 
     @Test
     void validateRefreshTokenShouldRejectAccessToken() {
-        TokenService tokenService = tokenService(15, 7);
+        KeyPair keyPair = generateRsaKeyPair();
+        TokenService tokenService = tokenService(keyPair, KEY_ID, 15, 7);
         TokenService.TokenPayload accessToken = tokenService.generateAccessToken(UUID.randomUUID(), "ELVO-UNIT-000001");
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
@@ -54,7 +66,8 @@ class TokenServiceUnitTest {
 
     @Test
     void validateAccessTokenShouldRejectMalformedToken() {
-        TokenService tokenService = tokenService(15, 7);
+        KeyPair keyPair = generateRsaKeyPair();
+        TokenService tokenService = tokenService(keyPair, KEY_ID, 15, 7);
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> tokenService.validateAccessToken("not.a.valid.jwt"));
@@ -63,7 +76,8 @@ class TokenServiceUnitTest {
 
     @Test
     void validateRefreshTokenShouldRejectExpiredToken() {
-        TokenService tokenService = tokenService(-1, -1);
+        KeyPair keyPair = generateRsaKeyPair();
+        TokenService tokenService = tokenService(keyPair, KEY_ID, -1, -1);
         TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(UUID.randomUUID());
 
         assertThrows(IllegalArgumentException.class, () -> tokenService.validateRefreshToken(refreshToken.token()));
@@ -71,7 +85,8 @@ class TokenServiceUnitTest {
 
     @Test
     void generatedTokenShouldContainFutureExpiry() {
-        TokenService tokenService = tokenService(5, 1);
+        KeyPair keyPair = generateRsaKeyPair();
+        TokenService tokenService = tokenService(keyPair, KEY_ID, 5, 1);
 
         TokenService.TokenPayload tokenPayload = tokenService.generateRefreshToken(UUID.randomUUID());
         assertDoesNotThrow(() -> tokenService.validateRefreshToken(tokenPayload.token()));
@@ -81,7 +96,8 @@ class TokenServiceUnitTest {
 
     @Test
     void generateAccessTokenShouldAllowCustomRolesAndScopes() {
-        TokenService tokenService = tokenService(15, 7);
+        KeyPair keyPair = generateRsaKeyPair();
+        TokenService tokenService = tokenService(keyPair, KEY_ID, 15, 7);
         UUID userId = UUID.randomUUID();
 
         TokenService.TokenPayload payload = tokenService.generateAccessToken(
@@ -97,12 +113,13 @@ class TokenServiceUnitTest {
 
     @Test
     void validateAccessTokenShouldRejectMissingRolesClaim() {
-        TokenService tokenService = tokenService(15, 7);
+        KeyPair keyPair = generateRsaKeyPair();
+        TokenService tokenService = tokenService(keyPair, KEY_ID, 15, 7);
         UUID userId = UUID.randomUUID();
-        SecretKey secretKey = Keys.hmacShaKeyFor(SECRET.getBytes());
 
         String token = Jwts.builder()
                 .issuer(ISSUER)
+            .header().keyId(KEY_ID).and()
                 .audience().add(AUDIENCE).and()
                 .subject(userId.toString())
                 .issuedAt(new Date())
@@ -110,7 +127,7 @@ class TokenServiceUnitTest {
                 .claim("ean", "ELVO-UNIT-ROLES")
                 .claim("tokenType", "ACCESS")
                 .claim("scopes", List.of("wallet:read"))
-                .signWith(secretKey)
+            .signWith(keyPair.getPrivate(), io.jsonwebtoken.Jwts.SIG.RS256)
                 .compact();
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
@@ -120,12 +137,13 @@ class TokenServiceUnitTest {
 
     @Test
     void validateAccessTokenShouldRejectMalformedScopesClaim() {
-        TokenService tokenService = tokenService(15, 7);
+        KeyPair keyPair = generateRsaKeyPair();
+        TokenService tokenService = tokenService(keyPair, KEY_ID, 15, 7);
         UUID userId = UUID.randomUUID();
-        SecretKey secretKey = Keys.hmacShaKeyFor(SECRET.getBytes());
 
         String token = Jwts.builder()
                 .issuer(ISSUER)
+            .header().keyId(KEY_ID).and()
                 .audience().add(AUDIENCE).and()
                 .subject(userId.toString())
                 .issuedAt(new Date())
@@ -134,11 +152,23 @@ class TokenServiceUnitTest {
                 .claim("tokenType", "ACCESS")
                 .claim("roles", List.of("USER"))
                 .claim("scopes", "wallet:read")
-                .signWith(secretKey)
+            .signWith(keyPair.getPrivate(), io.jsonwebtoken.Jwts.SIG.RS256)
                 .compact();
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> tokenService.validateAccessToken(token));
         assertEquals("Token scopes claim is invalid", ex.getMessage());
+    }
+
+    @Test
+    void validateAccessTokenShouldRejectUnexpectedKeyId() {
+        KeyPair keyPair = generateRsaKeyPair();
+        TokenService issuerService = tokenService(keyPair, "key-a", 15, 7);
+        TokenService verifierService = tokenService(keyPair, "key-b", 15, 7);
+
+        TokenService.TokenPayload tokenPayload = issuerService.generateAccessToken(UUID.randomUUID(), "ELVO-UNIT-KID");
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> verifierService.validateAccessToken(tokenPayload.token()));
+        assertEquals("Token is invalid", ex.getMessage());
     }
 }

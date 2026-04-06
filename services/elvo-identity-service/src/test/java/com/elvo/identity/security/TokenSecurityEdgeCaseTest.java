@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.UUID;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.util.Base64;
 
 import org.junit.jupiter.api.Test;
 
@@ -11,12 +14,41 @@ import com.elvo.identity.util.TokenService;
 
 class TokenSecurityEdgeCaseTest {
 
-    private static final String SECRET = "identity-security-edge-secret-at-least-thirty-two-bytes";
     private static final String ISSUER = "identity-test-issuer";
     private static final String AUDIENCE = "identity-test-audience";
+    private static final String KEY_ID = "identity-edge-key";
 
     private TokenService tokenService(long accessMinutes, long refreshDays) {
-        return new TokenService(SECRET, ISSUER, AUDIENCE, accessMinutes, refreshDays);
+        KeyPair keyPair = generateRsaKeyPair();
+        return new TokenService(
+                "",
+                toPrivatePem(keyPair),
+                toPublicPem(keyPair),
+                KEY_ID,
+                ISSUER,
+                AUDIENCE,
+                accessMinutes,
+                refreshDays);
+    }
+
+    private KeyPair generateRsaKeyPair() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return generator.generateKeyPair();
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to generate test key pair", ex);
+        }
+    }
+
+    private String toPrivatePem(KeyPair keyPair) {
+        String encoded = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
+        return "-----BEGIN PRIVATE KEY-----\n" + encoded + "\n-----END PRIVATE KEY-----";
+    }
+
+    private String toPublicPem(KeyPair keyPair) {
+        String encoded = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
+        return "-----BEGIN PUBLIC KEY-----\n" + encoded + "\n-----END PUBLIC KEY-----";
     }
 
     @Test

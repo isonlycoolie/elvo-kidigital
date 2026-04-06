@@ -1,7 +1,11 @@
 package com.elvo.identity.util;
 
 import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -14,7 +18,12 @@ import org.springframework.stereotype.Component;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.Jwts.SIG;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
+import io.jsonwebtoken.io.Decoders;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 
 @Component
 public class TokenService {
@@ -29,18 +38,55 @@ public class TokenService {
     private static final List<String> DEFAULT_SCOPES = List.of("wallet:read", "wallet:write");
 
     private final SecretKey signingKey;
+    private final PrivateKey signingPrivateKey;
+    private final PublicKey verificationPublicKey;
+    private final String signingKeyId;
+    private final boolean asymmetricSigningEnabled;
     private final String issuer;
     private final String audience;
     private final long accessTokenTtlMinutes;
     private final long refreshTokenTtlDays;
 
     public TokenService(@Value("${elvo.security.jwt.secret}") String jwtSecret,
+                        @Value("${elvo.security.jwt.signing.private-key-pem:}") String privateKeyPem,
+                        @Value("${elvo.security.jwt.signing.public-key-pem:}") String publicKeyPem,
+                        @Value("${elvo.security.jwt.signing.key-id:}") String signingKeyId,
                         @Value("${elvo.security.jwt.issuer:elvo-identity-service}") String issuer,
                         @Value("${elvo.security.jwt.audience:elvo-platform}") String audience,
                         @Value("${elvo.security.jwt.access-token-ttl-minutes:15}") long accessTokenTtlMinutes,
                         @Value("${elvo.security.jwt.refresh-token-ttl-days:7}") long refreshTokenTtlDays) {
-        validateJwtSecret(jwtSecret);
-        this.signingKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+        if (hasText(privateKeyPem) || hasText(publicKeyPem) || hasText(signingKeyId)) {
+            this.signingPrivateKey = parsePrivateKey(privateKeyPem);
+            this.verificationPublicKey = parsePublicKey(publicKeyPem);
+            this.signingKeyId = requireText(signingKeyId, "elvo.security.jwt.signing.key-id must be configured");
+            this.signingKey = null;
+            this.asymmetricSigningEnabled = true;
+        } else {
+            validateJwtSecret(jwtSecret);
+            this.signingKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+            this.signingPrivateKey = null;
+            this.verificationPublicKey = null;
+            this.signingKeyId = null;
+            this.asymmetricSigningEnabled = false;
+        }
+        this.issuer = issuer;
+        this.audience = audience;
+        this.accessTokenTtlMinutes = accessTokenTtlMinutes;
+        this.refreshTokenTtlDays = refreshTokenTtlDays;
+    }
+
+    TokenService(PrivateKey signingPrivateKey,
+                 PublicKey verificationPublicKey,
+                 String issuer,
+                 String audience,
+                 String signingKeyId,
+                 long accessTokenTtlMinutes,
+                 long refreshTokenTtlDays) {
+        this.signingPrivateKey = signingPrivateKey;
+        this.verificationPublicKey = verificationPublicKey;
+        this.signingKeyId = requireText(signingKeyId, "signing key id must be configured");
+        this.signingKey = null;
+        this.asymmetricSigningEnabled = true;
         this.issuer = issuer;
         this.audience = audience;
         this.accessTokenTtlMinutes = accessTokenTtlMinutes;
@@ -63,7 +109,7 @@ public class TokenService {
     public TokenPayload generateAccessToken(UUID userId, String ean, List<String> roles, List<String> scopes) {
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(accessTokenTtlMinutes * 60);
-        String token = Jwts.builder()
+        var builder = Jwts.builder()
             .issuer(issuer)
             .audience().add(audience).and()
                 .subject(userId.toString())
@@ -73,25 +119,23 @@ public class TokenService {
                 .claim(ROLES_CLAIM, sanitizeRequiredStringListClaim(roles, ROLES_CLAIM))
                 .claim(SCOPES_CLAIM, sanitizeRequiredStringListClaim(scopes, SCOPES_CLAIM))
                 .claim(TOKEN_TYPE_CLAIM, ACCESS_TOKEN_TYPE)
-                .id(UUID.randomUUID().toString())
-                .signWith(signingKey)
-                .compact();
+                .id(UUID.randomUUID().toString());
+            String token = sign(builder);
         return new TokenPayload(token, expiresAt);
     }
 
     public TokenPayload generateRefreshToken(UUID userId) {
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(refreshTokenTtlDays * 24 * 60 * 60);
-        String token = Jwts.builder()
+        var builder = Jwts.builder()
             .issuer(issuer)
             .audience().add(audience).and()
                 .subject(userId.toString())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiresAt))
                 .claim(TOKEN_TYPE_CLAIM, REFRESH_TOKEN_TYPE)
-                .id(UUID.randomUUID().toString())
-                .signWith(signingKey)
-                .compact();
+            .id(UUID.randomUUID().toString());
+        String token = sign(builder);
         return new TokenPayload(token, expiresAt);
     }
 
@@ -124,6 +168,20 @@ public class TokenService {
 
     private Claims parseClaims(String token) {
         try {
+            if (asymmetricSigningEnabled) {
+                String keyId = resolveKeyId(token);
+                if (!signingKeyId.equals(keyId)) {
+                    throw new IllegalArgumentException("Token key id is invalid");
+                }
+                return Jwts.parser()
+                        .verifyWith(verificationPublicKey)
+                        .requireIssuer(issuer)
+                        .requireAudience(audience)
+                        .build()
+                        .parseSignedClaims(token)
+                        .getPayload();
+            }
+
             return Jwts.parser()
                     .verifyWith(signingKey)
                     .requireIssuer(issuer)
@@ -134,6 +192,84 @@ public class TokenService {
         } catch (JwtException | IllegalArgumentException ex) {
             throw new IllegalArgumentException("Token is invalid", ex);
         }
+    }
+
+    private String sign(io.jsonwebtoken.JwtBuilder builder) {
+        if (asymmetricSigningEnabled) {
+            return builder
+                    .header().keyId(signingKeyId).and()
+                    .signWith(signingPrivateKey, SIG.RS256)
+                    .compact();
+        }
+        return builder
+                .signWith(signingKey)
+                .compact();
+    }
+
+    private String resolveKeyId(String token) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length < 2) {
+                throw new IllegalArgumentException("Token key id is invalid");
+            }
+            String headerJson = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
+            int kidKeyIndex = headerJson.indexOf("\"kid\"");
+            if (kidKeyIndex < 0) {
+                throw new IllegalArgumentException("Token key id is invalid");
+            }
+            int colonIndex = headerJson.indexOf(':', kidKeyIndex);
+            int startQuote = headerJson.indexOf('"', colonIndex + 1);
+            int endQuote = headerJson.indexOf('"', startQuote + 1);
+            if (startQuote < 0 || endQuote < 0) {
+                throw new IllegalArgumentException("Token key id is invalid");
+            }
+            return headerJson.substring(startQuote + 1, endQuote);
+        } catch (IllegalArgumentException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Token key id is invalid", ex);
+        }
+    }
+
+    private PrivateKey parsePrivateKey(String pem) {
+        String value = requireText(pem, "elvo.security.jwt.signing.private-key-pem must be configured");
+        try {
+            String normalized = value
+                    .replace("-----BEGIN PRIVATE KEY-----", "")
+                    .replace("-----END PRIVATE KEY-----", "")
+                    .replaceAll("\\s", "");
+            byte[] decoded = Decoders.BASE64.decode(normalized);
+            PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(decoded);
+            return KeyFactory.getInstance("RSA").generatePrivate(spec);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Invalid private key configuration", ex);
+        }
+    }
+
+    private PublicKey parsePublicKey(String pem) {
+        String value = requireText(pem, "elvo.security.jwt.signing.public-key-pem must be configured");
+        try {
+            String normalized = value
+                    .replace("-----BEGIN PUBLIC KEY-----", "")
+                    .replace("-----END PUBLIC KEY-----", "")
+                    .replaceAll("\\s", "");
+            byte[] decoded = Decoders.BASE64.decode(normalized);
+            X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
+            return KeyFactory.getInstance("RSA").generatePublic(spec);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Invalid public key configuration", ex);
+        }
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private String requireText(String value, String message) {
+        if (!hasText(value)) {
+            throw new IllegalStateException(message);
+        }
+        return value;
     }
 
     private UUID parseRequiredUuid(String value) {
