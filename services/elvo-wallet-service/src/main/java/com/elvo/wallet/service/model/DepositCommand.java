@@ -11,6 +11,9 @@ public record DepositCommand(
         String idempotencyKey,
         String reference,
         boolean agentFloatAvailable,
-        String mobileCallbackReference
+        String mobileCallbackReference,
+        String mobileCallbackSignature,
+        Long mobileCallbackTimestamp,
+        String mobileCallbackSourceIp
 ) {
 }

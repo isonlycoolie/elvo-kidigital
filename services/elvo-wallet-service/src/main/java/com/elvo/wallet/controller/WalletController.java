@@ -71,6 +71,9 @@ public class WalletController {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(WalletController.class);
     private static final Logger AUDIT_LOG = LoggerFactory.getLogger("audit.wallet.controller");
+    private static final String MOBILE_CALLBACK_SIGNATURE_HEADER = "X-Mobile-Callback-Signature";
+    private static final String MOBILE_CALLBACK_TIMESTAMP_HEADER = "X-Mobile-Callback-Timestamp";
+    private static final String FORWARDED_FOR_HEADER = "X-Forwarded-For";
 
     private final WalletService walletService;
     private final WalletRepository walletRepository;
@@ -158,7 +161,8 @@ public class WalletController {
      * Process a deposit
      */
     @PostMapping("/deposits")
-    public ResponseEntity<FlowResultResponseDto> deposit(@Valid @RequestBody DepositRequestDto request) {
+    public ResponseEntity<FlowResultResponseDto> deposit(@Valid @RequestBody DepositRequestDto request,
+                                                         HttpServletRequest httpRequest) {
         UUID userId = getCurrentUserId();
         String reference = request.getReference() != null ? request.getReference() : UUID.randomUUID().toString();
 
@@ -178,7 +182,10 @@ public class WalletController {
                 request.getIdempotencyKey(),
                 reference,
                 channel == WalletChannel.AGENT, // agentFloatAvailable
-                request.getMobileCallbackReference()
+                request.getMobileCallbackReference(),
+                httpRequest.getHeader(MOBILE_CALLBACK_SIGNATURE_HEADER),
+                parseLongHeader(httpRequest.getHeader(MOBILE_CALLBACK_TIMESTAMP_HEADER)),
+                resolveClientIp(httpRequest)
             );
 
             WalletFlowResult result = walletService.processDeposit(command);
@@ -661,6 +668,28 @@ public class WalletController {
             return blocks[0] + "." + blocks[1];
         }
         return sourceIp;
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader(FORWARDED_FOR_HEADER);
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            String[] addresses = forwardedFor.split(",");
+            if (addresses.length > 0 && !addresses[0].isBlank()) {
+                return addresses[0].trim();
+            }
+        }
+        return request.getRemoteAddr();
+    }
+
+    private Long parseLongHeader(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     /**

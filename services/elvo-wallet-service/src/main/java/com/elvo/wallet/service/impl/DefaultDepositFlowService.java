@@ -17,6 +17,7 @@ import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.security.MobileMoneyCallbackSecurityService;
 import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.service.DepositFlowService;
 import com.elvo.wallet.service.TransactionLifecycleService;
@@ -36,6 +37,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
     private final AgentServiceClient agentServiceClient;
     private final WalletIdempotencyService idempotencyService;
     private final WalletLedgerIntegrationService ledgerIntegrationService;
+    private final MobileMoneyCallbackSecurityService mobileMoneyCallbackSecurityService;
     private final MobileCallbackReconciliationService callbackReconciliationService;
     private final WalletLimitEnforcementService limitEnforcementService;
     private final WalletSagaOrchestrator sagaOrchestrator;
@@ -49,6 +51,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
                                      AgentServiceClient agentServiceClient,
                                      WalletIdempotencyService idempotencyService,
                                      WalletLedgerIntegrationService ledgerIntegrationService,
+                                     MobileMoneyCallbackSecurityService mobileMoneyCallbackSecurityService,
                                      MobileCallbackReconciliationService callbackReconciliationService,
                                      WalletLimitEnforcementService limitEnforcementService,
                                      WalletSagaOrchestrator sagaOrchestrator,
@@ -61,6 +64,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
         this.agentServiceClient = agentServiceClient;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
+        this.mobileMoneyCallbackSecurityService = mobileMoneyCallbackSecurityService;
         this.callbackReconciliationService = callbackReconciliationService;
         this.sagaOrchestrator = sagaOrchestrator;
         this.eventPublisher = eventPublisher;
@@ -158,6 +162,16 @@ public class DefaultDepositFlowService implements DepositFlowService {
                 transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.EXPIRED,
                     "Mobile callback timed out", correlationId(), "CALLBACK_TIMEOUT", "Mobile callback reference is missing");
                 return failed(wallet.getId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Mobile callback confirmation required");
+            }
+
+            if (!mobileMoneyCallbackSecurityService.isAuthenticatedCallback(
+                    command.mobileCallbackReference(),
+                    command.mobileCallbackSignature(),
+                    command.mobileCallbackTimestamp(),
+                    command.mobileCallbackSourceIp())) {
+                transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.FAILED,
+                    "Mobile callback authentication failed", correlationId(), "CALLBACK_AUTH_FAILED", "Untrusted callback payload");
+                return failed(wallet.getId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Mobile callback authentication failed");
             }
 
             callbackReconciliationService.scheduleRetry(command.mobileCallbackReference(), wallet.getId(), command.amount());

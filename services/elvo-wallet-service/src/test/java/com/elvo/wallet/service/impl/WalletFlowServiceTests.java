@@ -34,6 +34,7 @@ import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.EtcBruteForceProtectionService;
 import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.security.EtcCodeSecurityService;
+import com.elvo.wallet.security.MobileMoneyCallbackSecurityService;
 import com.elvo.wallet.security.StepUpAuthenticationService;
 import com.elvo.wallet.security.TransactionSigningChallengeService;
 import com.elvo.wallet.security.WalletFieldEncryptionService;
@@ -62,6 +63,7 @@ class WalletFlowServiceTests {
     @Mock private WalletIdempotencyService idempotencyService;
     @Mock private WalletLedgerIntegrationService ledgerIntegrationService;
     @Mock private MobileCallbackReconciliationService callbackReconciliationService;
+        @Mock private MobileMoneyCallbackSecurityService mobileMoneyCallbackSecurityService;
     @Mock private WalletLimitEnforcementService limitEnforcementService;
     @Mock private WalletEventPublisher eventPublisher;
     @Mock private WalletSagaOrchestrator sagaOrchestrator;
@@ -86,33 +88,33 @@ class WalletFlowServiceTests {
         wallet.setReservedBalance(BigDecimal.ZERO);
         wallet.setStatus(Wallet.WalletStatus.ACTIVE);
 
-                lenient().when(fieldEncryptionService.encrypt(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
-                lenient().when(fieldEncryptionService.decrypt(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
-                lenient().when(transactionLifecycleService.initialize(any(), any(), any(), any()))
-                                .thenAnswer(invocation -> {
-                                        Transaction transaction = invocation.getArgument(0);
-                                        transaction.setStatus(Transaction.TransactionStatus.INITIATED);
-                                        try {
-                                                java.lang.reflect.Field idField = Transaction.class.getDeclaredField("id");
-                                                idField.setAccessible(true);
-                                                if (idField.get(transaction) == null) {
-                                                        idField.set(transaction, UUID.randomUUID());
-                                                }
-                                        } catch (ReflectiveOperationException ignored) {
-                                        }
-                                        return transaction;
-                                });
-                lenient().when(transactionLifecycleService.transition(any(), any(), any(), any(), any(), any()))
-                                .thenAnswer(invocation -> {
-                                        Transaction transaction = invocation.getArgument(0);
-                                        Transaction.TransactionStatus nextStatus = invocation.getArgument(1);
-                                        transaction.setStatus(nextStatus);
-                                        return transaction;
-                                });
-                lenient().when(transactionRepository.findByExternalReferenceAndStatusInForUpdate(anyString(), any()))
-                                .thenReturn(java.util.List.of());
-                lenient().when(idempotencyService.get(anyString(), anyString(), anyString(), anyString()))
-                                .thenReturn(Optional.empty());
+        lenient().when(fieldEncryptionService.encrypt(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(fieldEncryptionService.decrypt(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(transactionLifecycleService.initialize(any(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    Transaction transaction = invocation.getArgument(0);
+                    transaction.setStatus(Transaction.TransactionStatus.INITIATED);
+                    try {
+                        java.lang.reflect.Field idField = Transaction.class.getDeclaredField("id");
+                        idField.setAccessible(true);
+                        if (idField.get(transaction) == null) {
+                            idField.set(transaction, UUID.randomUUID());
+                        }
+                    } catch (ReflectiveOperationException ignored) {
+                    }
+                    return transaction;
+                });
+        lenient().when(transactionLifecycleService.transition(any(), any(), any(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    Transaction transaction = invocation.getArgument(0);
+                    Transaction.TransactionStatus nextStatus = invocation.getArgument(1);
+                    transaction.setStatus(nextStatus);
+                    return transaction;
+                });
+        lenient().when(transactionRepository.findByExternalReferenceAndStatusInForUpdate(anyString(), any()))
+                .thenReturn(java.util.List.of());
+        lenient().when(idempotencyService.get(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(Optional.empty());
     }
 
     @Test
@@ -124,6 +126,7 @@ class WalletFlowServiceTests {
         when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
         when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
         when(transactionRepository.existsByReference(anyString())).thenReturn(false);
+        when(mobileMoneyCallbackSecurityService.isAuthenticatedCallback(anyString(), anyString(), any(), anyString())).thenReturn(true);
                 lenient().when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> {
             Transaction transaction = invocation.getArgument(0);
             try {
@@ -142,6 +145,7 @@ class WalletFlowServiceTests {
                 agentServiceClient,
                 idempotencyService,
                 ledgerIntegrationService,
+                mobileMoneyCallbackSecurityService,
                 callbackReconciliationService,
                 limitEnforcementService,
                 sagaOrchestrator,
@@ -157,7 +161,10 @@ class WalletFlowServiceTests {
                 "idem-1",
                 "ref-1",
                 true,
-                "cb-1"));
+                "cb-1",
+                "signed-callback",
+                System.currentTimeMillis() / 1000,
+                "127.0.0.1"));
 
         assertThat(result.success()).isTrue();
         verify(eventPublisher).publish(eq("wallet.deposit.completed"), any());
@@ -536,6 +543,7 @@ class WalletFlowServiceTests {
                 agentServiceClient,
                 idempotencyService,
                 ledgerIntegrationService,
+                mobileMoneyCallbackSecurityService,
                 callbackReconciliationService,
                 limitEnforcementService,
                 sagaOrchestrator,
@@ -551,10 +559,56 @@ class WalletFlowServiceTests {
                 "idem-mobile-timeout",
                 "dep-timeout",
                 true,
+                null,
+                null,
+                null,
                 null));
 
         assertThat(result.success()).isFalse();
         assertThat(result.message()).isEqualTo("Mobile callback confirmation required");
+        verify(callbackReconciliationService, never()).scheduleRetry(anyString(), any(), any());
+    }
+
+    @Test
+    void mobileDepositShouldFailWhenCallbackAuthenticationFails() {
+        UUID walletId = UUID.randomUUID();
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        when(identityServiceClient.isUserActive(any())).thenReturn(true);
+        when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
+        when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+        when(transactionRepository.existsByReference(anyString())).thenReturn(false);
+        when(mobileMoneyCallbackSecurityService.isAuthenticatedCallback(anyString(), anyString(), any(), anyString())).thenReturn(false);
+
+        DefaultDepositFlowService service = new DefaultDepositFlowService(
+                walletRepository,
+                transactionRepository,
+                identityServiceClient,
+                agentServiceClient,
+                idempotencyService,
+                ledgerIntegrationService,
+                mobileMoneyCallbackSecurityService,
+                callbackReconciliationService,
+                limitEnforcementService,
+                sagaOrchestrator,
+                eventPublisher,
+                fieldEncryptionService,
+                transactionLifecycleService);
+
+        WalletFlowResult result = service.process(new DepositCommand(
+                walletId,
+                wallet.getUserId(),
+                new BigDecimal("20.00"),
+                WalletChannel.MOBILE,
+                "idem-mobile-auth-fail",
+                "dep-mobile-auth-fail",
+                true,
+                "cb-2",
+                "invalid-signature",
+                System.currentTimeMillis() / 1000,
+                "10.0.0.1"));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.message()).isEqualTo("Mobile callback authentication failed");
         verify(callbackReconciliationService, never()).scheduleRetry(anyString(), any(), any());
     }
 
