@@ -119,8 +119,12 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "User is not active");
         }
 
-        if (!identityServiceClient.verifyEsp(command.userId(), command.espCode())
-                || !identityServiceClient.verifyEac(command.userId(), command.eacCode())) {
+        if (!identityServiceClient.verifyEsp(command.userId(), command.espCode())) {
+            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "ESP/EAC verification failed");
+        }
+
+        if (command.mode() != WithdrawalMode.OTHER_NUMBER
+                && !identityServiceClient.verifyEac(command.userId(), command.eacCode())) {
             return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "ESP/EAC verification failed");
         }
 
@@ -141,13 +145,15 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Step-up authentication required");
         }
 
-        EacReplayProtectionService.EacValidationResult replayCheck = eacReplayProtectionService.validateAndConsume(
-                command.userId(),
-                command.eacCode(),
-                replayBinding(command)
-        );
-        if (!replayCheck.accepted()) {
-            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, replayCheck.message());
+        if (command.mode() != WithdrawalMode.OTHER_NUMBER) {
+            EacReplayProtectionService.EacValidationResult replayCheck = eacReplayProtectionService.validateAndConsume(
+                    command.userId(),
+                    command.eacCode(),
+                    replayBinding(command)
+            );
+            if (!replayCheck.accepted()) {
+                return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, replayCheck.message());
+            }
         }
 
         if (command.mode() != WithdrawalMode.REGISTERED_NUMBER
@@ -195,6 +201,24 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         if (command.mode() == WithdrawalMode.OTHER_NUMBER) {
             transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.AWAITING_CONFIRMATION,
                 "Waiting for EAC confirmation", correlationId(), null, null);
+
+            if (!identityServiceClient.verifyEac(command.userId(), command.eacCode())) {
+                return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "ESP/EAC verification failed");
+            }
+
+            EacReplayProtectionService.EacValidationResult replayCheck = eacReplayProtectionService.validateAndConsume(
+                    command.userId(),
+                    command.eacCode(),
+                    replayBinding(command)
+            );
+            if (!replayCheck.accepted()) {
+                if (isExpiredEac(replayCheck.message())) {
+                    transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.EXPIRED,
+                        "Withdrawal confirmation window expired", correlationId(), "WITHDRAWAL_EAC_EXPIRED", replayCheck.message());
+                    return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Withdrawal confirmation expired");
+                }
+                return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, replayCheck.message());
+            }
         }
         transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PROCESSING,
             "Posting withdrawal", correlationId(), null, null);
@@ -283,5 +307,9 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
 
     private String correlationId() {
         return MDC.get("correlationId");
+    }
+
+    private boolean isExpiredEac(String message) {
+        return message != null && message.toLowerCase().contains("expired");
     }
 }

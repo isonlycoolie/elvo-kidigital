@@ -382,6 +382,56 @@ class WalletFlowServiceTests {
                 order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.COMPLETED), anyString(), any(), any(), any());
         }
 
+        @Test
+        void externalWithdrawalShouldExpireWhenEacConfirmationTimesOut() {
+                UUID walletId = UUID.randomUUID();
+                wallet.setBalance(new BigDecimal("100.00"));
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
+                when(identityServiceClient.isUserActive(any())).thenReturn(true);
+                when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
+                when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
+                when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(false);
+                when(eacReplayProtectionService.validateAndConsume(any(), anyString(), anyString()))
+                                .thenReturn(EacReplayProtectionService.EacValidationResult.deny("EAC expired"));
+                when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+
+                DefaultWithdrawalFlowService service = new DefaultWithdrawalFlowService(
+                                walletRepository,
+                                transactionRepository,
+                                identityServiceClient,
+                                idempotencyService,
+                                ledgerIntegrationService,
+                                limitEnforcementService,
+                                sagaOrchestrator,
+                                eventPublisher,
+                                eacReplayProtectionService,
+                                stepUpAuthenticationService,
+                                transactionSigningChallengeService,
+                                fraudVelocityService,
+                                fieldEncryptionService,
+                                transactionLifecycleService);
+
+                WalletFlowResult result = service.process(new WithdrawalCommand(
+                                walletId,
+                                wallet.getUserId(),
+                                new BigDecimal("30.00"),
+                                WithdrawalMode.OTHER_NUMBER,
+                                "0900000000",
+                                "esp",
+                                "eac",
+                                "idem-ext-withdraw-expired",
+                                "ref-ext-withdraw-expired",
+                                null,
+                                null,
+                                null));
+
+                assertThat(result.success()).isFalse();
+                assertThat(result.message()).isEqualTo("Withdrawal confirmation expired");
+                verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.EXPIRED), anyString(), any(), eq("WITHDRAWAL_EAC_EXPIRED"), eq("EAC expired"));
+        }
+
     @Test
     void withdrawalShouldFailWhenEacReplayDetected() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
