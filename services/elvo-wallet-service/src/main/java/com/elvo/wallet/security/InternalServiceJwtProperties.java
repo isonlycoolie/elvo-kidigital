@@ -2,7 +2,7 @@ package com.elvo.wallet.security;
 
 public class InternalServiceJwtProperties {
 
-    private String secret = "elvo-wallet-internal-jwt-secret-change-me";
+    private String secret = "";
     private String issuer = "elvo-internal-auth";
     private String audience = "elvo-wallet-service";
     private String requiredRole = "INTERNAL_SERVICE";

@@ -63,11 +63,11 @@ elvo:
       service-tag: ${ELVO_SERVICE_TAG:wallet-service}
   security:
     jwt:
-      secret: ${ELVO_JWT_SECRET:elvo-wallet-service-jwt-secret-must-be-at-least-32-bytes}
+      secret: ${ELVO_JWT_SECRET:}
       access-token-ttl-minutes: ${ELVO_JWT_ACCESS_TTL_MINUTES:15}
       refresh-token-ttl-days: ${ELVO_JWT_REFRESH_TTL_DAYS:7}
     internal-jwt:
-      secret: ${ELVO_INTERNAL_JWT_SECRET:${ELVO_JWT_SECRET:elvo-wallet-service-jwt-secret-must-be-at-least-32-bytes}}
+      secret: ${ELVO_INTERNAL_JWT_SECRET:${ELVO_JWT_SECRET:}}
       issuer: ${ELVO_INTERNAL_JWT_ISSUER:elvo-internal-auth}
       audience: ${ELVO_INTERNAL_JWT_AUDIENCE:elvo-wallet-service}
       required-role: ${ELVO_INTERNAL_JWT_REQUIRED_ROLE:INTERNAL_SERVICE}
@@ -94,12 +94,12 @@ elvo:
         - ${ELVO_MTLS_CN_AGENT_SERVICE:agent-service}
         - ${ELVO_MTLS_CN_SAGA_SERVICE:saga-service}
     correlation:
-      signature-secret: ${ELVO_CORRELATION_SIGNATURE_SECRET:${ELVO_INTERNAL_JWT_SECRET:elvo-wallet-correlation-signature-secret}}
+      signature-secret: ${ELVO_CORRELATION_SIGNATURE_SECRET:${ELVO_INTERNAL_JWT_SECRET:${ELVO_JWT_SECRET:}}}
     eac:
       replay:
         window-seconds: ${ELVO_EAC_REPLAY_WINDOW_SECONDS:300}
     etc:
-      hash-pepper: ${ELVO_ETC_HASH_PEPPER:elvo-wallet-etc-pepper}
+      hash-pepper: ${ELVO_ETC_HASH_PEPPER:}
       min-secure-length: ${ELVO_ETC_MIN_SECURE_LENGTH:12}
       max-expiry-window-seconds: ${ELVO_ETC_MAX_EXPIRY_WINDOW_SECONDS:900}
       bruteforce:
@@ -111,7 +111,7 @@ elvo:
       withdrawal-threshold: ${ELVO_STEP_UP_WITHDRAWAL_THRESHOLD:250.00}
       transfer-threshold: ${ELVO_STEP_UP_TRANSFER_THRESHOLD:500.00}
     transaction-challenge:
-      secret: ${ELVO_TX_CHALLENGE_SECRET:${ELVO_JWT_SECRET:elvo-wallet-service-jwt-secret-must-be-at-least-32-bytes}}
+      secret: ${ELVO_TX_CHALLENGE_SECRET:${ELVO_JWT_SECRET:}}
       issuer: ${ELVO_TX_CHALLENGE_ISSUER:elvo-wallet-service}
       audience: ${ELVO_TX_CHALLENGE_AUDIENCE:wallet-transaction-challenge}
       ttl-seconds: ${ELVO_TX_CHALLENGE_TTL_SECONDS:300}
@@ -133,4 +133,4 @@ elvo:
       max-failures-before-block: ${ELVO_DESTINATION_RISK_MAX_FAILURES_BEFORE_BLOCK:3}
       failure-window-seconds: ${ELVO_DESTINATION_RISK_FAILURE_WINDOW_SECONDS:900}
     field-encryption:
-      key: ${ELVO_FIELD_ENCRYPTION_KEY:wallet-field-encryption-key-32-bytes!}
+      key: ${ELVO_FIELD_ENCRYPTION_KEY:}

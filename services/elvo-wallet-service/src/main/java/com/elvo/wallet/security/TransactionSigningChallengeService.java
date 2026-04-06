@@ -34,7 +34,10 @@ public class TransactionSigningChallengeService {
                 "wallet-transaction-challenge-secret",
                 configuredSecret,
                 "ELVO_WALLET_TRANSACTION_CHALLENGE_SECRET",
-                "elvo-wallet-service-jwt-secret-must-be-at-least-32-bytes");
+            null);
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("Missing required secret: elvo.security.transaction-challenge.secret");
+        }
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.issuer = issuer;
         this.audience = audience;

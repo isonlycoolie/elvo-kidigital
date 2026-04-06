@@ -36,7 +36,7 @@ public class MobileMoneyCallbackSecurityService {
                 "mobile-callback-signature-secret",
                 configuredSecret,
                 "ELVO_MOBILE_CALLBACK_SIGNATURE_SECRET",
-                "elvo-mobile-callback-secret"),
+                null),
             maxCallbackAgeSeconds,
             maxFutureSkewSeconds,
             allowedSourceIps);
@@ -47,6 +47,9 @@ public class MobileMoneyCallbackSecurityService {
             long maxCallbackAgeSeconds,
             long maxFutureSkewSeconds,
             String allowedSourceIps) {
+            if (callbackSignatureSecret == null || callbackSignatureSecret.isBlank()) {
+                throw new IllegalStateException("Missing required secret: elvo.mobile.callback.signature-secret");
+            }
         this.callbackSignatureSecret = callbackSignatureSecret;
         this.maxCallbackAgeSeconds = maxCallbackAgeSeconds;
         this.maxFutureSkewSeconds = maxFutureSkewSeconds;

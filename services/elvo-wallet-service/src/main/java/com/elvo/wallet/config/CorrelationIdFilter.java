@@ -39,15 +39,23 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     @Autowired
     public CorrelationIdFilter(SecretManagerService secretManagerService,
                                @Value("${elvo.security.correlation.signature-secret:}") String configuredSecret) {
-        this(secretManagerService.resolve(
+        this(requireSecret(secretManagerService.resolve(
                 "wallet-correlation-signature-secret",
                 configuredSecret,
                 "ELVO_INTERNAL_JWT_SECRET",
-                "elvo-wallet-correlation-signature-secret"));
+            null),
+            "elvo.security.correlation.signature-secret"));
     }
 
     public CorrelationIdFilter(String correlationSignatureSecret) {
         this.correlationSignatureSecret = correlationSignatureSecret;
+    }
+
+    private static String requireSecret(String value, String key) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException("Missing required secret: " + key);
+        }
+        return value;
     }
 
     @Override

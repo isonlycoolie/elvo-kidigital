@@ -26,16 +26,27 @@ public class WalletFieldEncryptionService {
     @Autowired
     public WalletFieldEncryptionService(SecretManagerService secretManagerService,
             @Value("${elvo.security.field-encryption.key:}") String configuredKey) {
-        this(secretManagerService.resolve(
+        this(requireSecret(secretManagerService.resolve(
                 "wallet-field-encryption-key",
                 configuredKey,
                 "ELVO_WALLET_FIELD_ENCRYPTION_KEY",
-                "wallet-field-encryption-key-32-bytes!"));
+                null),
+                "elvo.security.field-encryption.key"));
     }
 
     public WalletFieldEncryptionService(String rawKey) {
+        if (rawKey == null || rawKey.isBlank()) {
+            throw new IllegalStateException("Missing required secret: elvo.security.field-encryption.key");
+        }
         byte[] keyBytes = sha256(rawKey);
         this.keySpec = new SecretKeySpec(keyBytes, "AES");
+    }
+
+    private static String requireSecret(String value, String key) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException("Missing required secret: " + key);
+        }
+        return value;
     }
 
     public String encrypt(String plainText) {
