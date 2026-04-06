@@ -11,6 +11,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -22,8 +23,17 @@ public class WalletFieldEncryptionService {
 
     private final SecretKeySpec keySpec;
 
-    public WalletFieldEncryptionService(
-            @Value("${elvo.security.field-encryption.key:wallet-field-encryption-key-32-bytes!}") String rawKey) {
+    @Autowired
+    public WalletFieldEncryptionService(SecretManagerService secretManagerService,
+            @Value("${elvo.security.field-encryption.key:}") String configuredKey) {
+        this(secretManagerService.resolve(
+                "wallet-field-encryption-key",
+                configuredKey,
+                "ELVO_WALLET_FIELD_ENCRYPTION_KEY",
+                "wallet-field-encryption-key-32-bytes!"));
+    }
+
+    public WalletFieldEncryptionService(String rawKey) {
         byte[] keyBytes = sha256(rawKey);
         this.keySpec = new SecretKeySpec(keyBytes, "AES");
     }

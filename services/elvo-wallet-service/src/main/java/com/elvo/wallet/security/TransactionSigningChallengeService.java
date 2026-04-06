@@ -24,11 +24,17 @@ public class TransactionSigningChallengeService {
     private final long ttlSeconds;
 
     public TransactionSigningChallengeService(
-            @Value("${elvo.security.transaction-challenge.secret:${elvo.security.jwt.secret:elvo-wallet-service-jwt-secret-must-be-at-least-32-bytes}}") String secret,
+            SecretManagerService secretManagerService,
+            @Value("${elvo.security.transaction-challenge.secret:}") String configuredSecret,
             @Value("${elvo.security.transaction-challenge.issuer:elvo-wallet-service}") String issuer,
             @Value("${elvo.security.transaction-challenge.audience:wallet-transaction-challenge}") String audience,
             @Value("${elvo.security.transaction-challenge.ttl-seconds:300}") long ttlSeconds
     ) {
+        String secret = secretManagerService.resolve(
+                "wallet-transaction-challenge-secret",
+                configuredSecret,
+                "ELVO_WALLET_TRANSACTION_CHALLENGE_SECRET",
+                "elvo-wallet-service-jwt-secret-must-be-at-least-32-bytes");
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.issuer = issuer;
         this.audience = audience;

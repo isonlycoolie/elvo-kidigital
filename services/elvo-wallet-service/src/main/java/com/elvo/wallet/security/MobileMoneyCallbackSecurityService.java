@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -23,11 +24,29 @@ public class MobileMoneyCallbackSecurityService {
     private final long maxFutureSkewSeconds;
     private final Set<String> allowedSourceIps;
 
-    public MobileMoneyCallbackSecurityService(
-            @Value("${elvo.mobile.callback.signature-secret:${ELVO_MOBILE_CALLBACK_SIGNATURE_SECRET:elvo-mobile-callback-secret}}") String callbackSignatureSecret,
+        @Autowired
+        public MobileMoneyCallbackSecurityService(
+            SecretManagerService secretManagerService,
+            @Value("${elvo.mobile.callback.signature-secret:}") String configuredSecret,
             @Value("${elvo.mobile.callback.max-age-seconds:300}") long maxCallbackAgeSeconds,
             @Value("${elvo.mobile.callback.max-future-skew-seconds:60}") long maxFutureSkewSeconds,
             @Value("${elvo.mobile.callback.allowed-source-ips:}") String allowedSourceIps) {
+        this(
+            secretManagerService.resolve(
+                "mobile-callback-signature-secret",
+                configuredSecret,
+                "ELVO_MOBILE_CALLBACK_SIGNATURE_SECRET",
+                "elvo-mobile-callback-secret"),
+            maxCallbackAgeSeconds,
+            maxFutureSkewSeconds,
+            allowedSourceIps);
+        }
+
+        public MobileMoneyCallbackSecurityService(
+            String callbackSignatureSecret,
+            long maxCallbackAgeSeconds,
+            long maxFutureSkewSeconds,
+            String allowedSourceIps) {
         this.callbackSignatureSecret = callbackSignatureSecret;
         this.maxCallbackAgeSeconds = maxCallbackAgeSeconds;
         this.maxFutureSkewSeconds = maxFutureSkewSeconds;

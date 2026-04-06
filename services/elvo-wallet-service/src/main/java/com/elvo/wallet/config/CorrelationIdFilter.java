@@ -11,10 +11,13 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.elvo.wallet.security.SecretManagerService;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -33,7 +36,17 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
 
     private final String correlationSignatureSecret;
 
-    public CorrelationIdFilter(@Value("${elvo.security.correlation.signature-secret:${ELVO_INTERNAL_JWT_SECRET:elvo-wallet-correlation-signature-secret}}") String correlationSignatureSecret) {
+    @Autowired
+    public CorrelationIdFilter(SecretManagerService secretManagerService,
+                               @Value("${elvo.security.correlation.signature-secret:}") String configuredSecret) {
+        this(secretManagerService.resolve(
+                "wallet-correlation-signature-secret",
+                configuredSecret,
+                "ELVO_INTERNAL_JWT_SECRET",
+                "elvo-wallet-correlation-signature-secret"));
+    }
+
+    public CorrelationIdFilter(String correlationSignatureSecret) {
         this.correlationSignatureSecret = correlationSignatureSecret;
     }
 
