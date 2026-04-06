@@ -143,6 +143,9 @@ public class LoginServiceImpl implements LoginService {
     }
 
     private void validateUserStatus(User user) {
+        if (user.getAccountStatus() == User.AccountStatus.EXPIRED) {
+            throw new IllegalStateException("Pending registration expired. Restart registration");
+        }
         if (user.getAccountStatus() != User.AccountStatus.ACTIVE) {
             throw new IllegalStateException("Account is not active");
         }

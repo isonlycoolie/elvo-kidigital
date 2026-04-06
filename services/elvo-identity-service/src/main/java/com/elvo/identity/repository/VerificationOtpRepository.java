@@ -61,6 +61,17 @@ public interface VerificationOtpRepository extends JpaRepository<VerificationOtp
                              @Param("purpose") VerificationOtp.Purpose purpose,
                              @Param("newStatus") VerificationOtp.Status newStatus);
 
+    @Modifying
+    @Transactional
+    @Query("""
+            update VerificationOtp otp
+            set otp.status = :newStatus
+            where otp.userId = :userId
+              and otp.status = com.elvo.identity.entity.VerificationOtp$Status.ACTIVE
+            """)
+    int invalidateAllActiveOtps(@Param("userId") UUID userId,
+                                @Param("newStatus") VerificationOtp.Status newStatus);
+
     @Query("""
             select count(otp)
             from VerificationOtp otp
