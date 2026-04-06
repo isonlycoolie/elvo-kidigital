@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.entity.Reservation;
@@ -43,7 +44,7 @@ public class DefaultReservationFlowService implements ReservationFlowService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public WalletFlowResult create(ReservationCommand command) {
         if (command == null || command.walletId() == null || command.amount() == null || command.expiryDate() == null) {
             return WalletFlowResult.failure("Invalid reservation request", null, "wallet.reservation.failed");
@@ -105,7 +106,7 @@ public class DefaultReservationFlowService implements ReservationFlowService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public WalletFlowResult release(UUID reservationId, String idempotencyKey) {
         String endpointScope = "wallet.reservation.release";
         String userScope = "internal-service";
@@ -144,7 +145,7 @@ public class DefaultReservationFlowService implements ReservationFlowService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public WalletFlowResult confirm(UUID reservationId, String idempotencyKey) {
         String endpointScope = "wallet.reservation.confirm";
         String userScope = "internal-service";

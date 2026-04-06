@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.client.AgentServiceClient;
@@ -69,7 +70,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public WalletFlowResult process(DepositCommand command) {
         if (command == null || command.walletId() == null || command.userId() == null || command.amount() == null) {
             return WalletFlowResult.failure("Invalid deposit request", null, "wallet.deposit.failed");

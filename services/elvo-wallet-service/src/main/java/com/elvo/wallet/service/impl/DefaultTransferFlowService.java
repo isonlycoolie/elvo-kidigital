@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.entity.Transaction;
@@ -69,7 +70,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public WalletFlowResult process(TransferCommand command) {
         if (command == null || command.sourceWalletId() == null || command.targetWalletId() == null || command.amount() == null) {
             return WalletFlowResult.failure("Invalid transfer request", null, "wallet.transfer.failed");

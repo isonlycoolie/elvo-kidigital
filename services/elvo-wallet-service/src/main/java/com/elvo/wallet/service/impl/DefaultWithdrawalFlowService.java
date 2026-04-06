@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.client.IdentityServiceClient;
@@ -78,7 +79,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public WalletFlowResult process(WithdrawalCommand command) {
         if (command == null || command.walletId() == null || command.userId() == null || command.amount() == null) {
             return WalletFlowResult.failure("Invalid withdrawal request", null, "wallet.withdrawal.failed");
