@@ -6,6 +6,7 @@ The ELVO Identity Service is the authentication and identity core for the ELVO p
 It is responsible for:
 
 - User registration and login
+- Pending-verification lifecycle with OTP resume tokens
 - Token issuance and refresh
 - Password reset and password update flows
 - ESP/EAC verification for step-up authentication
@@ -100,6 +101,14 @@ Security checks include:
 - JWT access and refresh token validation
 - Device trust verification for sensitive actions
 - Brute-force/rate-limit protection
+
+Registration and pending lifecycle rules:
+
+- Registration creates `PENDING_VERIFICATION` user records only.
+- Login for pending accounts returns `VERIFICATION_REQUIRED` with short-lived verification token.
+- OTP verify/resend endpoints require verification token.
+- Full access/refresh tokens are not issued until required verification channels are complete.
+- Post-verification provisioning (wallet/profile/preferences) uses deterministic idempotency keys.
 
 ## API Documentation
 
