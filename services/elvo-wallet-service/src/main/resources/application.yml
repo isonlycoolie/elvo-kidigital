@@ -165,6 +165,10 @@ elvo:
       enabled: ${ELVO_SECURITY_ALERT_STREAM_ENABLED:true}
       exchange: ${ELVO_SECURITY_ALERT_STREAM_EXCHANGE:elvo.wallet.security.alert.exchange}
       routing-key: ${ELVO_SECURITY_ALERT_STREAM_ROUTING_KEY:elvo.wallet.security.alert}
+    saga:
+      compensation:
+        max-attempts: ${ELVO_SAGA_COMPENSATION_MAX_ATTEMPTS:3}
+        base-backoff-ms: ${ELVO_SAGA_COMPENSATION_BASE_BACKOFF_MS:250}
     ledger:
       hash:
         key-prefix: ${ELVO_LEDGER_HASH_KEY_PREFIX:elvo:wallet:ledger:hash:}
