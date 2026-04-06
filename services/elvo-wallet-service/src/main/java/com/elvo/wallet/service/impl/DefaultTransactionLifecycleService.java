@@ -15,6 +15,7 @@ import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.TransactionStatusHistory;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.TransactionStatusHistoryRepository;
+import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.service.TransactionLifecycleService;
 
 @Service
@@ -30,13 +31,16 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
 
     private final TransactionRepository transactionRepository;
     private final TransactionStatusHistoryRepository transactionStatusHistoryRepository;
+    private final WalletFieldEncryptionService fieldEncryptionService;
     private final Duration expirationWindow;
 
     public DefaultTransactionLifecycleService(TransactionRepository transactionRepository,
                                               TransactionStatusHistoryRepository transactionStatusHistoryRepository,
+                                              WalletFieldEncryptionService fieldEncryptionService,
                                               long expiryMinutes) {
         this.transactionRepository = transactionRepository;
         this.transactionStatusHistoryRepository = transactionStatusHistoryRepository;
+        this.fieldEncryptionService = fieldEncryptionService;
         this.expirationWindow = Duration.ofMinutes(expiryMinutes);
     }
 
@@ -53,7 +57,7 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
         transaction.setStatusReason(normalizeReason(reason, "Transaction initiated"));
         transaction.setStatusUpdatedAt(now);
         transaction.setCorrelationId(resolveCorrelationId(correlationId));
-        transaction.setExternalReference(externalReference);
+        transaction.setExternalReference(encryptNullable(externalReference));
         if (transaction.getRetryCount() == null) {
             transaction.setRetryCount(0);
         }
@@ -97,7 +101,7 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
         transaction.setStatusUpdatedAt(now);
         transaction.setCorrelationId(resolveCorrelationId(correlationId));
         transaction.setFailureCode(failureCode);
-        transaction.setFailureMessage(failureMessage);
+        transaction.setFailureMessage(encryptNullable(failureMessage));
         if (nextStatus == Transaction.TransactionStatus.RETRYING) {
             transaction.setRetryCount(transaction.getRetryCount() == null ? 1 : transaction.getRetryCount() + 1);
         }
@@ -256,5 +260,12 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
         }
 
         return null;
+    }
+
+    private String encryptNullable(String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        return fieldEncryptionService.encrypt(value);
     }
 }

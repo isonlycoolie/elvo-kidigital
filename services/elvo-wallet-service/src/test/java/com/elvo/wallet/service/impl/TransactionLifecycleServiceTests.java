@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import static org.mockito.ArgumentMatchers.any;
 import org.mockito.Mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,6 +24,7 @@ import com.elvo.wallet.entity.TransactionStatusHistory;
 import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.TransactionStatusHistoryRepository;
+import com.elvo.wallet.security.WalletFieldEncryptionService;
 
 @ExtendWith(MockitoExtension.class)
 class TransactionLifecycleServiceTests {
@@ -33,11 +35,15 @@ class TransactionLifecycleServiceTests {
     @Mock
     private TransactionStatusHistoryRepository historyRepository;
 
+    @Mock
+    private WalletFieldEncryptionService fieldEncryptionService;
+
     private DefaultTransactionLifecycleService service;
 
     @BeforeEach
     void setUp() {
-        service = new DefaultTransactionLifecycleService(transactionRepository, historyRepository, 30);
+        lenient().when(fieldEncryptionService.encrypt(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        service = new DefaultTransactionLifecycleService(transactionRepository, historyRepository, fieldEncryptionService, 30);
     }
 
     @Test
