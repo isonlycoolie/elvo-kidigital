@@ -12,11 +12,14 @@ public class TokenRevocationService implements TokenRevocationChecker {
 
     private final StringRedisTemplate redisTemplate;
     private final String keyPrefix;
+    private final String namespace;
 
     public TokenRevocationService(StringRedisTemplate redisTemplate,
-                                  @Value("${elvo.security.jwt.revocation.key-prefix:elvo:jwt:revoked:}") String keyPrefix) {
+                                  @Value("${elvo.security.jwt.revocation.key-prefix:elvo:jwt:revoked:}") String keyPrefix,
+                                  @Value("${elvo.security.jwt.revocation.namespace:elvo:shared}") String namespace) {
         this.redisTemplate = redisTemplate;
         this.keyPrefix = keyPrefix;
+        this.namespace = namespace;
     }
 
     public void revokeJti(String jti, Instant expiresAt) {
@@ -29,7 +32,7 @@ public class TokenRevocationService implements TokenRevocationChecker {
             return;
         }
 
-        redisTemplate.opsForValue().set(keyPrefix + jti, "1", ttl);
+        redisTemplate.opsForValue().set(buildKey(jti), "1", ttl);
     }
 
     @Override
@@ -37,6 +40,13 @@ public class TokenRevocationService implements TokenRevocationChecker {
         if (jti == null || jti.isBlank()) {
             return false;
         }
-        return Boolean.TRUE.equals(redisTemplate.hasKey(keyPrefix + jti));
+        return Boolean.TRUE.equals(redisTemplate.hasKey(buildKey(jti)));
+    }
+
+    private String buildKey(String jti) {
+        if (namespace == null || namespace.isBlank()) {
+            return keyPrefix + jti;
+        }
+        return keyPrefix + namespace + ":" + jti;
     }
 }

@@ -80,6 +80,7 @@ elvo:
       audience: ${ELVO_JWT_AUDIENCE:elvo-wallet-service-${spring.profiles.active:dev}}
       revocation:
         key-prefix: ${ELVO_JWT_REVOCATION_KEY_PREFIX:elvo:jwt:revoked:}
+        namespace: ${ELVO_JWT_REVOCATION_NAMESPACE:elvo:${spring.profiles.active:dev}}
       signing:
         key-id: ${ELVO_JWT_SIGNING_KEY_ID:}
         private-key-pem: ${ELVO_JWT_SIGNING_PRIVATE_KEY_REF:sm://identity-jwt-signing-private-key}
