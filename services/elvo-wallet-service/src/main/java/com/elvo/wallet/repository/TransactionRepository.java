@@ -8,10 +8,13 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.elvo.wallet.entity.Transaction;
+
+import jakarta.persistence.LockModeType;
 
 public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
 
@@ -27,6 +30,17 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
         List<Transaction> findByExternalReferenceAndStatusIn(String externalReference,
                         Collection<Transaction.TransactionStatus> statuses);
+
+        @Lock(LockModeType.PESSIMISTIC_WRITE)
+        @Query("""
+                select t
+                from Transaction t
+                where t.externalReference = :externalReference
+                  and t.status in :statuses
+                """)
+        List<Transaction> findByExternalReferenceAndStatusInForUpdate(
+                @Param("externalReference") String externalReference,
+                @Param("statuses") Collection<Transaction.TransactionStatus> statuses);
 
     @Query("""
             select t

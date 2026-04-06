@@ -142,7 +142,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
 
         String transferReference = resolveReference(command.reference(), command.idempotencyKey());
         String encryptedTransferReference = fieldEncryptionService.encrypt(transferReference);
-        if (!transactionRepository.findByExternalReferenceAndStatusIn(
+        if (!transactionRepository.findByExternalReferenceAndStatusInForUpdate(
                 transferReference,
                 transactionLifecycleService.activeStatuses()).isEmpty()) {
             return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Transfer is already processing");

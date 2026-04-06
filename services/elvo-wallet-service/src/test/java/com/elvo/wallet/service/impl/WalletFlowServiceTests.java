@@ -109,7 +109,7 @@ class WalletFlowServiceTests {
                                         transaction.setStatus(nextStatus);
                                         return transaction;
                                 });
-                lenient().when(transactionRepository.findByExternalReferenceAndStatusIn(anyString(), any()))
+                lenient().when(transactionRepository.findByExternalReferenceAndStatusInForUpdate(anyString(), any()))
                                 .thenReturn(java.util.List.of());
                 lenient().when(idempotencyService.get(anyString(), anyString(), anyString(), anyString()))
                                 .thenReturn(Optional.empty());
@@ -489,7 +489,7 @@ class WalletFlowServiceTests {
 
         Transaction activeTx = new Transaction();
         activeTx.setStatus(Transaction.TransactionStatus.PROCESSING);
-        when(transactionRepository.findByExternalReferenceAndStatusIn(anyString(), any())).thenReturn(java.util.List.of(activeTx));
+        when(transactionRepository.findByExternalReferenceAndStatusInForUpdate(anyString(), any())).thenReturn(java.util.List.of(activeTx));
 
         DefaultTransferFlowService service = new DefaultTransferFlowService(
                 walletRepository,
@@ -672,7 +672,6 @@ class WalletFlowServiceTests {
                 etcBruteForceProtectionService,
                 transactionLifecycleService,
                 5);
-
         WalletFlowResult result = service.generate(new EtcCommand(
                 wallet.getId(),
                 wallet.getUserId(),
