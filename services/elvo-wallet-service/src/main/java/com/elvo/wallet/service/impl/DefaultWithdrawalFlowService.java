@@ -183,6 +183,12 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     }
 
     private String replayBinding(WithdrawalCommand command) {
-        return command.walletId() + ":" + command.userId() + ":" + command.idempotencyKey();
+        String target = command.targetNumber() == null ? "" : command.targetNumber().trim();
+        String amount = command.amount() == null ? "0" : command.amount().stripTrailingZeros().toPlainString();
+        return command.userId()
+                + ":WITHDRAWAL"
+                + ":" + command.mode()
+                + ":" + amount
+                + ":" + target;
     }
 }
