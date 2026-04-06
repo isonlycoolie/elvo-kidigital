@@ -15,6 +15,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -713,6 +714,52 @@ class WalletFlowServiceTests {
                 verify(callbackReconciliationService).consumeOnce(eq("cb-3"), any());
                 verify(callbackReconciliationService, never()).scheduleRetry(anyString(), any(), any());
         }
+
+            @Test
+            void mobileDepositShouldMoveToRetryingWhenCallbackReconciliationFailsTemporarily() {
+                UUID walletId = UUID.randomUUID();
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(identityServiceClient.isUserActive(any())).thenReturn(true);
+                when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+                when(transactionRepository.existsByReference(anyString())).thenReturn(false);
+                when(mobileMoneyCallbackSecurityService.isAuthenticatedCallback(anyString(), anyString(), any(), anyString())).thenReturn(true);
+                when(callbackReconciliationService.consumeOnce(anyString(), any())).thenReturn(true);
+                doThrow(new IllegalStateException("provider temporarily unavailable"))
+                        .when(callbackReconciliationService).scheduleRetry(anyString(), any(), any());
+
+                DefaultDepositFlowService service = new DefaultDepositFlowService(
+                        walletRepository,
+                        transactionRepository,
+                        identityServiceClient,
+                        agentServiceClient,
+                        idempotencyService,
+                        ledgerIntegrationService,
+                        mobileMoneyCallbackSecurityService,
+                        callbackReconciliationService,
+                        limitEnforcementService,
+                        sagaOrchestrator,
+                        eventPublisher,
+                        fieldEncryptionService,
+                        transactionLifecycleService);
+
+                WalletFlowResult result = service.process(new DepositCommand(
+                        walletId,
+                        wallet.getUserId(),
+                        new BigDecimal("20.00"),
+                        WalletChannel.MOBILE,
+                        "idem-mobile-retry",
+                        "dep-mobile-retry",
+                        true,
+                        "cb-retry",
+                        "signed-callback",
+                        System.currentTimeMillis() / 1000,
+                        "10.0.0.5"));
+
+                assertThat(result.success()).isFalse();
+                assertThat(result.message()).isEqualTo("Mobile callback reconciliation retry scheduled");
+                verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.RETRYING), anyString(), any(), any(), any());
+            }
 
     @Test
     void withdrawalShouldFailWhenVelocityRiskDetected() {

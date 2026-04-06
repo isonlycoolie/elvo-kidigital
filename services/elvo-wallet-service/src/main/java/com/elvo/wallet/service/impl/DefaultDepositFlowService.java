@@ -178,10 +178,16 @@ public class DefaultDepositFlowService implements DepositFlowService {
                 return failed(wallet.getId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Mobile callback replay detected");
             }
 
-            callbackReconciliationService.scheduleRetry(command.mobileCallbackReference(), wallet.getId(), command.amount());
-            transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.RETRYING,
-                "Waiting for callback reconciliation", correlationId(), null, null);
-            callbackReconciliationService.markReconciled(command.mobileCallbackReference());
+            try {
+                callbackReconciliationService.scheduleRetry(command.mobileCallbackReference(), wallet.getId(), command.amount());
+                transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.RETRYING,
+                    "Waiting for callback reconciliation", correlationId(), null, null);
+                callbackReconciliationService.markReconciled(command.mobileCallbackReference());
+            } catch (RuntimeException callbackException) {
+                transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.RETRYING,
+                    "Callback reconciliation retry scheduled", correlationId(), "CALLBACK_RETRY", callbackException.getMessage());
+                return failed(wallet.getId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Mobile callback reconciliation retry scheduled");
+            }
             }
 
             transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PROCESSING,
