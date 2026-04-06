@@ -30,6 +30,17 @@ spring:
     port: ${ELVO_RABBITMQ_PORT:5672}
     username: ${ELVO_RABBITMQ_USER:guest}
     password: ${ELVO_RABBITMQ_PASSWORD:guest}
+  mail:
+    host: ${EMAIL_PROVIDER_HOST:localhost}
+    port: ${EMAIL_PROVIDER_PORT:1025}
+    username: ${EMAIL_PROVIDER_USERNAME:}
+    password: ${EMAIL_PROVIDER_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${EMAIL_PROVIDER_SMTP_AUTH:true}
+          starttls:
+            enable: ${EMAIL_PROVIDER_SMTP_STARTTLS:true}
 
 server:
   error:
@@ -70,6 +81,9 @@ sentry:
     platform: spring-boot
 
 elvo:
+  communication:
+    email:
+      from: ${EMAIL_PROVIDER_FROM:no-reply@elvo.local}
   monitoring:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:elvo-identity-service}
