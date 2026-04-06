@@ -42,6 +42,7 @@ import com.elvo.wallet.security.FraudRulesEngine;
 import com.elvo.wallet.security.IpGeovelocityRiskService;
 import com.elvo.wallet.security.MakerCheckerApprovalService;
 import com.elvo.wallet.security.ApiAbuseProtectionService;
+import com.elvo.wallet.security.AmlCaseWorkflowService;
 import com.elvo.wallet.security.EmergencyControlService;
 import com.elvo.wallet.security.SanctionsScreeningService;
 import com.elvo.wallet.security.SecretManagerService;
@@ -110,6 +111,9 @@ class WalletControllerTest {
 
     @MockBean
     private SanctionsScreeningService sanctionsScreeningService;
+
+    @MockBean
+    private AmlCaseWorkflowService amlCaseWorkflowService;
     
     @MockBean
     private WalletFieldEncryptionService fieldEncryptionService;

@@ -1,19 +1,24 @@
 package com.elvo.wallet.controller;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.elvo.wallet.dto.request.AmlCaseResolutionRequestDto;
 import com.elvo.wallet.dto.request.FraudOverrideRequestDto;
 import com.elvo.wallet.dto.request.MakerCheckerDecisionRequestDto;
+import com.elvo.wallet.security.AmlCaseWorkflowService;
 import com.elvo.wallet.security.FraudRulesEngine;
 import com.elvo.wallet.security.MakerCheckerApprovalService;
 
@@ -27,11 +32,14 @@ public class AdminFraudController {
 
     private final FraudRulesEngine fraudRulesEngine;
     private final MakerCheckerApprovalService makerCheckerApprovalService;
+    private final AmlCaseWorkflowService amlCaseWorkflowService;
 
     public AdminFraudController(FraudRulesEngine fraudRulesEngine,
-                                MakerCheckerApprovalService makerCheckerApprovalService) {
+                                MakerCheckerApprovalService makerCheckerApprovalService,
+                                AmlCaseWorkflowService amlCaseWorkflowService) {
         this.fraudRulesEngine = fraudRulesEngine;
         this.makerCheckerApprovalService = makerCheckerApprovalService;
+        this.amlCaseWorkflowService = amlCaseWorkflowService;
     }
 
     @PostMapping("/overrides/users/{userId}")
@@ -65,5 +73,55 @@ public class AdminFraudController {
                 "approvalId", approvalId,
                 "approved", request.isApproved(),
                 "reason", request.getReason()));
+    }
+
+    @GetMapping("/aml-cases")
+    public ResponseEntity<List<AmlCaseWorkflowService.AmlCase>> listAmlCases(
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "limit", defaultValue = "50") int limit) {
+        AmlCaseWorkflowService.CaseStatus filter = parseStatus(status);
+        return ResponseEntity.ok(amlCaseWorkflowService.listCases(filter, limit));
+    }
+
+    @PostMapping("/aml-cases/{caseId}/review")
+    public ResponseEntity<Map<String, Object>> markAmlCaseUnderReview(@PathVariable String caseId) {
+        AmlCaseWorkflowService.AmlCase amlCase = amlCaseWorkflowService.setUnderReview(caseId);
+        if (amlCase == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.accepted().body(Map.of(
+                "caseId", amlCase.caseId(),
+                "status", amlCase.status().name()));
+    }
+
+    @PostMapping("/aml-cases/{caseId}/resolve")
+    public ResponseEntity<Map<String, Object>> resolveAmlCase(
+            @PathVariable String caseId,
+            @Valid @RequestBody AmlCaseResolutionRequestDto request) {
+        String resolver = "fraud-admin";
+        AmlCaseWorkflowService.AmlCase amlCase = amlCaseWorkflowService.resolveCase(
+                caseId,
+                request.isSuspiciousActivityConfirmed(),
+                request.getResolutionNotes(),
+                resolver);
+        if (amlCase == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.accepted().body(Map.of(
+                "caseId", amlCase.caseId(),
+                "status", amlCase.status().name(),
+                "suspiciousActivityConfirmed", amlCase.suspiciousActivityConfirmed(),
+                "resolvedBy", amlCase.resolvedBy()));
+    }
+
+    private AmlCaseWorkflowService.CaseStatus parseStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        try {
+            return AmlCaseWorkflowService.CaseStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 }
