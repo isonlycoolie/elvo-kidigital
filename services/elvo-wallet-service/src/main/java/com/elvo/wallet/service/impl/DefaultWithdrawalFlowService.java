@@ -192,6 +192,10 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PENDING,
             "Withdrawal queued", correlationId(), null, null);
         }
+        if (command.mode() == WithdrawalMode.OTHER_NUMBER) {
+            transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.AWAITING_CONFIRMATION,
+                "Waiting for EAC confirmation", correlationId(), null, null);
+        }
         transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PROCESSING,
             "Posting withdrawal", correlationId(), null, null);
 
