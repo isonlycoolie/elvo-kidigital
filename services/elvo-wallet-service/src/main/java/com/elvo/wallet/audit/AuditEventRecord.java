@@ -14,6 +14,8 @@ import jakarta.persistence.Table;
 @Table(name = "wallet_audit_events")
 public class AuditEventRecord {
 
+    public static final String GENESIS_HASH = "GENESIS";
+
     @Id
     @GeneratedValue(strategy = jakarta.persistence.GenerationType.UUID)
     @Column(name = "id", nullable = false, updatable = false)
@@ -34,6 +36,12 @@ public class AuditEventRecord {
     @Column(name = "payload", nullable = false, length = 4000, updatable = false)
     private String payload;
 
+    @Column(name = "previous_hash", nullable = false, length = 64, updatable = false)
+    private String previousHash = GENESIS_HASH;
+
+    @Column(name = "record_hash", nullable = false, length = 64, updatable = false)
+    private String recordHash;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -46,6 +54,50 @@ public class AuditEventRecord {
         this.correlationId = correlationId;
         this.occurredAt = occurredAt;
         this.payload = payload;
+    }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public String getEventType() {
+        return eventType;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    public Instant getOccurredAt() {
+        return occurredAt;
+    }
+
+    public String getPayload() {
+        return payload;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public String getPreviousHash() {
+        return previousHash;
+    }
+
+    public void setPreviousHash(String previousHash) {
+        this.previousHash = previousHash;
+    }
+
+    public String getRecordHash() {
+        return recordHash;
+    }
+
+    public void setRecordHash(String recordHash) {
+        this.recordHash = recordHash;
     }
 
     @PreUpdate
