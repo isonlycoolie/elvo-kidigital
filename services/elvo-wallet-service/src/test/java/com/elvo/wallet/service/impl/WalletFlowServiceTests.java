@@ -1580,7 +1580,8 @@ class WalletFlowServiceTests {
                 idempotencyService,
                 ledgerIntegrationService,
                 eventPublisher,
-                limitEnforcementService);
+                limitEnforcementService,
+                transactionLifecycleService);
 
         WalletFlowResult result = service.create(new ReservationCommand(
                 wallet.getId(),
@@ -1593,6 +1594,48 @@ class WalletFlowServiceTests {
         assertThat(result.success()).isTrue();
         verify(eventPublisher).publish(eq("wallet.reservation.created"), any());
     }
+
+        @Test
+        void reservationCreateShouldFollowLifecycleStateFlow() {
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(walletRepository.findByIdForUpdate(wallet.getId())).thenReturn(Optional.of(wallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+                when(reservationRepository.createReservation(any(), any(), any())).thenAnswer(invocation -> {
+                        Reservation reservation = new Reservation();
+                        reservation.setWallet(wallet);
+                        reservation.setAmount(invocation.getArgument(1));
+                        reservation.setExpiryDate(invocation.getArgument(2));
+                        try {
+                                java.lang.reflect.Field idField = Reservation.class.getDeclaredField("id");
+                                idField.setAccessible(true);
+                                idField.set(reservation, UUID.randomUUID());
+                        } catch (ReflectiveOperationException ignored) {
+                        }
+                        return reservation;
+                });
+
+                DefaultReservationFlowService service = new DefaultReservationFlowService(
+                                walletRepository,
+                                reservationRepository,
+                                idempotencyService,
+                                ledgerIntegrationService,
+                                eventPublisher,
+                                limitEnforcementService,
+                                transactionLifecycleService);
+
+                WalletFlowResult result = service.create(new ReservationCommand(
+                                wallet.getId(),
+                                wallet.getUserId(),
+                                new BigDecimal("7.00"),
+                                Instant.now().plusSeconds(3600),
+                                "idem-res-state",
+                                "ref-res-state"));
+
+                assertThat(result.success()).isTrue();
+                InOrder order = inOrder(transactionLifecycleService);
+                order.verify(transactionLifecycleService).initialize(any(Transaction.class), anyString(), any(), any());
+                order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.RESERVED), anyString(), any(), any(), any());
+        }
 
     @Test
     void etcGenerateShouldPublishEvent() {

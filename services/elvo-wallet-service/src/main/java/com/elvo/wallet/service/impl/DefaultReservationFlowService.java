@@ -4,15 +4,18 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.entity.Reservation;
+import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.service.TransactionLifecycleService;
 import com.elvo.wallet.service.ReservationFlowService;
 import com.elvo.wallet.service.model.ReservationCommand;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -28,19 +31,22 @@ public class DefaultReservationFlowService implements ReservationFlowService {
     private final WalletLedgerIntegrationService ledgerIntegrationService;
     private final WalletEventPublisher eventPublisher;
     private final WalletLimitEnforcementService limitEnforcementService;
+    private final TransactionLifecycleService transactionLifecycleService;
 
     public DefaultReservationFlowService(WalletRepository walletRepository,
                                          ReservationRepository reservationRepository,
                                          WalletIdempotencyService idempotencyService,
                                          WalletLedgerIntegrationService ledgerIntegrationService,
                                          WalletEventPublisher eventPublisher,
-                                         WalletLimitEnforcementService limitEnforcementService) {
+                                         WalletLimitEnforcementService limitEnforcementService,
+                                         TransactionLifecycleService transactionLifecycleService) {
         this.walletRepository = walletRepository;
         this.reservationRepository = reservationRepository;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
         this.eventPublisher = eventPublisher;
         this.limitEnforcementService = limitEnforcementService;
+        this.transactionLifecycleService = transactionLifecycleService;
     }
 
     @Override
@@ -84,6 +90,25 @@ public class DefaultReservationFlowService implements ReservationFlowService {
         }
 
         Reservation reservation = reservationRepository.createReservation(command.walletId(), command.amount(), command.expiryDate());
+        Transaction reservationTransaction = new Transaction();
+        reservationTransaction.setWallet(wallet);
+        reservationTransaction.setType(Transaction.TransactionType.RESERVATION);
+        reservationTransaction.setAmount(command.amount());
+        reservationTransaction.setReference(command.reference());
+        reservationTransaction.setExternalReference(String.valueOf(reservation.getId()));
+        reservationTransaction = transactionLifecycleService.initialize(
+            reservationTransaction,
+            "Reservation initiated",
+            correlationId(),
+            String.valueOf(reservation.getId()));
+        transactionLifecycleService.transition(
+            reservationTransaction,
+            Transaction.TransactionStatus.RESERVED,
+            "Reservation funds held",
+            correlationId(),
+            null,
+            null);
+
         ledgerIntegrationService.recordDoubleEntry("reservation.create", command.walletId(), command.amount(), command.reference());
         AUDIT_LOG.info("event=wallet.reservation.created walletId={} reservationId={} amount={}",
                 command.walletId(),
@@ -177,6 +202,31 @@ public class DefaultReservationFlowService implements ReservationFlowService {
 
         UUID walletId = reservation != null && reservation.getWallet() != null ? reservation.getWallet().getId() : null;
         if (reservation != null) {
+            Transaction reservationTransaction = new Transaction();
+            reservationTransaction.setWallet(reservation.getWallet());
+            reservationTransaction.setType(Transaction.TransactionType.RESERVATION);
+            reservationTransaction.setAmount(reservation.getAmount());
+            reservationTransaction.setReference(String.valueOf(reservationId));
+            reservationTransaction.setExternalReference(String.valueOf(reservationId));
+            reservationTransaction = transactionLifecycleService.initialize(
+                reservationTransaction,
+                "Reservation confirmation initiated",
+                correlationId(),
+                String.valueOf(reservationId));
+            transactionLifecycleService.transition(
+                reservationTransaction,
+                Transaction.TransactionStatus.RESERVED,
+                "Reservation still held for confirmation",
+                correlationId(),
+                null,
+                null);
+            transactionLifecycleService.transition(
+                reservationTransaction,
+                Transaction.TransactionStatus.COMPLETED,
+                "Reservation debit confirmed",
+                correlationId(),
+                null,
+                null);
             ledgerIntegrationService.recordDoubleEntry("reservation.confirm", walletId, reservation.getAmount(), String.valueOf(reservationId));
         }
 
@@ -209,5 +259,9 @@ public class DefaultReservationFlowService implements ReservationFlowService {
 
     private String scope(UUID userId) {
         return userId == null ? "anonymous" : userId.toString();
+    }
+
+    private String correlationId() {
+        return MDC.get("correlationId");
     }
 }
