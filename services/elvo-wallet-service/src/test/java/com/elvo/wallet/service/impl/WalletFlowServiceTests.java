@@ -622,6 +622,7 @@ class WalletFlowServiceTests {
 
         assertThat(result.success()).isFalse();
         assertThat(result.message()).isEqualTo("Mobile callback confirmation required");
+                verify(transactionLifecycleService, never()).transition(any(Transaction.class), eq(Transaction.TransactionStatus.EXPIRED), anyString(), any(), any(), any());
         verify(callbackReconciliationService, never()).scheduleRetry(anyString(), any(), any());
     }
 

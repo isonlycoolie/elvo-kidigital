@@ -159,8 +159,6 @@ public class DefaultDepositFlowService implements DepositFlowService {
                 "Awaiting callback confirmation", correlationId(), null, null);
 
             if (command.mobileCallbackReference() == null || command.mobileCallbackReference().isBlank()) {
-                transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.EXPIRED,
-                    "Mobile callback timed out", correlationId(), "CALLBACK_TIMEOUT", "Mobile callback reference is missing");
                 return failed(wallet.getId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Mobile callback confirmation required");
             }
 
