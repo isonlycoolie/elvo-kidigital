@@ -644,6 +644,67 @@ class WalletFlowServiceTests {
         assertThat(result.message()).isEqualTo("Transfer is already processing");
     }
 
+        @Test
+        void transferShouldStayProcessingUntilBothLedgerEntriesAreRecorded() {
+                Wallet sourceWallet = new Wallet();
+                ReflectionTestUtils.setField(sourceWallet, "id", UUID.randomUUID());
+                sourceWallet.setUserId(UUID.randomUUID());
+                sourceWallet.setBalance(new BigDecimal("100.00"));
+                sourceWallet.setReservedBalance(BigDecimal.ZERO);
+                sourceWallet.setStatus(Wallet.WalletStatus.ACTIVE);
+
+                Wallet targetWallet = new Wallet();
+                ReflectionTestUtils.setField(targetWallet, "id", UUID.randomUUID());
+                targetWallet.setUserId(UUID.randomUUID());
+                targetWallet.setBalance(new BigDecimal("40.00"));
+                targetWallet.setReservedBalance(BigDecimal.ZERO);
+                targetWallet.setStatus(Wallet.WalletStatus.ACTIVE);
+
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
+                when(stepUpAuthenticationService.requiresStepUpForTransfer(any())).thenReturn(false);
+                when(walletRepository.findByIdForUpdate(sourceWallet.getId())).thenReturn(Optional.of(sourceWallet));
+                when(walletRepository.findByIdForUpdate(targetWallet.getId())).thenReturn(Optional.of(targetWallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+                when(transactionRepository.findByExternalReferenceAndStatusInForUpdate(anyString(), any())).thenReturn(java.util.List.of());
+                when(transactionRepository.existsByReference(anyString())).thenReturn(false);
+
+                DefaultTransferFlowService service = new DefaultTransferFlowService(
+                                walletRepository,
+                                transactionRepository,
+                                idempotencyService,
+                                ledgerIntegrationService,
+                                limitEnforcementService,
+                                sagaOrchestrator,
+                                eventPublisher,
+                                stepUpAuthenticationService,
+                                transactionSigningChallengeService,
+                                fraudVelocityService,
+                                fieldEncryptionService,
+                                transactionLifecycleService);
+
+                WalletFlowResult result = service.process(new TransferCommand(
+                                sourceWallet.getId(),
+                                targetWallet.getId(),
+                                sourceWallet.getUserId(),
+                                new BigDecimal("15.00"),
+                                "idem-transfer-processing-lock",
+                                "transfer-processing-lock-ref",
+                                null,
+                                null,
+                                null));
+
+                assertThat(result.success()).isTrue();
+
+                InOrder flowOrder = inOrder(transactionLifecycleService, ledgerIntegrationService);
+                flowOrder.verify(transactionLifecycleService, org.mockito.Mockito.times(2))
+                        .transition(any(Transaction.class), eq(Transaction.TransactionStatus.PROCESSING), anyString(), any(), any(), any());
+                flowOrder.verify(ledgerIntegrationService).recordDoubleEntry(eq("transfer"), eq(sourceWallet.getId()), eq(new BigDecimal("15.00")), anyString());
+                flowOrder.verify(ledgerIntegrationService).recordDoubleEntry(eq("transfer"), eq(targetWallet.getId()), eq(new BigDecimal("15.00")), anyString());
+                flowOrder.verify(transactionLifecycleService, org.mockito.Mockito.times(2))
+                        .transition(any(Transaction.class), eq(Transaction.TransactionStatus.COMPLETED), anyString(), any(), any(), any());
+        }
+
     @Test
     void mobileDepositShouldFailWhenCallbackReferenceIsMissing() {
         UUID walletId = UUID.randomUUID();
