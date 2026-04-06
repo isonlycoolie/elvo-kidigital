@@ -172,6 +172,13 @@ elvo:
     serializable-retry:
       max-attempts: ${ELVO_SERIALIZABLE_RETRY_MAX_ATTEMPTS:4}
       base-backoff-ms: ${ELVO_SERIALIZABLE_RETRY_BASE_BACKOFF_MS:100}
+    locking:
+      distributed:
+        enabled: ${ELVO_DISTRIBUTED_LOCKING_ENABLED:true}
+        key-prefix: ${ELVO_DISTRIBUTED_LOCK_KEY_PREFIX:elvo:wallet:lock:}
+        ttl-seconds: ${ELVO_DISTRIBUTED_LOCK_TTL_SECONDS:10}
+        max-acquire-attempts: ${ELVO_DISTRIBUTED_LOCK_MAX_ATTEMPTS:40}
+        retry-delay-ms: ${ELVO_DISTRIBUTED_LOCK_RETRY_DELAY_MS:50}
     ledger:
       hash:
         key-prefix: ${ELVO_LEDGER_HASH_KEY_PREFIX:elvo:wallet:ledger:hash:}
