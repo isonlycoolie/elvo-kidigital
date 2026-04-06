@@ -83,6 +83,8 @@ sentry:
 elvo:
   startup:
     validate-required-env: ${ELVO_VALIDATE_REQUIRED_ENV:true}
+    reject-insecure-defaults: ${ELVO_REJECT_INSECURE_DEFAULTS:true}
+    relaxed-profiles: ${ELVO_RELAXED_PROFILES:dev,test,local}
   communication:
     email:
       from: ${EMAIL_PROVIDER_FROM:no-reply@elvo.local}
