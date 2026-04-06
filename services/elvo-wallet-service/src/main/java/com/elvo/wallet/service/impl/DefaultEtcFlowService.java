@@ -234,7 +234,7 @@ public class DefaultEtcFlowService implements EtcFlowService {
                                            java.util.UUID walletId) {
         try {
             return idempotencyService.get(key, userScope, endpointScope, payloadFingerprint).orElse(null);
-        } catch (IllegalArgumentException ex) {
+        } catch (RuntimeException ex) {
             return WalletFlowResult.failure(ex.getMessage(), walletId, "wallet.etc.failed");
         }
     }

@@ -221,7 +221,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
                                            String eventType) {
         try {
             return idempotencyService.get(key, userScope, endpointScope, payloadFingerprint).orElse(null);
-        } catch (IllegalArgumentException ex) {
+        } catch (RuntimeException ex) {
             return WalletFlowResult.failure(ex.getMessage(), walletId, eventType);
         }
     }

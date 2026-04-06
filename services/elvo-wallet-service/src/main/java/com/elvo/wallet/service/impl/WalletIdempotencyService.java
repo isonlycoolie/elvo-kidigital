@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.elvo.wallet.exception.IdempotencyReplayDetectedException;
 import com.elvo.wallet.service.model.WalletFlowResult;
 
 @Service
@@ -19,6 +20,7 @@ public class WalletIdempotencyService {
     private static final String LEGACY_SCOPE = "legacy";
 
     private final ConcurrentHashMap<String, IdempotencyEntry> completedOperations = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Instant> blockedKeys = new ConcurrentHashMap<>();
     private final long ttlSeconds;
 
     public WalletIdempotencyService(@Value("${elvo.security.idempotency.ttl-seconds:900}") long ttlSeconds) {
@@ -38,6 +40,8 @@ public class WalletIdempotencyService {
             return Optional.empty();
         }
 
+        ensureNotBlocked(key);
+
         IdempotencyEntry entry = completedOperations.get(key);
         if (entry == null) {
             return Optional.empty();
@@ -49,7 +53,8 @@ public class WalletIdempotencyService {
         }
 
         if (!entry.matches(userScope, endpointScope, payloadFingerprint)) {
-            throw new IllegalArgumentException("Idempotency key cannot be reused with a different request context");
+            markBlocked(key);
+            throw new IdempotencyReplayDetectedException("Idempotency replay attempt detected for key: context mismatch");
         }
 
         return Optional.of(entry.result());
@@ -68,6 +73,8 @@ public class WalletIdempotencyService {
             return;
         }
 
+        ensureNotBlocked(key);
+
         IdempotencyEntry candidate = new IdempotencyEntry(
                 safe(userScope),
                 safe(endpointScope),
@@ -80,7 +87,8 @@ public class WalletIdempotencyService {
                 return candidate;
             }
             if (!existing.matches(candidate.userScope(), candidate.endpointScope(), candidate.payloadFingerprint())) {
-                throw new IllegalArgumentException("Idempotency key cannot be reused with a different request context");
+                markBlocked(key);
+                throw new IdempotencyReplayDetectedException("Idempotency replay attempt detected for key: context mismatch");
             }
             return existing;
         });
@@ -103,6 +111,22 @@ public class WalletIdempotencyService {
 
     private String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private void ensureNotBlocked(String key) {
+        Instant blockedAt = blockedKeys.get(key);
+        if (blockedAt == null) {
+            return;
+        }
+        if (blockedAt.plusSeconds(ttlSeconds).isBefore(Instant.now())) {
+            blockedKeys.remove(key, blockedAt);
+            return;
+        }
+        throw new IdempotencyReplayDetectedException("Idempotency key is blocked due to replay detection");
+    }
+
+    private void markBlocked(String key) {
+        blockedKeys.put(key, Instant.now());
     }
 
     private record IdempotencyEntry(

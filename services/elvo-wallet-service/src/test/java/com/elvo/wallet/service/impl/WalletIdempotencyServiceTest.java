@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.elvo.wallet.exception.IdempotencyReplayDetectedException;
 import com.elvo.wallet.service.model.WalletFlowResult;
 
 class WalletIdempotencyServiceTest {
@@ -42,7 +43,20 @@ class WalletIdempotencyServiceTest {
         service.put("key-123", "user-1", "wallet.deposit.process", "payload-hash-1", result);
 
         assertThatThrownBy(() -> service.get("key-123", "user-1", "wallet.deposit.process", "payload-hash-2"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("different request context");
+            .isInstanceOf(IdempotencyReplayDetectedException.class)
+            .hasMessageContaining("replay attempt detected");
+        }
+
+        @Test
+        void compromisedKeyShouldBeBlockedAfterReplayAttempt() {
+        WalletFlowResult result = WalletFlowResult.success("ok", UUID.randomUUID(), UUID.randomUUID(), "wallet.deposit.completed");
+        service.put("key-123", "user-1", "wallet.deposit.process", "payload-hash-1", result);
+
+        assertThatThrownBy(() -> service.get("key-123", "user-2", "wallet.deposit.process", "payload-hash-1"))
+            .isInstanceOf(IdempotencyReplayDetectedException.class);
+
+        assertThatThrownBy(() -> service.get("key-123", "user-1", "wallet.deposit.process", "payload-hash-1"))
+            .isInstanceOf(IdempotencyReplayDetectedException.class)
+            .hasMessageContaining("blocked");
     }
 }
