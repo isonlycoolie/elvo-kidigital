@@ -45,7 +45,7 @@ public class Transaction {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 32)
-    private TransactionStatus status = TransactionStatus.PENDING;
+    private TransactionStatus status = TransactionStatus.INITIATED;
 
     @Column(name = "reference", nullable = false, length = 128)
     private String reference;
@@ -65,9 +65,18 @@ public class Transaction {
     }
 
     public enum TransactionStatus {
+        INITIATED,
         PENDING,
+        PROCESSING,
+        RESERVED,
+        AWAITING_CONFIRMATION,
         COMPLETED,
-        FAILED
+        FAILED,
+        REVERSED,
+        EXPIRED,
+        CANCELLED,
+        RETRYING,
+        RELEASED
     }
 
     @PrePersist
