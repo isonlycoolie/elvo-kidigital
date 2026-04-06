@@ -164,6 +164,31 @@ class TransactionLifecycleServiceTests {
         verify(historyRepository).save(any(TransactionStatusHistory.class));
     }
 
+    @Test
+    void expireShouldNotChangeTransactionBeforeTimeout() {
+        Transaction transaction = newTransaction(Transaction.TransactionStatus.AWAITING_CONFIRMATION);
+        transaction.setExpiresAt(Instant.now().plusSeconds(300));
+
+        Transaction result = service.expire(transaction, "not expired yet", "corr-exp-1");
+
+        assertThat(result.getStatus()).isEqualTo(Transaction.TransactionStatus.AWAITING_CONFIRMATION);
+    }
+
+    @Test
+    void transitionShouldRejectAnyStateAfterExpired() {
+        Transaction transaction = newTransaction(Transaction.TransactionStatus.EXPIRED);
+
+        assertThatThrownBy(() -> service.transition(
+                transaction,
+                Transaction.TransactionStatus.PROCESSING,
+                "continue after expiry",
+                "corr-exp-2",
+                null,
+                null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Invalid transaction transition from EXPIRED to PROCESSING");
+    }
+
         @Test
         void mobileDepositStatesShouldSupportAwaitingAndRetryTransitions() {
         assertThat(service.canTransition(
