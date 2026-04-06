@@ -16,6 +16,7 @@ import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import com.elvo.identity.security.SecretManagerService;
 import com.elvo.identity.security.TokenRevocationChecker;
 
 import io.jsonwebtoken.Claims;
@@ -59,40 +60,53 @@ public class TokenService {
                         @Value("${elvo.security.jwt.audience:elvo-platform}") String audience,
                         @Value("${elvo.security.jwt.access-token-ttl-minutes:15}") long accessTokenTtlMinutes,
                         @Value("${elvo.security.jwt.refresh-token-ttl-days:7}") long refreshTokenTtlDays,
+                        SecretManagerService secretManagerService,
                         TokenRevocationChecker tokenRevocationChecker) {
-                this(jwtSecret,
-                    privateKeyPem,
-                    publicKeyPem,
-                    signingKeyId,
-                    issuer,
-                    audience,
-                    accessTokenTtlMinutes,
-                    refreshTokenTtlDays,
-                    tokenRevocationChecker,
-                    true);
-                }
+        this(secretManagerService.resolve(
+                "identity-jwt-secret",
+                jwtSecret,
+                "ELVO_JWT_SECRET",
+                null),
+            secretManagerService.resolve(
+                "identity-jwt-signing-private-key",
+                privateKeyPem,
+                "ELVO_JWT_SIGNING_PRIVATE_KEY_PEM",
+                null),
+            secretManagerService.resolve(
+                "identity-jwt-signing-public-key",
+                publicKeyPem,
+                "ELVO_JWT_SIGNING_PUBLIC_KEY_PEM",
+                null),
+            signingKeyId,
+            issuer,
+            audience,
+            accessTokenTtlMinutes,
+            refreshTokenTtlDays,
+            tokenRevocationChecker,
+            true);
+    }
 
-                public TokenService(String jwtSecret,
-                                    String privateKeyPem,
-                                    String publicKeyPem,
-                                    String signingKeyId,
-                                    String issuer,
-                                    String audience,
-                                    long accessTokenTtlMinutes,
-                                    long refreshTokenTtlDays) {
-                this(jwtSecret,
-                    privateKeyPem,
-                    publicKeyPem,
-                    signingKeyId,
-                    issuer,
-                    audience,
-                    accessTokenTtlMinutes,
-                    refreshTokenTtlDays,
-                    jti -> false,
-                    false);
-                }
+    public TokenService(String jwtSecret,
+                        String privateKeyPem,
+                        String publicKeyPem,
+                        String signingKeyId,
+                        String issuer,
+                        String audience,
+                        long accessTokenTtlMinutes,
+                        long refreshTokenTtlDays) {
+        this(jwtSecret,
+            privateKeyPem,
+            publicKeyPem,
+            signingKeyId,
+            issuer,
+            audience,
+            accessTokenTtlMinutes,
+            refreshTokenTtlDays,
+            jti -> false,
+            false);
+    }
 
-                private TokenService(String jwtSecret,
+    private TokenService(String jwtSecret,
                          String privateKeyPem,
                          String publicKeyPem,
                          String signingKeyId,
@@ -130,17 +144,17 @@ public class TokenService {
                  String signingKeyId,
                  long accessTokenTtlMinutes,
                  long refreshTokenTtlDays) {
-            this(signingPrivateKey,
-                verificationPublicKey,
-                issuer,
-                audience,
-                signingKeyId,
-                accessTokenTtlMinutes,
-                refreshTokenTtlDays,
-                jti -> false);
-            }
+        this(signingPrivateKey,
+            verificationPublicKey,
+            issuer,
+            audience,
+            signingKeyId,
+            accessTokenTtlMinutes,
+            refreshTokenTtlDays,
+            jti -> false);
+    }
 
-            TokenService(PrivateKey signingPrivateKey,
+    TokenService(PrivateKey signingPrivateKey,
                  PublicKey verificationPublicKey,
                  String issuer,
                  String audience,
@@ -153,7 +167,7 @@ public class TokenService {
         this.signingKeyId = requireText(signingKeyId, "signing key id must be configured");
         this.signingKey = null;
         this.asymmetricSigningEnabled = true;
-            this.tokenRevocationChecker = tokenRevocationChecker;
+        this.tokenRevocationChecker = tokenRevocationChecker;
         this.issuer = issuer;
         this.audience = audience;
         this.accessTokenTtlMinutes = accessTokenTtlMinutes;

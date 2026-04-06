@@ -75,16 +75,18 @@ public class SecurityConfig {
     public InternalServiceJwtAuthenticationFilter internalServiceJwtAuthenticationFilter(
             InternalServiceJwtProperties jwtProperties,
             InternalServiceAuthorizationMatrix authorizationMatrix,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            SecretManagerService secretManagerService
     ) {
-        return new InternalServiceJwtAuthenticationFilter(jwtProperties, authorizationMatrix, objectMapper);
+        return new InternalServiceJwtAuthenticationFilter(jwtProperties, authorizationMatrix, objectMapper, secretManagerService);
     }
 
     @Bean
     public UserJwtAuthenticationFilter userJwtAuthenticationFilter(UserJwtProperties jwtProperties,
                                                                    ObjectMapper objectMapper,
-                                                                   UserTokenRevocationChecker tokenRevocationChecker) {
-        return new UserJwtAuthenticationFilter(jwtProperties, objectMapper, tokenRevocationChecker);
+                                                                   UserTokenRevocationChecker tokenRevocationChecker,
+                                                                   SecretManagerService secretManagerService) {
+        return new UserJwtAuthenticationFilter(jwtProperties, objectMapper, tokenRevocationChecker, secretManagerService);
     }
 
     @Bean

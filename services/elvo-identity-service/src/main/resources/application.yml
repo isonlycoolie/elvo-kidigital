@@ -75,15 +75,15 @@ elvo:
       service-tag: ${ELVO_SERVICE_TAG:elvo-identity-service}
   security:
     jwt:
-      secret: ${ELVO_JWT_SECRET:}
+      secret: ${ELVO_JWT_SECRET_REF:sm://identity-jwt-secret}
       issuer: ${ELVO_JWT_ISSUER:elvo-identity-service}
       audience: ${ELVO_JWT_AUDIENCE:elvo-platform}
       revocation:
         key-prefix: ${ELVO_JWT_REVOCATION_KEY_PREFIX:elvo:jwt:revoked:}
       signing:
         key-id: ${ELVO_JWT_SIGNING_KEY_ID:}
-        private-key-pem: ${ELVO_JWT_SIGNING_PRIVATE_KEY_PEM:}
-        public-key-pem: ${ELVO_JWT_SIGNING_PUBLIC_KEY_PEM:}
+        private-key-pem: ${ELVO_JWT_SIGNING_PRIVATE_KEY_REF:sm://identity-jwt-signing-private-key}
+        public-key-pem: ${ELVO_JWT_SIGNING_PUBLIC_KEY_REF:sm://identity-jwt-signing-public-key}
       access-token-ttl-minutes: ${ELVO_JWT_ACCESS_TTL_MINUTES:15}
       refresh-token-ttl-days: ${ELVO_JWT_REFRESH_TTL_DAYS:7}
   messaging:

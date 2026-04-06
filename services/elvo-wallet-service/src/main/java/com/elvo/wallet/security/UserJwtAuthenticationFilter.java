@@ -43,17 +43,41 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
     private final UserJwtProperties jwtProperties;
     private final ObjectMapper objectMapper;
     private final UserTokenRevocationChecker tokenRevocationChecker;
+    private final String resolvedJwtSecret;
+    private final String resolvedSigningPublicKeyPem;
 
     public UserJwtAuthenticationFilter(UserJwtProperties jwtProperties, ObjectMapper objectMapper) {
-        this(jwtProperties, objectMapper, jti -> false);
+        this(jwtProperties, objectMapper, jti -> false, null);
     }
 
     public UserJwtAuthenticationFilter(UserJwtProperties jwtProperties,
                                        ObjectMapper objectMapper,
                                        UserTokenRevocationChecker tokenRevocationChecker) {
+        this(jwtProperties, objectMapper, tokenRevocationChecker, null);
+    }
+
+    public UserJwtAuthenticationFilter(UserJwtProperties jwtProperties,
+                                       ObjectMapper objectMapper,
+                                       UserTokenRevocationChecker tokenRevocationChecker,
+                                       SecretManagerService secretManagerService) {
         this.jwtProperties = jwtProperties;
         this.objectMapper = objectMapper;
         this.tokenRevocationChecker = tokenRevocationChecker;
+        if (secretManagerService == null) {
+            this.resolvedJwtSecret = jwtProperties.getSecret();
+            this.resolvedSigningPublicKeyPem = jwtProperties.getSigningPublicKeyPem();
+        } else {
+            this.resolvedJwtSecret = secretManagerService.resolve(
+                    "wallet-user-jwt-secret",
+                    jwtProperties.getSecret(),
+                    "ELVO_JWT_SECRET",
+                    null);
+            this.resolvedSigningPublicKeyPem = secretManagerService.resolve(
+                    "wallet-user-jwt-signing-public-key",
+                    jwtProperties.getSigningPublicKeyPem(),
+                    "ELVO_JWT_SIGNING_PUBLIC_KEY_PEM",
+                    null);
+        }
     }
 
     @Override
@@ -114,8 +138,8 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private Claims parseClaims(String token) {
-        if (hasText(jwtProperties.getSigningPublicKeyPem())) {
-            PublicKey publicKey = parsePublicKey(jwtProperties.getSigningPublicKeyPem());
+        if (hasText(resolvedSigningPublicKeyPem)) {
+            PublicKey publicKey = parsePublicKey(resolvedSigningPublicKeyPem);
             String configuredKeyId = jwtProperties.getSigningKeyId();
             if (hasText(configuredKeyId)) {
                 String tokenKeyId = resolveKeyId(token);
@@ -133,7 +157,10 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
                     .getPayload();
         }
 
-        SecretKey secretKey = Keys.hmacShaKeyFor(jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
+        if (!hasText(resolvedJwtSecret)) {
+            throw new IllegalStateException("elvo.security.jwt.secret must be configured");
+        }
+        SecretKey secretKey = Keys.hmacShaKeyFor(resolvedJwtSecret.getBytes(StandardCharsets.UTF_8));
         return Jwts.parser()
                 .verifyWith(secretKey)
                 .requireIssuer(jwtProperties.getIssuer())

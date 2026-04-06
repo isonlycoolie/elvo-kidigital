@@ -36,15 +36,34 @@ public class InternalServiceJwtAuthenticationFilter extends OncePerRequestFilter
     private final InternalServiceJwtProperties jwtProperties;
     private final InternalServiceAuthorizationMatrix authorizationMatrix;
     private final ObjectMapper objectMapper;
+    private final String internalJwtSecret;
 
     public InternalServiceJwtAuthenticationFilter(
             InternalServiceJwtProperties jwtProperties,
             InternalServiceAuthorizationMatrix authorizationMatrix,
             ObjectMapper objectMapper
     ) {
+        this(jwtProperties, authorizationMatrix, objectMapper, null);
+    }
+
+    public InternalServiceJwtAuthenticationFilter(
+            InternalServiceJwtProperties jwtProperties,
+            InternalServiceAuthorizationMatrix authorizationMatrix,
+            ObjectMapper objectMapper,
+            SecretManagerService secretManagerService
+    ) {
         this.jwtProperties = jwtProperties;
         this.authorizationMatrix = authorizationMatrix;
         this.objectMapper = objectMapper;
+        if (secretManagerService == null) {
+            this.internalJwtSecret = jwtProperties.getSecret();
+        } else {
+            this.internalJwtSecret = secretManagerService.resolve(
+                    "wallet-internal-jwt-secret",
+                    jwtProperties.getSecret(),
+                    "ELVO_INTERNAL_JWT_SECRET",
+                    null);
+        }
     }
 
     @Override
@@ -110,7 +129,10 @@ public class InternalServiceJwtAuthenticationFilter extends OncePerRequestFilter
     }
 
     private Claims parseClaims(String token) {
-        SecretKey secretKey = Keys.hmacShaKeyFor(jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
+        if (internalJwtSecret == null || internalJwtSecret.isBlank()) {
+            throw new IllegalStateException("elvo.security.internal-jwt.secret must be configured");
+        }
+        SecretKey secretKey = Keys.hmacShaKeyFor(internalJwtSecret.getBytes(StandardCharsets.UTF_8));
 
         return Jwts.parser()
                 .verifyWith(secretKey)

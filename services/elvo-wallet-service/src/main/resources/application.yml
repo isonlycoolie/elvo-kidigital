@@ -72,18 +72,18 @@ elvo:
       service-tag: ${ELVO_SERVICE_TAG:wallet-service}
   security:
     jwt:
-      secret: ${ELVO_JWT_SECRET:}
+      secret: ${ELVO_JWT_SECRET_REF:sm://wallet-user-jwt-secret}
       issuer: ${ELVO_JWT_ISSUER:elvo-identity-service}
       audience: ${ELVO_JWT_AUDIENCE:elvo-platform}
       revocation:
         key-prefix: ${ELVO_JWT_REVOCATION_KEY_PREFIX:elvo:jwt:revoked:}
       signing:
         key-id: ${ELVO_JWT_SIGNING_KEY_ID:}
-        public-key-pem: ${ELVO_JWT_SIGNING_PUBLIC_KEY_PEM:}
+        public-key-pem: ${ELVO_JWT_SIGNING_PUBLIC_KEY_REF:sm://wallet-user-jwt-signing-public-key}
       access-token-ttl-minutes: ${ELVO_JWT_ACCESS_TTL_MINUTES:15}
       refresh-token-ttl-days: ${ELVO_JWT_REFRESH_TTL_DAYS:7}
     internal-jwt:
-      secret: ${ELVO_INTERNAL_JWT_SECRET:}
+      secret: ${ELVO_INTERNAL_JWT_SECRET_REF:sm://wallet-internal-jwt-secret}
       issuer: ${ELVO_INTERNAL_JWT_ISSUER:elvo-internal-auth}
       audience: ${ELVO_INTERNAL_JWT_AUDIENCE:elvo-wallet-service}
       required-role: ${ELVO_INTERNAL_JWT_REQUIRED_ROLE:INTERNAL_SERVICE}
@@ -110,7 +110,7 @@ elvo:
         - ${ELVO_MTLS_CN_AGENT_SERVICE:agent-service}
         - ${ELVO_MTLS_CN_SAGA_SERVICE:saga-service}
     correlation:
-      signature-secret: ${ELVO_CORRELATION_SIGNATURE_SECRET:${ELVO_INTERNAL_JWT_SECRET:${ELVO_JWT_SECRET:}}}
+      signature-secret: ${ELVO_CORRELATION_SIGNATURE_SECRET_REF:sm://wallet-correlation-signature-secret}
     eac:
       replay:
         window-seconds: ${ELVO_EAC_REPLAY_WINDOW_SECONDS:300}
@@ -127,7 +127,7 @@ elvo:
       withdrawal-threshold: ${ELVO_STEP_UP_WITHDRAWAL_THRESHOLD:250.00}
       transfer-threshold: ${ELVO_STEP_UP_TRANSFER_THRESHOLD:500.00}
     transaction-challenge:
-      secret: ${ELVO_TX_CHALLENGE_SECRET:${ELVO_JWT_SECRET:}}
+      secret: ${ELVO_TX_CHALLENGE_SECRET_REF:sm://wallet-transaction-challenge-secret}
       issuer: ${ELVO_TX_CHALLENGE_ISSUER:elvo-wallet-service}
       audience: ${ELVO_TX_CHALLENGE_AUDIENCE:wallet-transaction-challenge}
       ttl-seconds: ${ELVO_TX_CHALLENGE_TTL_SECONDS:300}

@@ -21,6 +21,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import com.elvo.wallet.security.InternalServiceJwtProperties;
+import com.elvo.wallet.security.SecretManagerService;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -35,24 +36,35 @@ public class DefaultIdentityServiceClient implements IdentityServiceClient {
     private final RestTemplate restTemplate;
     private final IdentityClientProperties properties;
     private final InternalServiceJwtProperties internalJwtProperties;
+    private final String internalJwtSecret;
 
     public DefaultIdentityServiceClient(RestTemplateBuilder restTemplateBuilder,
                                         IdentityClientProperties properties,
-                                        InternalServiceJwtProperties internalJwtProperties) {
+                                        InternalServiceJwtProperties internalJwtProperties,
+                                        SecretManagerService secretManagerService) {
         this(restTemplateBuilder
                 .setConnectTimeout(Duration.ofSeconds(properties.getConnectTimeoutSeconds()))
                 .setReadTimeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
                 .build(),
             properties,
-            internalJwtProperties);
+            internalJwtProperties,
+            resolveInternalJwtSecret(secretManagerService, internalJwtProperties.getSecret()));
     }
 
     DefaultIdentityServiceClient(RestTemplate restTemplate,
                                  IdentityClientProperties properties,
                                  InternalServiceJwtProperties internalJwtProperties) {
+        this(restTemplate, properties, internalJwtProperties, internalJwtProperties.getSecret());
+    }
+
+    private DefaultIdentityServiceClient(RestTemplate restTemplate,
+                                         IdentityClientProperties properties,
+                                         InternalServiceJwtProperties internalJwtProperties,
+                                         String internalJwtSecret) {
         this.restTemplate = restTemplate;
         this.properties = properties;
         this.internalJwtProperties = internalJwtProperties;
+        this.internalJwtSecret = internalJwtSecret;
     }
 
     @Override
@@ -128,7 +140,7 @@ public class DefaultIdentityServiceClient implements IdentityServiceClient {
     }
 
     private String generateInternalServiceToken() {
-        String secret = internalJwtProperties.getSecret();
+        String secret = internalJwtSecret;
         if (secret == null || secret.isBlank()) {
             throw new IllegalStateException("elvo.security.internal-jwt.secret must be configured");
         }
@@ -158,5 +170,13 @@ public class DefaultIdentityServiceClient implements IdentityServiceClient {
         }
         Object value = data.get(key);
         return Boolean.TRUE.equals(value);
+    }
+
+    private static String resolveInternalJwtSecret(SecretManagerService secretManagerService, String configuredSecret) {
+        return secretManagerService.resolve(
+                "wallet-internal-jwt-secret",
+                configuredSecret,
+                "ELVO_INTERNAL_JWT_SECRET",
+                null);
     }
 }
