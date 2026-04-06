@@ -24,21 +24,39 @@ public class TokenService {
     private static final String EAN_CLAIM = "ean";
 
     private final SecretKey signingKey;
+    private final String issuer;
+    private final String audience;
     private final long accessTokenTtlMinutes;
     private final long refreshTokenTtlDays;
 
     public TokenService(@Value("${elvo.security.jwt.secret}") String jwtSecret,
+                        @Value("${elvo.security.jwt.issuer:elvo-identity-service}") String issuer,
+                        @Value("${elvo.security.jwt.audience:elvo-platform}") String audience,
                         @Value("${elvo.security.jwt.access-token-ttl-minutes:15}") long accessTokenTtlMinutes,
                         @Value("${elvo.security.jwt.refresh-token-ttl-days:7}") long refreshTokenTtlDays) {
+        validateJwtSecret(jwtSecret);
         this.signingKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+        this.issuer = issuer;
+        this.audience = audience;
         this.accessTokenTtlMinutes = accessTokenTtlMinutes;
         this.refreshTokenTtlDays = refreshTokenTtlDays;
+    }
+
+    private void validateJwtSecret(String jwtSecret) {
+        if (jwtSecret == null || jwtSecret.isBlank()) {
+            throw new IllegalStateException("elvo.security.jwt.secret must be configured");
+        }
+        if (jwtSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException("elvo.security.jwt.secret must be at least 32 bytes");
+        }
     }
 
     public TokenPayload generateAccessToken(UUID userId, String ean) {
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(accessTokenTtlMinutes * 60);
         String token = Jwts.builder()
+            .issuer(issuer)
+            .audience().add(audience).and()
                 .subject(userId.toString())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiresAt))
@@ -54,6 +72,8 @@ public class TokenService {
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(refreshTokenTtlDays * 24 * 60 * 60);
         String token = Jwts.builder()
+            .issuer(issuer)
+            .audience().add(audience).and()
                 .subject(userId.toString())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiresAt))
@@ -93,6 +113,8 @@ public class TokenService {
         try {
             return Jwts.parser()
                     .verifyWith(signingKey)
+                    .requireIssuer(issuer)
+                    .requireAudience(audience)
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();

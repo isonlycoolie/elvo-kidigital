@@ -75,7 +75,9 @@ elvo:
       service-tag: ${ELVO_SERVICE_TAG:elvo-identity-service}
   security:
     jwt:
-      secret: ${ELVO_JWT_SECRET:elvo-identity-service-jwt-secret-must-be-at-least-32-bytes}
+      secret: ${ELVO_JWT_SECRET:}
+      issuer: ${ELVO_JWT_ISSUER:elvo-identity-service}
+      audience: ${ELVO_JWT_AUDIENCE:elvo-platform}
       access-token-ttl-minutes: ${ELVO_JWT_ACCESS_TTL_MINUTES:15}
       refresh-token-ttl-days: ${ELVO_JWT_REFRESH_TTL_DAYS:7}
   messaging:

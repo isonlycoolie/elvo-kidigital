@@ -67,7 +67,7 @@ elvo:
       access-token-ttl-minutes: ${ELVO_JWT_ACCESS_TTL_MINUTES:15}
       refresh-token-ttl-days: ${ELVO_JWT_REFRESH_TTL_DAYS:7}
     internal-jwt:
-      secret: ${ELVO_INTERNAL_JWT_SECRET:${ELVO_JWT_SECRET:}}
+      secret: ${ELVO_INTERNAL_JWT_SECRET:}
       issuer: ${ELVO_INTERNAL_JWT_ISSUER:elvo-internal-auth}
       audience: ${ELVO_INTERNAL_JWT_AUDIENCE:elvo-wallet-service}
       required-role: ${ELVO_INTERNAL_JWT_REQUIRED_ROLE:INTERNAL_SERVICE}
