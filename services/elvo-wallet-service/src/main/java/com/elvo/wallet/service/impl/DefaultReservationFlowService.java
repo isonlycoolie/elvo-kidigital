@@ -245,14 +245,29 @@ public class DefaultReservationFlowService implements ReservationFlowService {
                 correlationId(),
                 null,
                 null);
-            transactionLifecycleService.transition(
-                reservationTransaction,
-                Transaction.TransactionStatus.COMPLETED,
-                "Reservation debit confirmed",
-                correlationId(),
-                null,
-                null);
-            ledgerIntegrationService.recordDoubleEntry("reservation.confirm", walletId, reservation.getAmount(), String.valueOf(reservationId));
+
+                try {
+                ledgerIntegrationService.recordDoubleEntry("reservation.confirm", walletId, reservation.getAmount(), String.valueOf(reservationId));
+                transactionLifecycleService.transition(
+                    reservationTransaction,
+                    Transaction.TransactionStatus.COMPLETED,
+                    "Reservation debit confirmed",
+                    correlationId(),
+                    null,
+                    null);
+                } catch (RuntimeException ex) {
+                reservationRepository.releaseReservation(reservationId);
+                transitionSafely(
+                    reservationTransaction,
+                    Transaction.TransactionStatus.REVERSED,
+                    "Reservation reversed after confirmation failure",
+                    "RESERVATION_REVERSED",
+                    ex.getMessage());
+
+                WalletFlowResult result = WalletFlowResult.failure("Reservation reversed", walletId, "wallet.reservation.failed");
+                idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
+                return result;
+                }
         }
 
         AUDIT_LOG.info("event=wallet.reservation.confirmed reservationId={} walletId={}", reservationId, walletId);
@@ -288,5 +303,17 @@ public class DefaultReservationFlowService implements ReservationFlowService {
 
     private String correlationId() {
         return MDC.get("correlationId");
+    }
+
+    private void transitionSafely(Transaction transaction,
+                                  Transaction.TransactionStatus status,
+                                  String reason,
+                                  String failureCode,
+                                  String failureMessage) {
+        try {
+            transactionLifecycleService.transition(transaction, status, reason, correlationId(), failureCode, failureMessage);
+        } catch (RuntimeException ignored) {
+            // Best effort transition for reservation compensation path.
+        }
     }
 }

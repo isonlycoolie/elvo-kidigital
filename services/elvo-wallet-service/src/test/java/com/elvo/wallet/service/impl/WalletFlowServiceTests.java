@@ -1666,6 +1666,38 @@ class WalletFlowServiceTests {
                 order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.RELEASED), anyString(), any(), any(), any());
         }
 
+        @Test
+        void reservationConfirmShouldReverseOnPostingFailure() {
+                UUID reservationId = UUID.randomUUID();
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+
+                Reservation reservation = new Reservation();
+                reservation.setWallet(wallet);
+                reservation.setAmount(new BigDecimal("9.00"));
+                when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(reservation));
+                when(reservationRepository.confirmDebit(reservationId)).thenReturn(true);
+                when(reservationRepository.releaseReservation(reservationId)).thenReturn(true);
+                doThrow(new RuntimeException("confirm posting failed"))
+                                .when(ledgerIntegrationService)
+                                .recordDoubleEntry(eq("reservation.confirm"), eq(wallet.getId()), eq(new BigDecimal("9.00")), eq(String.valueOf(reservationId)));
+
+                DefaultReservationFlowService service = new DefaultReservationFlowService(
+                                walletRepository,
+                                reservationRepository,
+                                idempotencyService,
+                                ledgerIntegrationService,
+                                eventPublisher,
+                                limitEnforcementService,
+                                transactionLifecycleService);
+
+                WalletFlowResult result = service.confirm(reservationId, "idem-res-confirm-reverse");
+
+                assertThat(result.success()).isFalse();
+                assertThat(result.message()).isEqualTo("Reservation reversed");
+                verify(reservationRepository).releaseReservation(reservationId);
+                verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.REVERSED), anyString(), any(), eq("RESERVATION_REVERSED"), eq("confirm posting failed"));
+        }
+
     @Test
     void etcGenerateShouldPublishEvent() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
