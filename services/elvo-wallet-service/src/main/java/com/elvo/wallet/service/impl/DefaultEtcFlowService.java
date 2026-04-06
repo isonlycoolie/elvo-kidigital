@@ -172,6 +172,15 @@ public class DefaultEtcFlowService implements EtcFlowService {
                 emitFraudEvent("ETC expired or brute-force attempts", code, deviceId, sourceIp, etc.getWallet().getId());
             }
             etcRepository.expireGeneratedCodes(Instant.now());
+
+            BigDecimal redeemAmount = resolveRedeemAmount(code);
+            String expiredReference = "etc-redeem-" + etcCodeSecurityService.redact(code);
+            Transaction expiredTransaction = initializeEtcRedemptionTransaction(etc.getWallet(), redeemAmount, expiredReference);
+            transactionLifecycleService.transition(expiredTransaction, Transaction.TransactionStatus.PENDING,
+                "ETC redemption queued", correlationId(), null, null);
+            transactionLifecycleService.transition(expiredTransaction, Transaction.TransactionStatus.EXPIRED,
+                "ETC redemption expired", correlationId(), "ETC_EXPIRED", "ETC code has expired");
+
             WalletFlowResult result = WalletFlowResult.failure("ETC code has expired", etc.getWallet().getId(), "wallet.etc.failed");
             idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
             return result;
@@ -277,5 +286,15 @@ public class DefaultEtcFlowService implements EtcFlowService {
 
     private String correlationId() {
         return MDC.get("correlationId");
+    }
+
+    private Transaction initializeEtcRedemptionTransaction(Wallet wallet, BigDecimal amount, String reference) {
+        Transaction transaction = new Transaction();
+        transaction.setWallet(wallet);
+        transaction.setType(Transaction.TransactionType.DEPOSIT);
+        transaction.setAmount(amount);
+        transaction.setReference(reference);
+        transaction.setExternalReference(reference);
+        return transactionLifecycleService.initialize(transaction, "ETC redemption initiated", correlationId(), reference);
     }
 }

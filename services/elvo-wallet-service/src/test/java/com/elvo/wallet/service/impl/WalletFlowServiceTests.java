@@ -1786,4 +1786,41 @@ class WalletFlowServiceTests {
                 order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.PROCESSING), anyString(), any(), any(), any());
                 order.verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.COMPLETED), anyString(), any(), any(), any());
         }
+
+        @Test
+        void etcRedeemShouldTransitionToExpiredWhenCodeHasTimedOut() {
+                lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+                when(etcCodeSecurityService.hashCode(anyString())).thenReturn("hash-etc");
+                when(etcCodeSecurityService.redact(anyString())).thenReturn("***C123");
+                when(etcBruteForceProtectionService.isBlocked(anyString(), anyString(), anyString())).thenReturn(false);
+                when(etcBruteForceProtectionService.registerFailure(anyString(), anyString(), anyString())).thenReturn(false);
+                when(etcRepository.registerFailedAttempt(anyString(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(1);
+
+                Etc etc = new Etc();
+                etc.setWallet(wallet);
+                etc.setCodeHash("hash-etc");
+                etc.setExpiresAt(Instant.now().minusSeconds(60));
+                when(etcRepository.findByCodeHashForUpdate("hash-etc")).thenReturn(Optional.of(etc));
+                when(etcRepository.isCodeExpired(eq("hash-etc"), any())).thenReturn(true);
+
+                DefaultEtcFlowService service = new DefaultEtcFlowService(
+                                etcRepository,
+                                walletRepository,
+                                transactionRepository,
+                                idempotencyService,
+                                ledgerIntegrationService,
+                                limitEnforcementService,
+                                eventPublisher,
+                                etcCodeSecurityService,
+                                etcCodePolicyService,
+                                etcBruteForceProtectionService,
+                                transactionLifecycleService,
+                                5);
+
+                WalletFlowResult result = service.redeem("ETC-10-ABC123", "idem-etc-expired", "device-1", "10.0.0.1");
+
+                assertThat(result.success()).isFalse();
+                assertThat(result.message()).isEqualTo("ETC code has expired");
+                verify(transactionLifecycleService).transition(any(Transaction.class), eq(Transaction.TransactionStatus.EXPIRED), anyString(), any(), eq("ETC_EXPIRED"), eq("ETC code has expired"));
+        }
 }
