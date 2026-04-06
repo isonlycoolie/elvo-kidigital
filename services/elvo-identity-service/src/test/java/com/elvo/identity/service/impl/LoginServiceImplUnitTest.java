@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -122,6 +123,8 @@ class LoginServiceImplUnitTest {
 
         PendingVerificationException ex = assertThrows(PendingVerificationException.class, () -> loginService.login(request));
         assertEquals("Email verification is required", ex.getMessage());
+        verify(sessionRepository, never()).save(any());
+        verify(tokenService, never()).generateAccessToken(any(), any());
     }
 
     @Test

@@ -2,6 +2,8 @@ package com.elvo.identity.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -19,6 +21,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.elvo.identity.audit.AuditEventPublisher;
 import com.elvo.identity.dto.response.RegistrationResponse;
+import com.elvo.identity.entity.User;
+import com.elvo.identity.entity.VerificationOtp;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
@@ -26,7 +30,10 @@ import com.elvo.identity.monitoring.SentryExceptionReporter;
 import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.security.TokenRevocationService;
 import com.elvo.identity.service.LoginService;
+import com.elvo.identity.service.OtpService;
+import com.elvo.identity.service.PostVerificationProvisioningService;
 import com.elvo.identity.service.RegistrationService;
+import com.elvo.identity.service.VerificationTokenService;
 import com.elvo.identity.util.TokenService;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -66,6 +73,15 @@ class AuthControllerUnitTest {
     private TokenRevocationService tokenRevocationService;
 
     @MockBean
+    private OtpService otpService;
+
+    @MockBean
+    private VerificationTokenService verificationTokenService;
+
+    @MockBean
+    private PostVerificationProvisioningService postVerificationProvisioningService;
+
+    @MockBean
     private SentryExceptionReporter sentryExceptionReporter;
 
     @Test
@@ -85,8 +101,19 @@ class AuthControllerUnitTest {
 
     @Test
     void registerShouldReturnOkForValidPayload() throws Exception {
+      UUID userId = UUID.randomUUID();
+      User user = new User();
+      setId(user, userId);
+      user.setEmail("user@elvo.com");
+      user.setPhone("+12025550111");
+
         when(registrationService.register(any())).thenReturn(
-                new RegistrationResponse(UUID.randomUUID(), "ELVO-UNIT-123456", "user@elvo.com", "+12025550111", true));
+        new RegistrationResponse(userId, "ELVO-UNIT-123456", "user@elvo.com", "+12025550111", true));
+      when(userRepository.findById(userId)).thenReturn(java.util.Optional.of(user));
+      when(otpService.issueVerificationOtp(any(), any(), any(), any(), eq(false), any(), any(), any(), any()))
+        .thenReturn(new OtpService.OtpDispatchResult("req-1", "u***@elvo.com", java.time.Instant.now().plusSeconds(300)));
+      when(verificationTokenService.issueToken(userId))
+        .thenReturn(new VerificationTokenService.VerificationToken("verification-token", java.time.Instant.now().plusSeconds(600)));
 
         mockMvc.perform(post("/auth/register")
             .with(csrf())
@@ -103,6 +130,37 @@ class AuthControllerUnitTest {
                                 """))
                 .andExpect(status().isOk());
     }
+
+                @Test
+                void verifyEmailOtpShouldNotProvisionBeforeFullVerification() throws Exception {
+              UUID userId = UUID.randomUUID();
+              User user = new User();
+              setId(user, userId);
+              user.setEmail("user@elvo.com");
+              user.setPhone("+12025550111");
+              user.setEmailVerified(false);
+              user.setMobileVerified(false);
+              user.setAccountStatus(User.AccountStatus.PENDING_VERIFICATION);
+
+              when(userRepository.findByEmailIgnoreCase("user@elvo.com")).thenReturn(java.util.Optional.of(user));
+              when(verificationTokenService.isValidForUser("verification-token", userId)).thenReturn(true);
+              when(otpService.verifyOtp(eq(user), eq(VerificationOtp.Purpose.EMAIL_VERIFICATION), eq("123456"), any(), any(), any()))
+                .thenReturn(new OtpService.OtpVerificationResult(true, "OTP_VERIFIED", "Verification successful"));
+
+              mockMvc.perform(post("/auth/verify-email-otp")
+                  .with(csrf())
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content("""
+                    {
+                      "identifier": "user@elvo.com",
+                      "otpCode": "123456",
+                      "verificationToken": "verification-token"
+                    }
+                    """))
+                .andExpect(status().isOk());
+
+              verify(postVerificationProvisioningService, never()).provisionIfNeeded(any());
+                }
 
                             @Test
                             void refreshTokenFailureShouldEmitStructuredAuthFailureAudit() throws Exception {
@@ -124,4 +182,14 @@ class AuthControllerUnitTest {
                             audit.getDescription() != null
                               && audit.getDescription().startsWith("AUTH_FAILURE|flow=refresh-token|reason=TOKEN_INVALID")));
                             }
+
+                private void setId(Object target, UUID id) {
+                  try {
+                    java.lang.reflect.Field field = target.getClass().getDeclaredField("id");
+                    field.setAccessible(true);
+                    field.set(target, id);
+                  } catch (NoSuchFieldException | IllegalAccessException ex) {
+                    throw new IllegalStateException("Unable to set test id", ex);
+                  }
+                }
 }
