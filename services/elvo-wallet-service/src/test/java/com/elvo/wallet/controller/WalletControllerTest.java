@@ -42,6 +42,7 @@ import com.elvo.wallet.security.FraudRulesEngine;
 import com.elvo.wallet.security.IpGeovelocityRiskService;
 import com.elvo.wallet.security.MakerCheckerApprovalService;
 import com.elvo.wallet.security.ApiAbuseProtectionService;
+import com.elvo.wallet.security.EmergencyControlService;
 import com.elvo.wallet.security.SecretManagerService;
 import com.elvo.wallet.security.UserJwtPrincipal;
 import com.elvo.wallet.security.WalletFieldEncryptionService;
@@ -102,6 +103,9 @@ class WalletControllerTest {
 
     @MockBean
     private ApiAbuseProtectionService apiAbuseProtectionService;
+
+    @MockBean
+    private EmergencyControlService emergencyControlService;
     
     @MockBean
     private WalletFieldEncryptionService fieldEncryptionService;
@@ -121,6 +125,8 @@ class WalletControllerTest {
             .thenReturn(MakerCheckerApprovalService.ApprovalDecision.allow());
         when(apiAbuseProtectionService.evaluate(any(), any(), any()))
             .thenReturn(ApiAbuseProtectionService.AbuseDecision.allow());
+        when(emergencyControlService.isGlobalKillSwitchEnabled()).thenReturn(false);
+        when(emergencyControlService.isWalletEmergencyFrozen(any())).thenReturn(false);
     }
 
     @AfterEach

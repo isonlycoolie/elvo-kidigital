@@ -156,6 +156,8 @@ elvo:
       max-violations: ${ELVO_API_ABUSE_MAX_VIOLATIONS:5}
       violation-window-seconds: ${ELVO_API_ABUSE_VIOLATION_WINDOW_SECONDS:600}
       block-seconds: ${ELVO_API_ABUSE_BLOCK_SECONDS:900}
+    emergency:
+      key-prefix: ${ELVO_EMERGENCY_KEY_PREFIX:elvo:wallet:emergency:}
     fraud:
       velocity:
         window-seconds: ${ELVO_FRAUD_VELOCITY_WINDOW_SECONDS:120}

@@ -52,6 +52,7 @@ import com.elvo.wallet.security.FraudRulesEngine;
 import com.elvo.wallet.security.IpGeovelocityRiskService;
 import com.elvo.wallet.security.MakerCheckerApprovalService;
 import com.elvo.wallet.security.ApiAbuseProtectionService;
+import com.elvo.wallet.security.EmergencyControlService;
 import com.elvo.wallet.security.UserJwtPrincipal;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
@@ -96,6 +97,7 @@ public class WalletController {
     private final MakerCheckerApprovalService makerCheckerApprovalService;
     private final SecurityAlertStreamingService securityAlertStreamingService;
     private final ApiAbuseProtectionService apiAbuseProtectionService;
+    private final EmergencyControlService emergencyControlService;
 
     public WalletController(WalletService walletService, WalletRepository walletRepository,
                           TransactionRepository transactionRepository, ReservationRepository reservationRepository,
@@ -108,7 +110,8 @@ public class WalletController {
                           FraudRulesEngine fraudRulesEngine,
                           MakerCheckerApprovalService makerCheckerApprovalService,
                           SecurityAlertStreamingService securityAlertStreamingService,
-                          ApiAbuseProtectionService apiAbuseProtectionService) {
+                          ApiAbuseProtectionService apiAbuseProtectionService,
+                          EmergencyControlService emergencyControlService) {
         this.walletService = walletService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -124,6 +127,7 @@ public class WalletController {
         this.makerCheckerApprovalService = makerCheckerApprovalService;
         this.securityAlertStreamingService = securityAlertStreamingService;
         this.apiAbuseProtectionService = apiAbuseProtectionService;
+        this.emergencyControlService = emergencyControlService;
     }
 
     /**
@@ -395,6 +399,11 @@ public class WalletController {
         Wallet sourceWallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
 
+        ResponseEntity<FlowResultResponseDto> emergencyBlocked = blockIfEmergencyControlTriggered(sourceWallet.getId(), "wallet.transfer.failed");
+        if (emergencyBlocked != null) {
+            return emergencyBlocked;
+        }
+
         String sourceIp = resolveClientIp(httpRequest);
         String deviceId = httpRequest.getHeader("X-Device-Id");
         ApiAbuseProtectionService.AbuseDecision abuseDecision = apiAbuseProtectionService.evaluate(userId, sourceIp, deviceId);
@@ -540,6 +549,11 @@ public class WalletController {
 
         Wallet wallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
+
+        ResponseEntity<FlowResultResponseDto> emergencyBlocked = blockIfEmergencyControlTriggered(wallet.getId(), "wallet.etc.failed");
+        if (emergencyBlocked != null) {
+            return emergencyBlocked;
+        }
 
         String code = etcCodePolicyService.generateSecureCode();
 
@@ -847,6 +861,18 @@ public class WalletController {
         } catch (NumberFormatException ex) {
             return null;
         }
+    }
+
+    private ResponseEntity<FlowResultResponseDto> blockIfEmergencyControlTriggered(UUID walletId, String eventType) {
+        if (emergencyControlService.isGlobalKillSwitchEnabled()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new FlowResultResponseDto(false, emergencyControlService.globalKillSwitchReason(), walletId, null, eventType));
+        }
+        if (walletId != null && emergencyControlService.isWalletEmergencyFrozen(walletId)) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new FlowResultResponseDto(false, emergencyControlService.walletEmergencyReason(walletId), walletId, null, eventType));
+        }
+        return null;
     }
 
     /**
