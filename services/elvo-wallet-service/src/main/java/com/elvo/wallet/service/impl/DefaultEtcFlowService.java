@@ -159,6 +159,7 @@ public class DefaultEtcFlowService implements EtcFlowService {
             }
             eventPublisher.publish("wallet.etc.failed", java.util.Map.of(
                     "reason", "ETC code not found",
+                    "failureCode", "ETC_INVALID",
                     "codeRef", etcCodeSecurityService.redact(code)));
             WalletFlowResult result = WalletFlowResult.failure("ETC code not found", null, "wallet.etc.failed");
                 idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
@@ -193,6 +194,15 @@ public class DefaultEtcFlowService implements EtcFlowService {
             if (thresholdHit || attempts >= maxFailedAttemptsPerCode) {
                 emitFraudEvent("ETC brute-force threshold exceeded", code, deviceId, sourceIp, etc.getWallet().getId());
             }
+
+            recordEtcFailure(
+                    etc.getWallet(),
+                    resolveRedeemAmount(code),
+                    "etc-redeem-" + etcCodeSecurityService.redact(code),
+                    "ETC redeem attempt rejected",
+                    "ETC_REUSED_OR_INVALID",
+                    "ETC code cannot be redeemed");
+
             WalletFlowResult result = WalletFlowResult.failure("ETC code cannot be redeemed", etc.getWallet().getId(), "wallet.etc.failed");
             idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
             return result;
@@ -209,6 +219,14 @@ public class DefaultEtcFlowService implements EtcFlowService {
 
         BigDecimal redeemAmount = resolveRedeemAmount(code);
         if (!limitEnforcementService.validate(wallet.getId(), WalletLimitEnforcementService.FlowType.ETC_REDEEM, redeemAmount)) {
+            recordEtcFailure(
+                    wallet,
+                    redeemAmount,
+                    "etc-redeem-" + etcCodeSecurityService.redact(code),
+                    "ETC redeem limits exceeded",
+                    "ETC_LIMIT_EXCEEDED",
+                    "ETC redeem limits exceeded");
+
             WalletFlowResult result = WalletFlowResult.failure("ETC redeem limits exceeded", wallet.getId(), "wallet.etc.failed");
             idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
             return result;
@@ -296,5 +314,22 @@ public class DefaultEtcFlowService implements EtcFlowService {
         transaction.setReference(reference);
         transaction.setExternalReference(reference);
         return transactionLifecycleService.initialize(transaction, "ETC redemption initiated", correlationId(), reference);
+    }
+
+    private void recordEtcFailure(Wallet wallet,
+                                  BigDecimal amount,
+                                  String reference,
+                                  String reason,
+                                  String failureCode,
+                                  String failureMessage) {
+        if (wallet == null) {
+            return;
+        }
+
+        Transaction transaction = initializeEtcRedemptionTransaction(wallet, amount, reference);
+        transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PENDING,
+                "ETC redemption queued", correlationId(), null, null);
+        transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.FAILED,
+                reason, correlationId(), failureCode, failureMessage);
     }
 }
