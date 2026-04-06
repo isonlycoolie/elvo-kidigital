@@ -25,6 +25,7 @@ import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.service.WalletService;
 import com.elvo.wallet.service.model.WalletFlowResult;
 
@@ -49,6 +50,9 @@ class WalletControllerTest {
 
     @MockBean
     private EtcRepository etcRepository;
+
+    @MockBean
+    private EtcCodePolicyService etcCodePolicyService;
 
     @Test
     @WithMockUser(username = "11111111-1111-1111-1111-111111111111")

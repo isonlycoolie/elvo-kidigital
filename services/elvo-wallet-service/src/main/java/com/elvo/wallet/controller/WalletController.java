@@ -44,6 +44,7 @@ import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.service.WalletService;
 import com.elvo.wallet.service.model.DepositCommand;
 import com.elvo.wallet.service.model.EtcCommand;
@@ -73,16 +74,19 @@ public class WalletController {
     private final ReservationRepository reservationRepository;
     private final EtcRepository etcRepository;
     private final WalletMapper walletMapper;
+    private final EtcCodePolicyService etcCodePolicyService;
 
     public WalletController(WalletService walletService, WalletRepository walletRepository,
                           TransactionRepository transactionRepository, ReservationRepository reservationRepository,
-                          EtcRepository etcRepository, WalletMapper walletMapper) {
+                          EtcRepository etcRepository, WalletMapper walletMapper,
+                          EtcCodePolicyService etcCodePolicyService) {
         this.walletService = walletService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.reservationRepository = reservationRepository;
         this.etcRepository = etcRepository;
         this.walletMapper = walletMapper;
+        this.etcCodePolicyService = etcCodePolicyService;
     }
 
     /**
@@ -305,7 +309,7 @@ public class WalletController {
         Wallet wallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
 
-        String code = "ETC-" + request.getAmount().intValue() + "-" + UUID.randomUUID().toString().substring(0, 8);
+        String code = etcCodePolicyService.generateSecureCode();
 
         EtcCommand command = new EtcCommand(
             wallet.getId(),

@@ -31,6 +31,7 @@ import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
+import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.security.EtcCodeSecurityService;
 import com.elvo.wallet.service.EacReplayProtectionService;
 import com.elvo.wallet.service.model.DepositCommand;
@@ -60,6 +61,7 @@ class WalletFlowServiceTests {
     @Mock private WalletSagaOrchestrator sagaOrchestrator;
     @Mock private EacReplayProtectionService eacReplayProtectionService;
     @Mock private EtcCodeSecurityService etcCodeSecurityService;
+    @Mock private EtcCodePolicyService etcCodePolicyService;
 
     private Wallet wallet;
 
@@ -243,6 +245,8 @@ class WalletFlowServiceTests {
 
         when(etcCodeSecurityService.hashCode(anyString())).thenReturn("hash-etc");
         when(etcCodeSecurityService.redact(anyString())).thenReturn("***C123");
+        when(etcCodePolicyService.hasRequiredEntropy(anyString())).thenReturn(true);
+        when(etcCodePolicyService.isExpiryWithinWindow(any(), any())).thenReturn(true);
 
         DefaultEtcFlowService service = new DefaultEtcFlowService(
                 etcRepository,
@@ -252,7 +256,8 @@ class WalletFlowServiceTests {
                 ledgerIntegrationService,
                 limitEnforcementService,
             eventPublisher,
-            etcCodeSecurityService);
+            etcCodeSecurityService,
+            etcCodePolicyService);
 
         WalletFlowResult result = service.generate(new EtcCommand(wallet.getId(), wallet.getUserId(), "ETC-10-ABC123", Instant.now().plusSeconds(3600), "idem-5"));
 

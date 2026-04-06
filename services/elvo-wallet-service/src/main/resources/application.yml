@@ -89,3 +89,5 @@ elvo:
         window-seconds: ${ELVO_EAC_REPLAY_WINDOW_SECONDS:300}
     etc:
       hash-pepper: ${ELVO_ETC_HASH_PEPPER:elvo-wallet-etc-pepper}
+      min-secure-length: ${ELVO_ETC_MIN_SECURE_LENGTH:12}
+      max-expiry-window-seconds: ${ELVO_ETC_MAX_EXPIRY_WINDOW_SECONDS:900}

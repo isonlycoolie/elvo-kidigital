@@ -15,6 +15,7 @@ import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.TransactionRepository;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.EtcCodeSecurityService;
+import com.elvo.wallet.security.EtcCodePolicyService;
 import com.elvo.wallet.service.EtcFlowService;
 import com.elvo.wallet.service.model.EtcCommand;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -32,6 +33,7 @@ public class DefaultEtcFlowService implements EtcFlowService {
     private final WalletLimitEnforcementService limitEnforcementService;
     private final WalletEventPublisher eventPublisher;
     private final EtcCodeSecurityService etcCodeSecurityService;
+    private final EtcCodePolicyService etcCodePolicyService;
 
     public DefaultEtcFlowService(EtcRepository etcRepository,
                                  WalletRepository walletRepository,
@@ -40,7 +42,8 @@ public class DefaultEtcFlowService implements EtcFlowService {
                                  WalletLedgerIntegrationService ledgerIntegrationService,
                                  WalletLimitEnforcementService limitEnforcementService,
                                  WalletEventPublisher eventPublisher,
-                                 EtcCodeSecurityService etcCodeSecurityService) {
+                                 EtcCodeSecurityService etcCodeSecurityService,
+                                 EtcCodePolicyService etcCodePolicyService) {
         this.etcRepository = etcRepository;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -49,6 +52,7 @@ public class DefaultEtcFlowService implements EtcFlowService {
         this.eventPublisher = eventPublisher;
         this.limitEnforcementService = limitEnforcementService;
         this.etcCodeSecurityService = etcCodeSecurityService;
+        this.etcCodePolicyService = etcCodePolicyService;
     }
 
     @Override
@@ -56,6 +60,14 @@ public class DefaultEtcFlowService implements EtcFlowService {
     public WalletFlowResult generate(EtcCommand command) {
         if (command == null || command.walletId() == null || command.code() == null || command.expiresAt() == null) {
             return WalletFlowResult.failure("Invalid ETC generation request", null, "wallet.etc.failed");
+        }
+
+        if (!etcCodePolicyService.hasRequiredEntropy(command.code())) {
+            return WalletFlowResult.failure("ETC code does not meet entropy requirements", command.walletId(), "wallet.etc.failed");
+        }
+
+        if (!etcCodePolicyService.isExpiryWithinWindow(command.expiresAt(), Instant.now())) {
+            return WalletFlowResult.failure("ETC expiration window is invalid", command.walletId(), "wallet.etc.failed");
         }
 
         WalletFlowResult duplicate = idempotencyService.get(command.idempotencyKey()).orElse(null);
