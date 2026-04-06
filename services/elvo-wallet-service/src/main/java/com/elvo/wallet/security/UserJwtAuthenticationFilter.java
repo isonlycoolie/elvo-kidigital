@@ -43,6 +43,7 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
     private final UserJwtProperties jwtProperties;
     private final ObjectMapper objectMapper;
     private final UserTokenRevocationChecker tokenRevocationChecker;
+    private final IdentityJwksKeyResolver identityJwksKeyResolver;
     private final String resolvedJwtSecret;
     private final String resolvedSigningPublicKeyPem;
     private final String resolvedPreviousSigningPublicKeyPem;
@@ -50,22 +51,31 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
     private final String resolvedPreviousSigningKeyId;
 
     public UserJwtAuthenticationFilter(UserJwtProperties jwtProperties, ObjectMapper objectMapper) {
-        this(jwtProperties, objectMapper, jti -> false, null);
+        this(jwtProperties, objectMapper, jti -> false, null, null);
     }
 
     public UserJwtAuthenticationFilter(UserJwtProperties jwtProperties,
                                        ObjectMapper objectMapper,
                                        UserTokenRevocationChecker tokenRevocationChecker) {
-        this(jwtProperties, objectMapper, tokenRevocationChecker, null);
+        this(jwtProperties, objectMapper, tokenRevocationChecker, null, null);
     }
 
     public UserJwtAuthenticationFilter(UserJwtProperties jwtProperties,
                                        ObjectMapper objectMapper,
                                        UserTokenRevocationChecker tokenRevocationChecker,
                                        SecretManagerService secretManagerService) {
+        this(jwtProperties, objectMapper, tokenRevocationChecker, secretManagerService, null);
+    }
+
+    public UserJwtAuthenticationFilter(UserJwtProperties jwtProperties,
+                                       ObjectMapper objectMapper,
+                                       UserTokenRevocationChecker tokenRevocationChecker,
+                                       SecretManagerService secretManagerService,
+                                       IdentityJwksKeyResolver identityJwksKeyResolver) {
         this.jwtProperties = jwtProperties;
         this.objectMapper = objectMapper;
         this.tokenRevocationChecker = tokenRevocationChecker;
+        this.identityJwksKeyResolver = identityJwksKeyResolver;
         if (secretManagerService == null) {
             this.resolvedJwtSecret = jwtProperties.getSecret();
             this.resolvedSigningPublicKeyPem = jwtProperties.getSigningPublicKeyPem();
@@ -151,12 +161,9 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private Claims parseClaims(String token) {
-        if (hasText(resolvedSigningPublicKeyPem)) {
+        if (hasText(resolvedSigningPublicKeyPem) || identityJwksKeyResolver != null) {
             String tokenKeyId = resolveKeyId(token);
             PublicKey publicKey = resolvePublicKey(tokenKeyId);
-            if (publicKey == null) {
-                throw new IllegalArgumentException("Token key id is invalid");
-            }
 
             return Jwts.parser()
                     .verifyWith(publicKey)
@@ -223,6 +230,10 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private PublicKey resolvePublicKey(String tokenKeyId) {
+        if (identityJwksKeyResolver != null) {
+            return identityJwksKeyResolver.resolve(tokenKeyId);
+        }
+
         if (!hasText(tokenKeyId)) {
             return parsePublicKey(resolvedSigningPublicKeyPem);
         }

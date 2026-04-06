@@ -151,6 +151,25 @@ class UserJwtAuthenticationFilterTest {
         assertThat(authentication).isNotNull();
     }
 
+    @Test
+    void shouldResolveTokenKeyFromJwksResolver() throws Exception {
+        UUID userId = UUID.randomUUID();
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/wallets/me/balance");
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token(keyPair, KEY_ID, userId, "ACCESS"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = (req, res) -> { };
+
+        IdentityJwksKeyResolver identityJwksKeyResolver = mock(IdentityJwksKeyResolver.class);
+        when(identityJwksKeyResolver.resolve(KEY_ID)).thenReturn(keyPair.getPublic());
+        UserJwtAuthenticationFilter jwksFilter = new UserJwtAuthenticationFilter(properties, new ObjectMapper().registerModule(new JavaTimeModule()), tokenRevocationChecker, null, identityJwksKeyResolver);
+
+        jwksFilter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isNotEqualTo(403);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        assertThat(authentication).isNotNull();
+    }
+
     private String token(UUID userId, String tokenType) {
         return token(keyPair, KEY_ID, userId, tokenType);
     }
