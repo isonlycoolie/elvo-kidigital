@@ -13,8 +13,11 @@ import org.junit.jupiter.api.Test;
 import static org.mockito.Mockito.when;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.env.Environment;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -27,7 +30,9 @@ import com.elvo.wallet.exception.GlobalExceptionHandler;
 import com.elvo.wallet.mapper.WalletMapper;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.InternalServiceAuthorizationMatrix;
+import com.elvo.wallet.security.MakerCheckerApprovalService;
 import com.elvo.wallet.security.SecurityConfig;
+import com.elvo.wallet.security.SecretManagerService;
 import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
@@ -40,7 +45,8 @@ import io.jsonwebtoken.security.Keys;
         SecurityConfig.class,
         WalletMapper.class,
         GlobalExceptionHandler.class,
-        InternalServiceAuthorizationMatrix.class
+        InternalServiceAuthorizationMatrix.class,
+        InternalWalletControllerSecurityTest.InternalWalletControllerSecurityTestConfig.class
 })
 @TestPropertySource(properties = {
         "elvo.security.internal-jwt.secret=test-secret-for-wallet-internal-auth-32",
@@ -48,7 +54,9 @@ import io.jsonwebtoken.security.Keys;
         "elvo.security.internal-jwt.audience=elvo-wallet-service",
         "elvo.security.internal-jwt.required-role=INTERNAL_SERVICE",
     "elvo.security.internal-jwt.source-service-claim=sourceService",
-    "elvo.security.internal-jwt.service-identity-claim=serviceIdentity"
+    "elvo.security.internal-jwt.service-identity-claim=serviceIdentity",
+    "elvo.security.correlation.signature-secret=test-wallet-correlation-signature-secret",
+    "ELVO_INTERNAL_JWT_SECRET=test-wallet-correlation-signature-secret"
 })
 class InternalWalletControllerSecurityTest {
 
@@ -66,6 +74,17 @@ class InternalWalletControllerSecurityTest {
 
         @MockBean
         private WalletFieldEncryptionService fieldEncryptionService;
+
+    @MockBean
+    private MakerCheckerApprovalService makerCheckerApprovalService;
+
+    @TestConfiguration
+    static class InternalWalletControllerSecurityTestConfig {
+        @Bean
+        SecretManagerService secretManagerService(Environment environment) {
+            return new SecretManagerService(environment);
+        }
+    }
 
     @Test
     void internalBalanceShouldRejectUnauthorizedSourceService() throws Exception {
