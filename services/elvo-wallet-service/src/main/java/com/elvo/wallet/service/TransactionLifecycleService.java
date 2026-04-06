@@ -15,6 +15,10 @@ public interface TransactionLifecycleService {
                            String failureCode,
                            String failureMessage);
 
+    Transaction expire(Transaction transaction, String reason, String correlationId);
+
+    int expireOverdueTransactions();
+
     boolean canTransition(Transaction.TransactionStatus fromStatus, Transaction.TransactionStatus toStatus);
 
     List<Transaction.TransactionStatus> activeStatuses();

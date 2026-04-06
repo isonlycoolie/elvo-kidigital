@@ -1,5 +1,6 @@
 package com.elvo.wallet.service.impl;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
@@ -29,13 +30,14 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
 
     private final TransactionRepository transactionRepository;
     private final TransactionStatusHistoryRepository transactionStatusHistoryRepository;
-    private static final long DEFAULT_EXPIRY_MINUTES = 30;
+    private final Duration expirationWindow;
 
     public DefaultTransactionLifecycleService(TransactionRepository transactionRepository,
                                               TransactionStatusHistoryRepository transactionStatusHistoryRepository,
                                               long expiryMinutes) {
         this.transactionRepository = transactionRepository;
         this.transactionStatusHistoryRepository = transactionStatusHistoryRepository;
+        this.expirationWindow = Duration.ofMinutes(expiryMinutes);
     }
 
     @Override
@@ -56,7 +58,7 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
             transaction.setRetryCount(0);
         }
         if (transaction.getExpiresAt() == null) {
-            transaction.setExpiresAt(now.plusSeconds(DEFAULT_EXPIRY_MINUTES * 60));
+            transaction.setExpiresAt(now.plus(expirationWindow));
         }
 
         Transaction persisted = transactionRepository.save(transaction);
@@ -106,6 +108,39 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
         AUDIT_LOG.info("transaction_transitioned transactionId={} fromStatus={} toStatus={} reason={} correlationId={}",
                 persisted.getId(), currentStatus, nextStatus, persisted.getStatusReason(), persisted.getCorrelationId());
         return persisted;
+    }
+
+    @Override
+    @Transactional
+    public Transaction expire(Transaction transaction, String reason, String correlationId) {
+        if (transaction == null) {
+            throw new IllegalArgumentException("Transaction is required");
+        }
+
+        if (TERMINAL_STATUSES.contains(transaction.getStatus())) {
+            return transaction;
+        }
+
+        Instant expiresAt = transaction.getExpiresAt();
+        if (expiresAt != null && expiresAt.isAfter(Instant.now())) {
+            return transaction;
+        }
+
+        return transition(transaction, Transaction.TransactionStatus.EXPIRED, reason, correlationId,
+                "TRANSACTION_EXPIRED", reason);
+    }
+
+    @Override
+    @Transactional
+    public int expireOverdueTransactions() {
+        Instant now = Instant.now();
+        List<Transaction> overdueTransactions = transactionRepository.findByStatusInAndExpiresAtBefore(activeStatuses(), now);
+        int expiredCount = 0;
+        for (Transaction transaction : overdueTransactions) {
+            expire(transaction, "Transaction expired", resolveCorrelationId(null));
+            expiredCount++;
+        }
+        return expiredCount;
     }
 
     @Override
