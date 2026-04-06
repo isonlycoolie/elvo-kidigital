@@ -55,59 +55,68 @@ public class LoginServiceImpl implements LoginService {
     @Override
     @Transactional
     public LoginResponse login(LoginRequest request) {
-        User user = loadUser(request.getIdentifier());
-        securityProtectionService.enforcePerUserRateLimit(user);
-        securityProtectionService.ensureAccountNotLocked(user);
-        validatePassword(user, request.getPassword(), request);
-        validateUserStatus(user);
-        validateMfaIfRequired(user, request);
+        User user = null;
+        try {
+            user = loadUser(request.getIdentifier());
+            securityProtectionService.enforcePerUserRateLimit(user);
+            securityProtectionService.ensureAccountNotLocked(user);
+            validatePassword(user, request.getPassword(), request);
+            validateUserStatus(user);
+            validateMfaIfRequired(user, request);
 
-        securityProtectionService.recordSuccessfulAuthentication(
-            user,
-            request.getSourceIp(),
-            request.getSourceUserAgent(),
-            request.getDeviceId());
+            securityProtectionService.recordSuccessfulAuthentication(
+                user,
+                request.getSourceIp(),
+                request.getSourceUserAgent(),
+                request.getDeviceId());
 
-        Device device = upsertDevice(user, request);
+            Device device = upsertDevice(user, request);
 
-        TokenService.TokenPayload accessToken = tokenService.generateAccessToken(user.getId(), user.getEan());
-        TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(user.getId());
+            TokenService.TokenPayload accessToken = tokenService.generateAccessToken(user.getId(), user.getEan());
+            TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(user.getId());
 
-        Session session = new Session();
-        session.setUser(user);
-        session.setDevice(device);
-        session.setJwtToken(accessToken.token());
-        session.setRefreshToken(refreshToken.token());
-        session.setExpiresAt(refreshToken.expiresAt());
-        session.setIpAddress(request.getSourceIp());
-        session.setSessionStatus(Session.SessionStatus.ACTIVE);
-        session.setActive(true);
-        session.setRevoked(false);
-        Session savedSession = sessionRepository.save(session);
+            Session session = new Session();
+            session.setUser(user);
+            session.setDevice(device);
+            session.setJwtToken(accessToken.token());
+            session.setRefreshToken(refreshToken.token());
+            session.setExpiresAt(refreshToken.expiresAt());
+            session.setIpAddress(request.getSourceIp());
+            session.setSessionStatus(Session.SessionStatus.ACTIVE);
+            session.setActive(true);
+            session.setRevoked(false);
+            Session savedSession = sessionRepository.save(session);
 
-        device.setLastUsedAt(Instant.now());
-        deviceRepository.save(device);
+            device.setLastUsedAt(Instant.now());
+            deviceRepository.save(device);
 
-        Audit audit = new Audit();
-        audit.setActionType(Audit.ActionType.LOGIN);
-        audit.setDescription("User login successful");
-        audit.setSourceType(Audit.SourceType.API);
-        audit.setSourceIp(request.getSourceIp());
-        audit.setSourceUserAgent(request.getSourceUserAgent());
-        audit.setCorrelationId(null);
-        audit.setSessionId(savedSession.getId());
-        audit.setDeviceId(device.getId());
-        audit.setUser(user);
-        Audit savedAudit = auditRepository.save(audit);
-        auditEventPublisher.publish(savedAudit);
+            Audit audit = new Audit();
+            audit.setActionType(Audit.ActionType.LOGIN);
+            audit.setDescription("User login successful");
+            audit.setSourceType(Audit.SourceType.API);
+            audit.setSourceIp(request.getSourceIp());
+            audit.setSourceUserAgent(request.getSourceUserAgent());
+            audit.setCorrelationId(null);
+            audit.setSessionId(savedSession.getId());
+            audit.setDeviceId(device.getId());
+            audit.setUser(user);
+            Audit savedAudit = auditRepository.save(audit);
+            auditEventPublisher.publish(savedAudit);
 
-        return new LoginResponse(
-                user.getId(),
-                accessToken.token(),
-                refreshToken.token(),
-                accessToken.expiresAt(),
-                refreshToken.expiresAt(),
-                savedSession.getId());
+            return new LoginResponse(
+                    user.getId(),
+                    accessToken.token(),
+                    refreshToken.token(),
+                    accessToken.expiresAt(),
+                    refreshToken.expiresAt(),
+                    savedSession.getId());
+        } catch (RuntimeException ex) {
+            // Password failures are already audited by SecurityProtectionService.
+            if (user == null || !"Invalid credentials".equals(ex.getMessage())) {
+                auditAuthenticationFailure(user, request, classifyFailureReason(ex));
+            }
+            throw ex;
+        }
     }
 
     private User loadUser(String identifier) {
@@ -160,5 +169,39 @@ public class LoginServiceImpl implements LoginService {
                     device.setRevoked(false);
                     return device;
                 });
+    }
+
+    private void auditAuthenticationFailure(User user, LoginRequest request, String reason) {
+        Audit audit = new Audit();
+        audit.setActionType(Audit.ActionType.USER_ACTIVITY);
+        audit.setDescription("AUTH_FAILURE|flow=login|reason=" + reason);
+        audit.setSourceType(Audit.SourceType.API);
+        audit.setSourceIp(request.getSourceIp());
+        audit.setSourceUserAgent(request.getSourceUserAgent());
+        if (user != null) {
+            audit.setUser(user);
+        }
+        Audit savedAudit = auditRepository.save(audit);
+        auditEventPublisher.publish(savedAudit);
+    }
+
+    private String classifyFailureReason(RuntimeException ex) {
+        String message = ex.getMessage();
+        if ("Invalid credentials".equals(message)) {
+            return "INVALID_CREDENTIALS";
+        }
+        if ("Account is temporarily locked".equals(message)) {
+            return "ACCOUNT_LOCKED";
+        }
+        if ("Account is not active".equals(message)) {
+            return "ACCOUNT_DISABLED";
+        }
+        if ("MFA code is required".equals(message)) {
+            return "MFA_REQUIRED";
+        }
+        if ("Rate limit exceeded for user".equals(message)) {
+            return "RATE_LIMITED";
+        }
+        return "AUTH_FAILURE";
     }
 }

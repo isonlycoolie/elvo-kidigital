@@ -1,6 +1,8 @@
 package com.elvo.identity.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -20,7 +22,9 @@ import com.elvo.identity.dto.response.RegistrationResponse;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
+import com.elvo.identity.monitoring.SentryExceptionReporter;
 import com.elvo.identity.security.SecurityHashingService;
+import com.elvo.identity.security.TokenRevocationService;
 import com.elvo.identity.service.LoginService;
 import com.elvo.identity.service.RegistrationService;
 import com.elvo.identity.util.TokenService;
@@ -58,6 +62,12 @@ class AuthControllerUnitTest {
     @MockBean
     private SecurityHashingService hashingService;
 
+    @MockBean
+    private TokenRevocationService tokenRevocationService;
+
+    @MockBean
+    private SentryExceptionReporter sentryExceptionReporter;
+
     @Test
     void registerShouldReturnBadRequestForInvalidPayload() throws Exception {
         mockMvc.perform(post("/auth/register")
@@ -93,4 +103,25 @@ class AuthControllerUnitTest {
                                 """))
                 .andExpect(status().isOk());
     }
+
+                            @Test
+                            void refreshTokenFailureShouldEmitStructuredAuthFailureAudit() throws Exception {
+                          when(tokenService.validateRefreshToken(any())).thenThrow(new IllegalArgumentException("Token is invalid"));
+
+                          mockMvc.perform(post("/auth/refresh-token")
+                              .with(csrf())
+                              .contentType(MediaType.APPLICATION_JSON)
+                              .content("""
+                                {
+                                  "refreshToken": "invalid.token.value",
+                                  "sourceIp": "127.0.0.1",
+                                  "sourceUserAgent": "JUnit"
+                                }
+                                """))
+                            .andExpect(status().is5xxServerError());
+
+                          verify(auditRepository).save(argThat(audit ->
+                            audit.getDescription() != null
+                              && audit.getDescription().startsWith("AUTH_FAILURE|flow=refresh-token|reason=TOKEN_INVALID")));
+                            }
 }

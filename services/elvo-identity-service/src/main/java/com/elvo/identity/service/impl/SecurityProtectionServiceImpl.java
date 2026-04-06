@@ -65,7 +65,7 @@ public class SecurityProtectionServiceImpl implements SecurityProtectionService 
 
         Audit audit = new Audit();
         audit.setActionType(Audit.ActionType.USER_ACTIVITY);
-        audit.setDescription("Failed authentication attempt");
+        audit.setDescription("AUTH_FAILURE|flow=login|reason=INVALID_CREDENTIALS");
         audit.setSourceType(Audit.SourceType.API);
         audit.setSourceIp(sourceIp);
         audit.setSourceUserAgent(sourceUserAgent);

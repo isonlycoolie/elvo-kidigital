@@ -20,13 +20,17 @@ class TokenSecurityEdgeCaseTest {
 
     private TokenService tokenService(long accessMinutes, long refreshDays) {
         KeyPair keyPair = generateRsaKeyPair();
+        return tokenService(keyPair, ISSUER, AUDIENCE, accessMinutes, refreshDays);
+    }
+
+    private TokenService tokenService(KeyPair keyPair, String issuer, String audience, long accessMinutes, long refreshDays) {
         return new TokenService(
                 "",
                 toPrivatePem(keyPair),
                 toPublicPem(keyPair),
                 KEY_ID,
-                ISSUER,
-                AUDIENCE,
+                issuer,
+                audience,
                 accessMinutes,
                 refreshDays);
     }
@@ -77,5 +81,29 @@ class TokenSecurityEdgeCaseTest {
         TokenService.TokenPayload refresh = tokenService.generateRefreshToken(UUID.randomUUID());
 
         assertThrows(IllegalArgumentException.class, () -> tokenService.validateRefreshToken(refresh.token()));
+    }
+
+    @Test
+    void wrongIssuerShouldBeRejected() {
+        KeyPair keyPair = generateRsaKeyPair();
+        TokenService validatingService = tokenService(keyPair, ISSUER, AUDIENCE, 15, 7);
+        TokenService foreignIssuerService = tokenService(keyPair, "other-issuer", AUDIENCE, 15, 7);
+
+        TokenService.TokenPayload tokenPayload = foreignIssuerService.generateAccessToken(UUID.randomUUID(), "ELVO-EDGE-0001");
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> validatingService.validateAccessToken(tokenPayload.token()));
+        assertEquals("Token is invalid", ex.getMessage());
+    }
+
+    @Test
+    void wrongAudienceShouldBeRejected() {
+        KeyPair keyPair = generateRsaKeyPair();
+        TokenService validatingService = tokenService(keyPair, ISSUER, AUDIENCE, 15, 7);
+        TokenService foreignAudienceService = tokenService(keyPair, ISSUER, "other-audience", 15, 7);
+
+        TokenService.TokenPayload tokenPayload = foreignAudienceService.generateAccessToken(UUID.randomUUID(), "ELVO-EDGE-0001");
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> validatingService.validateAccessToken(tokenPayload.token()));
+        assertEquals("Token is invalid", ex.getMessage());
     }
 }

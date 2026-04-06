@@ -93,65 +93,87 @@ public class AuthController {
 
     @PostMapping("/refresh-token")
     public ResponseEntity<ApiResponse<LoginResponse>> refreshToken(@Valid @RequestBody AuthRefreshTokenRequest request) {
-        TokenService.RefreshTokenClaims claims = tokenService.validateRefreshToken(request.getRefreshToken());
-        Session session = sessionRepository.findByRefreshToken(request.getRefreshToken())
-                .orElseThrow(() -> new IllegalArgumentException("Refresh token is invalid"));
+        try {
+            TokenService.RefreshTokenClaims claims = tokenService.validateRefreshToken(request.getRefreshToken());
+            Session session = sessionRepository.findByRefreshToken(request.getRefreshToken())
+                    .orElseThrow(() -> new IllegalArgumentException("Refresh token is invalid"));
 
-        if (!session.getUser().getId().equals(claims.userId())) {
-            throw new IllegalArgumentException("Refresh token is invalid");
+            if (!session.getUser().getId().equals(claims.userId())) {
+                throw new IllegalArgumentException("Refresh token is invalid");
+            }
+
+            if (session.isRevoked() || !session.isActive() || Instant.now().isAfter(session.getExpiresAt())) {
+                throw new IllegalStateException("Session is expired or revoked");
+            }
+
+            tokenRevocationService.revokeJti(claims.jti(), claims.expiresAt());
+            revokeSessionAccessTokenIfPresent(session);
+
+            TokenService.TokenPayload accessToken = tokenService.generateAccessToken(session.getUser().getId(), session.getUser().getEan());
+            TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(session.getUser().getId());
+            session.setJwtToken(accessToken.token());
+            session.setRefreshToken(refreshToken.token());
+            session.setExpiresAt(refreshToken.expiresAt());
+            sessionRepository.save(session);
+
+            Audit audit = new Audit();
+            audit.setActionType(Audit.ActionType.USER_ACTIVITY);
+            audit.setDescription("Refresh token issued");
+            audit.setSourceType(Audit.SourceType.API);
+            audit.setSourceIp(request.getSourceIp());
+            audit.setSourceUserAgent(request.getSourceUserAgent());
+            audit.setSessionId(session.getId());
+            audit.setUser(session.getUser());
+            Audit savedAudit = auditRepository.save(audit);
+            auditEventPublisher.publish(savedAudit);
+
+            LoginResponse response = new LoginResponse(
+                    session.getUser().getId(),
+                    accessToken.token(),
+                    refreshToken.token(),
+                    accessToken.expiresAt(),
+                    refreshToken.expiresAt(),
+                    session.getId());
+            return ResponseEntity.ok(ApiResponse.ok("Token refreshed", response));
+        } catch (RuntimeException ex) {
+            auditAuthFailure(
+                    "refresh-token",
+                    classifyAuthFailureReason(ex),
+                    request.getSourceIp(),
+                    request.getSourceUserAgent(),
+                    null,
+                    null);
+            throw ex;
         }
-
-        if (session.isRevoked() || !session.isActive() || Instant.now().isAfter(session.getExpiresAt())) {
-            throw new IllegalStateException("Session is expired or revoked");
-        }
-
-        tokenRevocationService.revokeJti(claims.jti(), claims.expiresAt());
-        revokeSessionAccessTokenIfPresent(session);
-
-        TokenService.TokenPayload accessToken = tokenService.generateAccessToken(session.getUser().getId(), session.getUser().getEan());
-        TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(session.getUser().getId());
-        session.setJwtToken(accessToken.token());
-        session.setRefreshToken(refreshToken.token());
-        session.setExpiresAt(refreshToken.expiresAt());
-        sessionRepository.save(session);
-
-        Audit audit = new Audit();
-        audit.setActionType(Audit.ActionType.USER_ACTIVITY);
-        audit.setDescription("Refresh token issued");
-        audit.setSourceType(Audit.SourceType.API);
-        audit.setSourceIp(request.getSourceIp());
-        audit.setSourceUserAgent(request.getSourceUserAgent());
-        audit.setSessionId(session.getId());
-        audit.setUser(session.getUser());
-        Audit savedAudit = auditRepository.save(audit);
-        auditEventPublisher.publish(savedAudit);
-
-        LoginResponse response = new LoginResponse(
-                session.getUser().getId(),
-                accessToken.token(),
-                refreshToken.token(),
-                accessToken.expiresAt(),
-                refreshToken.expiresAt(),
-                session.getId());
-        return ResponseEntity.ok(ApiResponse.ok("Token refreshed", response));
     }
 
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<AuthActionResponse>> logout(@Valid @RequestBody AuthLogoutRequest request) {
-        TokenService.RefreshTokenClaims claims = tokenService.validateRefreshToken(request.getRefreshToken());
-        int updated = sessionRepository.findByRefreshToken(request.getRefreshToken())
-                .map(session -> {
-                    if (!session.getUser().getId().equals(claims.userId())) {
-                        throw new IllegalArgumentException("Refresh token is invalid");
-                    }
-                    tokenRevocationService.revokeJti(claims.jti(), claims.expiresAt());
-                    revokeSessionAccessTokenIfPresent(session);
-                    auditSessionEvent(session, "Logout completed", request.getSourceIp(), request.getSourceUserAgent());
-                    return sessionRepository.revokeSession(session.getId());
-                })
-                .orElse(0);
+        try {
+            TokenService.RefreshTokenClaims claims = tokenService.validateRefreshToken(request.getRefreshToken());
+            int updated = sessionRepository.findByRefreshToken(request.getRefreshToken())
+                    .map(session -> {
+                        if (!session.getUser().getId().equals(claims.userId())) {
+                            throw new IllegalArgumentException("Refresh token is invalid");
+                        }
+                        tokenRevocationService.revokeJti(claims.jti(), claims.expiresAt());
+                        revokeSessionAccessTokenIfPresent(session);
+                        auditSessionEvent(session, "Logout completed", request.getSourceIp(), request.getSourceUserAgent());
+                        return sessionRepository.revokeSession(session.getId());
+                    })
+                    .orElse(0);
 
-        return ResponseEntity.ok(ApiResponse.ok("Logout processed", new AuthActionResponse(updated > 0, "Logout complete")));
+            return ResponseEntity.ok(ApiResponse.ok("Logout processed", new AuthActionResponse(updated > 0, "Logout complete")));
+        } catch (RuntimeException ex) {
+            auditAuthFailure(
+                    "logout",
+                    classifyAuthFailureReason(ex),
+                    request.getSourceIp(),
+                    request.getSourceUserAgent(),
+                    null,
+                    null);
+            throw ex;
+        }
     }
 
     @PostMapping("/logout-all")
@@ -275,5 +297,50 @@ public class AuthController {
         } catch (IllegalArgumentException ex) {
             // Access token may already be invalid/expired and does not require denylist storage.
         }
+    }
+
+    private void auditAuthFailure(String flow,
+                                  String reason,
+                                  String sourceIp,
+                                  String sourceUserAgent,
+                                  Session session,
+                                  User user) {
+        Audit audit = new Audit();
+        audit.setActionType(Audit.ActionType.USER_ACTIVITY);
+        audit.setDescription("AUTH_FAILURE|flow=" + flow + "|reason=" + reason);
+        audit.setSourceType(Audit.SourceType.API);
+        audit.setSourceIp(sourceIp);
+        audit.setSourceUserAgent(sourceUserAgent);
+        if (session != null) {
+            audit.setSessionId(session.getId());
+        }
+        if (user != null) {
+            audit.setUser(user);
+        }
+        Audit savedAudit = auditRepository.save(audit);
+        auditEventPublisher.publish(savedAudit);
+    }
+
+    private String classifyAuthFailureReason(RuntimeException ex) {
+        String message = ex.getMessage();
+        if (message == null) {
+            return "AUTH_FAILURE";
+        }
+        if ("Token is invalid".equals(message)) {
+            return "TOKEN_INVALID";
+        }
+        if ("Token issuer is invalid".equals(message) || "Token audience is invalid".equals(message)) {
+            return "TOKEN_CLAIMS_INVALID";
+        }
+        if ("Token is revoked".equals(message)) {
+            return "TOKEN_REVOKED";
+        }
+        if ("Refresh token is invalid".equals(message)) {
+            return "REFRESH_TOKEN_INVALID";
+        }
+        if ("Session is expired or revoked".equals(message)) {
+            return "SESSION_STALE";
+        }
+        return "AUTH_FAILURE";
     }
 }

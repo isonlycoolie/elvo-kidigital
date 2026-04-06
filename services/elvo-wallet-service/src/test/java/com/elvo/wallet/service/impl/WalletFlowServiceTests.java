@@ -273,6 +273,90 @@ class WalletFlowServiceTests {
         verify(eventPublisher).publish(eq("wallet.withdrawal.failed"), any());
     }
 
+    @Test
+    void withdrawalShouldFailWhenUserIsDisabled() {
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        when(identityServiceClient.isUserActive(any())).thenReturn(false);
+
+        DefaultWithdrawalFlowService service = new DefaultWithdrawalFlowService(
+                walletRepository,
+                transactionRepository,
+                identityServiceClient,
+                idempotencyService,
+                ledgerIntegrationService,
+                limitEnforcementService,
+                sagaOrchestrator,
+                eventPublisher,
+                eacReplayProtectionService,
+                stepUpAuthenticationService,
+                transactionSigningChallengeService,
+                fraudVelocityService,
+                fieldEncryptionService,
+                transactionLifecycleService);
+
+        WalletFlowResult result = service.process(new WithdrawalCommand(
+                UUID.randomUUID(),
+                wallet.getUserId(),
+                new BigDecimal("10.00"),
+                WithdrawalMode.DEVICE_FREE,
+                "0900000000",
+                "esp",
+                "eac",
+                "idem-user-disabled",
+                "ref-user-disabled",
+                null,
+                null,
+                null));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.message()).contains("User is not active");
+        verify(walletRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    void externalWithdrawalShouldFailWhenEacVerificationFails() {
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        when(identityServiceClient.isUserActive(any())).thenReturn(true);
+        when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
+        when(identityServiceClient.verifyEac(any(), any())).thenReturn(false);
+                when(walletRepository.findByIdForUpdate(any())).thenReturn(Optional.of(wallet));
+                when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
+
+        DefaultWithdrawalFlowService service = new DefaultWithdrawalFlowService(
+                walletRepository,
+                transactionRepository,
+                identityServiceClient,
+                idempotencyService,
+                ledgerIntegrationService,
+                limitEnforcementService,
+                sagaOrchestrator,
+                eventPublisher,
+                eacReplayProtectionService,
+                stepUpAuthenticationService,
+                transactionSigningChallengeService,
+                fraudVelocityService,
+                fieldEncryptionService,
+                transactionLifecycleService);
+
+        WalletFlowResult result = service.process(new WithdrawalCommand(
+                UUID.randomUUID(),
+                wallet.getUserId(),
+                new BigDecimal("10.00"),
+                WithdrawalMode.OTHER_NUMBER,
+                "0900000000",
+                "esp",
+                "eac",
+                "idem-eac-fail",
+                "ref-eac-fail",
+                null,
+                null,
+                null));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.message()).contains("ESP/EAC verification failed");
+                verify(walletRepository).findByIdForUpdate(any());
+    }
+
         @Test
         void registeredWithdrawalShouldFollowLifecycleStateFlow() {
                 UUID walletId = UUID.randomUUID();
