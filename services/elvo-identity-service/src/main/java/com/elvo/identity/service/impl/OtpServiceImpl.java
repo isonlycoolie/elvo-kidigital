@@ -8,8 +8,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.elvo.identity.audit.AuditEventPublisher;
+import com.elvo.identity.entity.Audit;
 import com.elvo.identity.entity.User;
 import com.elvo.identity.entity.VerificationOtp;
+import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.VerificationOtpRepository;
 import com.elvo.identity.security.OtpCryptoService;
 import com.elvo.identity.service.EmailSenderService;
@@ -27,19 +30,25 @@ public class OtpServiceImpl implements OtpService {
     private final OtpCryptoService otpCryptoService;
     private final EmailSenderService emailSenderService;
     private final SmsSenderService smsSenderService;
+    private final AuditRepository auditRepository;
+    private final AuditEventPublisher auditEventPublisher;
 
     public OtpServiceImpl(VerificationOtpRepository verificationOtpRepository,
                           VerificationPolicyService verificationPolicyService,
                           OtpRateLimitService otpRateLimitService,
                           OtpCryptoService otpCryptoService,
                           EmailSenderService emailSenderService,
-                          SmsSenderService smsSenderService) {
+                          SmsSenderService smsSenderService,
+                          AuditRepository auditRepository,
+                          AuditEventPublisher auditEventPublisher) {
         this.verificationOtpRepository = verificationOtpRepository;
         this.verificationPolicyService = verificationPolicyService;
         this.otpRateLimitService = otpRateLimitService;
         this.otpCryptoService = otpCryptoService;
         this.emailSenderService = emailSenderService;
         this.smsSenderService = smsSenderService;
+        this.auditRepository = auditRepository;
+        this.auditEventPublisher = auditEventPublisher;
     }
 
     @Override
@@ -63,6 +72,7 @@ public class OtpServiceImpl implements OtpService {
                     purpose,
                     now.minus(verificationPolicyService.resendWindow()));
             if (recentOtpCount >= verificationPolicyService.maxResendsPerWindow() + 1L) {
+                recordOtpAudit(user, "OTP_RESEND_LIMIT_EXCEEDED|purpose=" + purpose.name());
                 throw new IllegalStateException("OTP resend limit reached");
             }
         }
@@ -72,6 +82,7 @@ public class OtpServiceImpl implements OtpService {
 
         if (resend && latestActiveOtp != null
                 && now.isBefore(latestActiveOtp.getCreatedAt().plus(verificationPolicyService.resendCooldown()))) {
+            recordOtpAudit(user, "OTP_RESEND_COOLDOWN_ACTIVE|purpose=" + purpose.name());
             throw new IllegalStateException("OTP resend cooldown active");
         }
 
@@ -93,8 +104,10 @@ public class OtpServiceImpl implements OtpService {
         otp.setAttemptCount(0);
         otp.setResendCount(resend && latestActiveOtp != null ? latestActiveOtp.getResendCount() + 1 : 0);
         VerificationOtp savedOtp = verificationOtpRepository.save(otp);
+        recordOtpAudit(user, "OTP_GENERATED|purpose=" + purpose.name() + "|channel=" + channel.name());
 
         dispatchOtp(savedOtp, otpCode);
+        recordOtpAudit(user, "OTP_DELIVERED|purpose=" + purpose.name() + "|channel=" + channel.name());
         return new OtpDispatchResult(savedOtp.getRequestId(), maskDestination(savedOtp), savedOtp.getExpiresAt());
     }
 
@@ -110,20 +123,24 @@ public class OtpServiceImpl implements OtpService {
 
         VerificationOtp otp = resolveActiveOtp(user.getId(), purpose, requestId);
         if (otp == null) {
+            recordOtpAudit(user, "OTP_VERIFY_FAILED|reason=MISSING|purpose=" + purpose.name());
             return new OtpVerificationResult(false, "OTP_REQUIRED", "Verification code is required");
         }
 
         if (otp.getStatus() != VerificationOtp.Status.ACTIVE) {
+            recordOtpAudit(user, "OTP_VERIFY_FAILED|reason=STATUS_INVALID|purpose=" + purpose.name());
             return new OtpVerificationResult(false, "OTP_INVALID", "Verification code is invalid");
         }
 
         if (otp.getConsumedAt() != null) {
+            recordOtpAudit(user, "OTP_VERIFY_FAILED|reason=ALREADY_USED|purpose=" + purpose.name());
             return new OtpVerificationResult(false, "OTP_ALREADY_USED", "Verification code is already used");
         }
 
         Instant now = Instant.now();
         if (now.isAfter(otp.getExpiresAt())) {
             otp.setStatus(VerificationOtp.Status.EXPIRED);
+            recordOtpAudit(user, "OTP_EXPIRED|purpose=" + purpose.name());
             return new OtpVerificationResult(false, "OTP_EXPIRED", "Verification code expired");
         }
 
@@ -132,13 +149,16 @@ public class OtpServiceImpl implements OtpService {
             otp.setAttemptCount(otp.getAttemptCount() + 1);
             if (otp.getAttemptCount() >= verificationPolicyService.maxOtpAttempts()) {
                 otp.setStatus(VerificationOtp.Status.LOCKED);
+                recordOtpAudit(user, "OTP_LOCKED|purpose=" + purpose.name());
                 return new OtpVerificationResult(false, "OTP_LOCKED", "Verification code locked");
             }
+            recordOtpAudit(user, "OTP_VERIFY_FAILED|reason=INVALID|purpose=" + purpose.name());
             return new OtpVerificationResult(false, "OTP_INVALID", "Verification code is invalid");
         }
 
         otp.setStatus(VerificationOtp.Status.USED);
         otp.setConsumedAt(now);
+        recordOtpAudit(user, "OTP_VERIFIED|purpose=" + purpose.name());
         return new OtpVerificationResult(true, "OTP_VERIFIED", "Verification successful");
     }
 
@@ -159,6 +179,16 @@ public class OtpServiceImpl implements OtpService {
             return;
         }
         smsSenderService.sendVerificationOtp(otp.getDestination(), otpCode, verificationPolicyService.otpTtl(), otp.getRequestId());
+    }
+
+    private void recordOtpAudit(User user, String description) {
+        Audit audit = new Audit();
+        audit.setActionType(Audit.ActionType.USER_ACTIVITY);
+        audit.setDescription(description);
+        audit.setSourceType(Audit.SourceType.SYSTEM);
+        audit.setUser(user);
+        Audit savedAudit = auditRepository.save(audit);
+        auditEventPublisher.publish(savedAudit);
     }
 
     private String normalizeDestination(VerificationOtp.Channel channel, String destination) {
