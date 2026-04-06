@@ -47,6 +47,7 @@ import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.DestinationRiskService;
 import com.elvo.wallet.security.DeviceLocationRiskService;
 import com.elvo.wallet.security.EtcCodePolicyService;
+import com.elvo.wallet.security.UserJwtPrincipal;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
 import com.elvo.wallet.service.model.DepositCommand;
@@ -701,26 +702,11 @@ public class WalletController {
             throw new UnauthorizedException("User not authenticated");
         }
 
-        String authenticatedName = authentication.getName();
-        if (authenticatedName != null && !authenticatedName.isBlank()) {
-            try {
-                return UUID.fromString(authenticatedName);
-            } catch (IllegalArgumentException ex) {
-                LOGGER.error("Invalid user ID format in authentication name: {}", authenticatedName);
-            }
+        if (authentication.getPrincipal() instanceof UserJwtPrincipal principal) {
+            return principal.userId();
         }
 
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof String principalName) {
-            try {
-                return UUID.fromString(principalName);
-            } catch (IllegalArgumentException e) {
-                LOGGER.error("Invalid user ID format in principal: {}", principalName);
-                throw new UnauthorizedException("Invalid user ID format");
-            }
-        }
-
-        throw new UnauthorizedException("Unable to extract user ID from authentication");
+        throw new UnauthorizedException("Invalid authenticated user context");
     }
 
     // Custom exceptions

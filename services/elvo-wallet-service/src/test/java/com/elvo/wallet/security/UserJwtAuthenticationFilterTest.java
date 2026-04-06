@@ -62,7 +62,10 @@ class UserJwtAuthenticationFilterTest {
         assertThat(response.getStatus()).isNotEqualTo(403);
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         assertThat(authentication).isNotNull();
-        assertThat(authentication.getName()).isEqualTo(userId.toString());
+        assertThat(authentication.getPrincipal()).isInstanceOf(UserJwtPrincipal.class);
+        UserJwtPrincipal principal = (UserJwtPrincipal) authentication.getPrincipal();
+        assertThat(principal.userId()).isEqualTo(userId);
+        assertThat(principal.ean()).isEqualTo("ELVO-USER-0001");
         assertThat(authentication.getAuthorities()).extracting("authority").contains("ROLE_USER");
     }
 

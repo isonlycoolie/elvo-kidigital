@@ -57,12 +57,6 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        if (SecurityContextHolder.getContext().getAuthentication() != null
-                && SecurityContextHolder.getContext().getAuthentication().isAuthenticated()) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
         String authorizationHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (authorizationHeader == null || !authorizationHeader.startsWith(BEARER_PREFIX)) {
             forbidden(response, "Missing or invalid user bearer token");
@@ -84,14 +78,16 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
             }
 
             Collection<? extends GrantedAuthority> authorities = extractAuthorities(claims);
-            if (authorities.isEmpty() || extractScopes(claims).isEmpty()) {
+            List<String> scopes = extractScopes(claims);
+            if (authorities.isEmpty() || scopes.isEmpty()) {
                 forbidden(response, "Token claims are invalid");
                 return;
             }
 
             UUID subject = UUID.fromString(claims.getSubject());
+            UserJwtPrincipal principal = new UserJwtPrincipal(subject, ean, scopes);
             UsernamePasswordAuthenticationToken authenticationToken =
-                    new UsernamePasswordAuthenticationToken(subject.toString(), "N/A", authorities);
+                    new UsernamePasswordAuthenticationToken(principal, "N/A", authorities);
             SecurityContextHolder.getContext().setAuthentication(authenticationToken);
             filterChain.doFilter(request, response);
         } catch (Exception ex) {
