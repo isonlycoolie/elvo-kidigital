@@ -16,6 +16,8 @@ import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import com.elvo.identity.security.TokenRevocationChecker;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -43,6 +45,7 @@ public class TokenService {
     private final PublicKey verificationPublicKey;
     private final String signingKeyId;
     private final boolean asymmetricSigningEnabled;
+    private final TokenRevocationChecker tokenRevocationChecker;
     private final String issuer;
     private final String audience;
     private final long accessTokenTtlMinutes;
@@ -55,7 +58,50 @@ public class TokenService {
                         @Value("${elvo.security.jwt.issuer:elvo-identity-service}") String issuer,
                         @Value("${elvo.security.jwt.audience:elvo-platform}") String audience,
                         @Value("${elvo.security.jwt.access-token-ttl-minutes:15}") long accessTokenTtlMinutes,
-                        @Value("${elvo.security.jwt.refresh-token-ttl-days:7}") long refreshTokenTtlDays) {
+                        @Value("${elvo.security.jwt.refresh-token-ttl-days:7}") long refreshTokenTtlDays,
+                        TokenRevocationChecker tokenRevocationChecker) {
+                this(jwtSecret,
+                    privateKeyPem,
+                    publicKeyPem,
+                    signingKeyId,
+                    issuer,
+                    audience,
+                    accessTokenTtlMinutes,
+                    refreshTokenTtlDays,
+                    tokenRevocationChecker,
+                    true);
+                }
+
+                public TokenService(String jwtSecret,
+                                    String privateKeyPem,
+                                    String publicKeyPem,
+                                    String signingKeyId,
+                                    String issuer,
+                                    String audience,
+                                    long accessTokenTtlMinutes,
+                                    long refreshTokenTtlDays) {
+                this(jwtSecret,
+                    privateKeyPem,
+                    publicKeyPem,
+                    signingKeyId,
+                    issuer,
+                    audience,
+                    accessTokenTtlMinutes,
+                    refreshTokenTtlDays,
+                    jti -> false,
+                    false);
+                }
+
+                private TokenService(String jwtSecret,
+                         String privateKeyPem,
+                         String publicKeyPem,
+                         String signingKeyId,
+                         String issuer,
+                         String audience,
+                         long accessTokenTtlMinutes,
+                         long refreshTokenTtlDays,
+                         TokenRevocationChecker tokenRevocationChecker,
+                         boolean ignored) {
         if (hasText(privateKeyPem) || hasText(publicKeyPem) || hasText(signingKeyId)) {
             this.signingPrivateKey = parsePrivateKey(privateKeyPem);
             this.verificationPublicKey = parsePublicKey(publicKeyPem);
@@ -70,6 +116,7 @@ public class TokenService {
             this.signingKeyId = null;
             this.asymmetricSigningEnabled = false;
         }
+        this.tokenRevocationChecker = tokenRevocationChecker;
         this.issuer = issuer;
         this.audience = audience;
         this.accessTokenTtlMinutes = accessTokenTtlMinutes;
@@ -83,11 +130,30 @@ public class TokenService {
                  String signingKeyId,
                  long accessTokenTtlMinutes,
                  long refreshTokenTtlDays) {
+            this(signingPrivateKey,
+                verificationPublicKey,
+                issuer,
+                audience,
+                signingKeyId,
+                accessTokenTtlMinutes,
+                refreshTokenTtlDays,
+                jti -> false);
+            }
+
+            TokenService(PrivateKey signingPrivateKey,
+                 PublicKey verificationPublicKey,
+                 String issuer,
+                 String audience,
+                 String signingKeyId,
+                 long accessTokenTtlMinutes,
+                 long refreshTokenTtlDays,
+                 TokenRevocationChecker tokenRevocationChecker) {
         this.signingPrivateKey = signingPrivateKey;
         this.verificationPublicKey = verificationPublicKey;
         this.signingKeyId = requireText(signingKeyId, "signing key id must be configured");
         this.signingKey = null;
         this.asymmetricSigningEnabled = true;
+            this.tokenRevocationChecker = tokenRevocationChecker;
         this.issuer = issuer;
         this.audience = audience;
         this.accessTokenTtlMinutes = accessTokenTtlMinutes;
@@ -153,8 +219,10 @@ public class TokenService {
         }
         List<String> roles = parseRequiredStringListClaim(claims.get(ROLES_CLAIM), ROLES_CLAIM);
         List<String> scopes = parseRequiredStringListClaim(claims.get(SCOPES_CLAIM), SCOPES_CLAIM);
+        String jti = parseRequiredJti(claims);
+        ensureNotRevoked(jti);
 
-        return new AccessTokenClaims(userId, ean, roles, scopes, claims.getExpiration().toInstant());
+        return new AccessTokenClaims(userId, ean, roles, scopes, jti, claims.getExpiration().toInstant());
     }
 
     public RefreshTokenClaims validateRefreshToken(String token) {
@@ -164,7 +232,9 @@ public class TokenService {
         }
 
         UUID userId = parseRequiredUuid(claims.getSubject());
-        return new RefreshTokenClaims(userId, claims.getExpiration().toInstant());
+        String jti = parseRequiredJti(claims);
+        ensureNotRevoked(jti);
+        return new RefreshTokenClaims(userId, jti, claims.getExpiration().toInstant());
     }
 
     public JwksDocument getJwksDocument() {
@@ -306,6 +376,20 @@ public class TokenService {
         }
     }
 
+    private String parseRequiredJti(Claims claims) {
+        String jti = claims.getId();
+        if (jti == null || jti.isBlank()) {
+            throw new IllegalArgumentException("Token identifier is invalid");
+        }
+        return jti;
+    }
+
+    private void ensureNotRevoked(String jti) {
+        if (tokenRevocationChecker.isRevoked(jti)) {
+            throw new IllegalArgumentException("Token is revoked");
+        }
+    }
+
     private List<String> sanitizeRequiredStringListClaim(List<String> values, String claimName) {
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("Token " + claimName + " claim is invalid");
@@ -341,10 +425,10 @@ public class TokenService {
     public record TokenPayload(String token, Instant expiresAt) {
     }
 
-    public record AccessTokenClaims(UUID userId, String ean, List<String> roles, List<String> scopes, Instant expiresAt) {
+    public record AccessTokenClaims(UUID userId, String ean, List<String> roles, List<String> scopes, String jti, Instant expiresAt) {
     }
 
-    public record RefreshTokenClaims(UUID userId, Instant expiresAt) {
+    public record RefreshTokenClaims(UUID userId, String jti, Instant expiresAt) {
     }
 
     public record JwksDocument(List<JwkKey> keys) {

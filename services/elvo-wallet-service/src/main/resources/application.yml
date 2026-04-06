@@ -75,6 +75,8 @@ elvo:
       secret: ${ELVO_JWT_SECRET:}
       issuer: ${ELVO_JWT_ISSUER:elvo-identity-service}
       audience: ${ELVO_JWT_AUDIENCE:elvo-platform}
+      revocation:
+        key-prefix: ${ELVO_JWT_REVOCATION_KEY_PREFIX:elvo:jwt:revoked:}
       signing:
         key-id: ${ELVO_JWT_SIGNING_KEY_ID:}
         public-key-pem: ${ELVO_JWT_SIGNING_PUBLIC_KEY_PEM:}

@@ -81,8 +81,10 @@ public class SecurityConfig {
     }
 
     @Bean
-    public UserJwtAuthenticationFilter userJwtAuthenticationFilter(UserJwtProperties jwtProperties, ObjectMapper objectMapper) {
-        return new UserJwtAuthenticationFilter(jwtProperties, objectMapper);
+    public UserJwtAuthenticationFilter userJwtAuthenticationFilter(UserJwtProperties jwtProperties,
+                                                                   ObjectMapper objectMapper,
+                                                                   UserTokenRevocationChecker tokenRevocationChecker) {
+        return new UserJwtAuthenticationFilter(jwtProperties, objectMapper, tokenRevocationChecker);
     }
 
     @Bean

@@ -34,6 +34,7 @@ import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.security.SecurityHashingService;
+import com.elvo.identity.security.TokenRevocationService;
 import com.elvo.identity.service.LoginService;
 import com.elvo.identity.service.RegistrationService;
 import com.elvo.identity.util.TokenService;
@@ -55,6 +56,7 @@ public class AuthController {
     private final AuditRepository auditRepository;
     private final AuditEventPublisher auditEventPublisher;
     private final TokenService tokenService;
+    private final TokenRevocationService tokenRevocationService;
     private final SecurityHashingService hashingService;
 
     public AuthController(RegistrationService registrationService,
@@ -64,6 +66,7 @@ public class AuthController {
                           AuditRepository auditRepository,
                           AuditEventPublisher auditEventPublisher,
                           TokenService tokenService,
+                          TokenRevocationService tokenRevocationService,
                           SecurityHashingService hashingService) {
         this.registrationService = registrationService;
         this.loginService = loginService;
@@ -72,6 +75,7 @@ public class AuthController {
         this.auditRepository = auditRepository;
         this.auditEventPublisher = auditEventPublisher;
         this.tokenService = tokenService;
+        this.tokenRevocationService = tokenRevocationService;
         this.hashingService = hashingService;
     }
 
@@ -100,6 +104,9 @@ public class AuthController {
         if (session.isRevoked() || !session.isActive() || Instant.now().isAfter(session.getExpiresAt())) {
             throw new IllegalStateException("Session is expired or revoked");
         }
+
+        tokenRevocationService.revokeJti(claims.jti(), claims.expiresAt());
+        revokeSessionAccessTokenIfPresent(session);
 
         TokenService.TokenPayload accessToken = tokenService.generateAccessToken(session.getUser().getId(), session.getUser().getEan());
         TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(session.getUser().getId());
@@ -137,6 +144,8 @@ public class AuthController {
                     if (!session.getUser().getId().equals(claims.userId())) {
                         throw new IllegalArgumentException("Refresh token is invalid");
                     }
+                    tokenRevocationService.revokeJti(claims.jti(), claims.expiresAt());
+                    revokeSessionAccessTokenIfPresent(session);
                     auditSessionEvent(session, "Logout completed", request.getSourceIp(), request.getSourceUserAgent());
                     return sessionRepository.revokeSession(session.getId());
                 })
@@ -147,6 +156,17 @@ public class AuthController {
 
     @PostMapping("/logout-all")
     public ResponseEntity<ApiResponse<AuthActionResponse>> logoutAll(@Valid @RequestBody AuthLogoutAllRequest request) {
+        sessionRepository.findByUserIdAndActiveTrueAndRevokedFalseOrderByCreatedAtDesc(request.getUserId())
+                .forEach(session -> {
+                    try {
+                        TokenService.RefreshTokenClaims refreshClaims = tokenService.validateRefreshToken(session.getRefreshToken());
+                        tokenRevocationService.revokeJti(refreshClaims.jti(), refreshClaims.expiresAt());
+                    } catch (IllegalArgumentException ex) {
+                        // Skip already-invalid refresh token entries.
+                    }
+                    revokeSessionAccessTokenIfPresent(session);
+                });
+
         int updated = sessionRepository.revokeActiveSessionsByUserId(request.getUserId());
         if (updated > 0) {
             Audit audit = new Audit();
@@ -243,5 +263,17 @@ public class AuthController {
         audit.setUser(session.getUser());
         Audit savedAudit = auditRepository.save(audit);
         auditEventPublisher.publish(savedAudit);
+    }
+
+    private void revokeSessionAccessTokenIfPresent(Session session) {
+        if (session.getJwtToken() == null || session.getJwtToken().isBlank()) {
+            return;
+        }
+        try {
+            TokenService.AccessTokenClaims accessClaims = tokenService.validateAccessToken(session.getJwtToken());
+            tokenRevocationService.revokeJti(accessClaims.jti(), accessClaims.expiresAt());
+        } catch (IllegalArgumentException ex) {
+            // Access token may already be invalid/expired and does not require denylist storage.
+        }
     }
 }

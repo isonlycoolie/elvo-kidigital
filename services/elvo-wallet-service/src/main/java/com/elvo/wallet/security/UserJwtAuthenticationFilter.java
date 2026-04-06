@@ -42,10 +42,18 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final UserJwtProperties jwtProperties;
     private final ObjectMapper objectMapper;
+    private final UserTokenRevocationChecker tokenRevocationChecker;
 
     public UserJwtAuthenticationFilter(UserJwtProperties jwtProperties, ObjectMapper objectMapper) {
+        this(jwtProperties, objectMapper, jti -> false);
+    }
+
+    public UserJwtAuthenticationFilter(UserJwtProperties jwtProperties,
+                                       ObjectMapper objectMapper,
+                                       UserTokenRevocationChecker tokenRevocationChecker) {
         this.jwtProperties = jwtProperties;
         this.objectMapper = objectMapper;
+        this.tokenRevocationChecker = tokenRevocationChecker;
     }
 
     @Override
@@ -68,6 +76,16 @@ public class UserJwtAuthenticationFilter extends OncePerRequestFilter {
             Claims claims = parseClaims(token);
             if (!ACCESS_TOKEN_TYPE.equals(claims.get(TOKEN_TYPE_CLAIM, String.class))) {
                 forbidden(response, "Token type is invalid");
+                return;
+            }
+
+            String jti = claims.getId();
+            if (jti == null || jti.isBlank()) {
+                forbidden(response, "Token identifier is invalid");
+                return;
+            }
+            if (tokenRevocationChecker.isRevoked(jti)) {
+                forbidden(response, "Token is revoked");
                 return;
             }
 

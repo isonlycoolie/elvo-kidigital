@@ -24,6 +24,10 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.jsonwebtoken.Jwts;
 import jakarta.servlet.FilterChain;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 class UserJwtAuthenticationFilterTest {
 
     private static final String ISSUER = "elvo-identity-service";
@@ -33,6 +37,7 @@ class UserJwtAuthenticationFilterTest {
     private UserJwtProperties properties;
     private UserJwtAuthenticationFilter filter;
     private KeyPair keyPair;
+    private UserTokenRevocationChecker tokenRevocationChecker;
 
     @BeforeEach
     void setUp() {
@@ -45,8 +50,11 @@ class UserJwtAuthenticationFilterTest {
         keyPair = generateRsaKeyPair();
         properties.setSigningPublicKeyPem(toPublicPem(keyPair));
 
+        tokenRevocationChecker = mock(UserTokenRevocationChecker.class);
+        when(tokenRevocationChecker.isRevoked(anyString())).thenReturn(false);
+
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        filter = new UserJwtAuthenticationFilter(properties, objectMapper);
+        filter = new UserJwtAuthenticationFilter(properties, objectMapper, tokenRevocationChecker);
     }
 
     @Test
@@ -107,12 +115,29 @@ class UserJwtAuthenticationFilterTest {
         assertThat(response.getContentAsString()).contains("Missing or invalid user bearer token");
     }
 
+    @Test
+    void shouldRejectRevokedJti() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(tokenRevocationChecker.isRevoked(anyString())).thenReturn(true);
+
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/wallets/me/balance");
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token(userId, "ACCESS"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = (req, res) -> { };
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentAsString()).contains("Token is revoked");
+    }
+
     private String token(UUID userId, String tokenType) {
         return Jwts.builder()
                 .issuer(ISSUER)
                 .header().keyId(KEY_ID).and()
                 .audience().add(AUDIENCE).and()
                 .subject(userId.toString())
+            .id(UUID.randomUUID().toString())
                 .issuedAt(new Date())
                 .expiration(Date.from(Instant.now().plusSeconds(120)))
                 .claim("ean", "ELVO-USER-0001")
