@@ -125,7 +125,7 @@ public class FastLoginServiceImpl implements FastLoginService {
     }
 
     private Device registerOrRefreshDevice(User user, String deviceId, String deviceType, String sourceIp) {
-        Device device = deviceRepository.findByDeviceId(deviceId)
+        Device device = deviceRepository.findByUserIdAndDeviceId(user.getId(), deviceId)
                 .orElseGet(Device::new);
         device.setUser(user);
         device.setDeviceId(deviceId);

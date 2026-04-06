@@ -42,12 +42,14 @@ class SecurityProtectionServiceEdgeCaseTest {
     @Test
     void bruteForceAttemptsShouldLockAccountAndFlagSuspiciousDevice() {
         User user = new User();
+        UUID userId = UUID.randomUUID();
+        setId(user, userId);
         user.setFailedLoginAttempts(4);
         user.setSuspiciousActivityCount(0);
 
         Device device = new Device();
         device.setSuspicious(false);
-        when(deviceRepository.findByDeviceId("device-attack-1")).thenReturn(Optional.of(device));
+        when(deviceRepository.findByUserIdAndDeviceId(userId, "device-attack-1")).thenReturn(Optional.of(device));
 
         service.recordFailedAuthentication(user, "127.0.0.1", "edge-test", "device-attack-1");
 
@@ -56,6 +58,16 @@ class SecurityProtectionServiceEdgeCaseTest {
         assertEquals(true, device.isSuspicious());
         verify(userRepository).save(user);
         verify(deviceRepository, atLeastOnce()).save(device);
+    }
+
+    private static void setId(User user, UUID userId) {
+        try {
+            var idField = User.class.getDeclaredField("id");
+            idField.setAccessible(true);
+            idField.set(user, userId);
+        } catch (ReflectiveOperationException ex) {
+            throw new IllegalStateException("Unable to set test user id", ex);
+        }
     }
 
     @Test

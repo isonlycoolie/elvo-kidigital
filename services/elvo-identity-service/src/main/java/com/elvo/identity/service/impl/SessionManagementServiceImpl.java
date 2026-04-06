@@ -54,12 +54,8 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         User user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        Device device = deviceRepository.findByDeviceId(request.getDeviceId())
+        Device device = deviceRepository.findByUserIdAndDeviceId(user.getId(), request.getDeviceId())
                 .orElseThrow(() -> new IllegalStateException("Device must be registered before session creation"));
-
-        if (!device.getUser().getId().equals(user.getId())) {
-            throw new IllegalStateException("Device does not belong to the requesting user");
-        }
 
         if (device.isRevoked() || device.isSuspicious() || !device.isTrusted()) {
             throw new IllegalStateException("Device trust verification failed");

@@ -20,5 +20,5 @@ public interface DeviceRepository extends JpaRepository<Device, UUID> {
 
     List<Device> findByUserIdAndRevoked(UUID userId, boolean revoked);
 
-    Optional<Device> findByDeviceId(String deviceId);
+    Optional<Device> findByUserIdAndDeviceId(UUID userId, String deviceId);
 }

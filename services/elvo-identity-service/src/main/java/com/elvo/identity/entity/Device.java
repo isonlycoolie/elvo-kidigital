@@ -21,7 +21,7 @@ import jakarta.persistence.UniqueConstraint;
 @Table(
         name = "devices",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_devices_device_id", columnNames = "device_id")
+        @UniqueConstraint(name = "uk_devices_user_device_id", columnNames = {"user_id", "device_id"})
         },
         indexes = {
                 @Index(name = "idx_devices_user_id", columnList = "user_id"),

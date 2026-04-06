@@ -189,7 +189,7 @@ public class LoginServiceImpl implements LoginService {
     }
 
     private Device upsertDevice(User user, LoginRequest request) {
-        return deviceRepository.findByDeviceId(request.getDeviceId())
+        return deviceRepository.findByUserIdAndDeviceId(user.getId(), request.getDeviceId())
                 .map(existing -> {
                     existing.setDeviceType(request.getDeviceType());
                     existing.setRevoked(false);

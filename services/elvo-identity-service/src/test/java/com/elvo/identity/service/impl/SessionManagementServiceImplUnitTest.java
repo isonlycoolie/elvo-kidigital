@@ -93,7 +93,7 @@ class SessionManagementServiceImplUnitTest {
         TokenService.TokenPayload refreshToken = new TokenService.TokenPayload("refresh.jwt", REFRESH_EXPIRY);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(deviceRepository.findByDeviceId("device-1")).thenReturn(Optional.of(device));
+        when(deviceRepository.findByUserIdAndDeviceId(userId, "device-1")).thenReturn(Optional.of(device));
         when(deviceRepository.save(any(Device.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(tokenService.generateAccessToken(userId, "ELVO-SESSION-UNIT-1")).thenReturn(accessToken);
         when(tokenService.calculateSessionAbsoluteExpiry()).thenReturn(ABSOLUTE_SESSION_EXPIRY);

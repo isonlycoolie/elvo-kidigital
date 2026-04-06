@@ -58,7 +58,7 @@ public class SecurityProtectionServiceImpl implements SecurityProtectionService 
         if (user.getFailedLoginAttempts() >= MAX_FAILED_LOGIN_ATTEMPTS) {
             user.setLockoutUntil(Instant.now().plus(LOCKOUT_DURATION));
             user.setSuspiciousActivityCount(user.getSuspiciousActivityCount() + 1);
-            markDeviceSuspicious(deviceId);
+            markDeviceSuspicious(user.getId(), deviceId);
         }
 
         userRepository.save(user);
@@ -91,7 +91,7 @@ public class SecurityProtectionServiceImpl implements SecurityProtectionService 
         audit.setUser(user);
         auditRepository.save(audit);
 
-        deviceRepository.findByDeviceId(deviceId).ifPresent(device -> {
+        deviceRepository.findByUserIdAndDeviceId(user.getId(), deviceId).ifPresent(device -> {
             if (device.isSuspicious()) {
                 device.setSuspicious(false);
                 deviceRepository.save(device);
@@ -99,12 +99,12 @@ public class SecurityProtectionServiceImpl implements SecurityProtectionService 
         });
     }
 
-    private void markDeviceSuspicious(String deviceId) {
+    private void markDeviceSuspicious(java.util.UUID userId, String deviceId) {
         if (deviceId == null || deviceId.isBlank()) {
             return;
         }
 
-        deviceRepository.findByDeviceId(deviceId).ifPresent(device -> {
+        deviceRepository.findByUserIdAndDeviceId(userId, deviceId).ifPresent(device -> {
             device.setSuspicious(true);
             deviceRepository.save(device);
         });
