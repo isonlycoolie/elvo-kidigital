@@ -20,6 +20,8 @@ public class VerifyOtpRequest {
 
     private String sourceUserAgent;
 
+    private String deviceId;
+
     public String getIdentifier() {
         return identifier;
     }
@@ -58,5 +60,13 @@ public class VerifyOtpRequest {
 
     public void setSourceUserAgent(String sourceUserAgent) {
         this.sourceUserAgent = sourceUserAgent;
+    }
+
+    public String getDeviceId() {
+        return deviceId;
+    }
+
+    public void setDeviceId(String deviceId) {
+        this.deviceId = deviceId;
     }
 }

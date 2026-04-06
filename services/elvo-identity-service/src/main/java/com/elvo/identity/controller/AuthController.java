@@ -102,8 +102,11 @@ public class AuthController {
                 VerificationOtp.Channel.EMAIL,
                 VerificationOtp.Purpose.EMAIL_VERIFICATION,
                 response.email(),
+                    false,
                 null,
-                null);
+                    null,
+                    request.getSourceIp(),
+                    null);
         }
 
         if (response.phone() != null && !response.phone().isBlank()) {
@@ -111,8 +114,11 @@ public class AuthController {
                 VerificationOtp.Channel.SMS,
                 VerificationOtp.Purpose.MOBILE_VERIFICATION,
                 response.phone(),
+                    false,
                 null,
-                null);
+                    null,
+                    request.getSourceIp(),
+                    null);
         }
 
         return ResponseEntity.ok(ApiResponse.ok("Registration successful. Verification required.", response));
@@ -129,7 +135,10 @@ public class AuthController {
             VerificationOtp.Channel.EMAIL,
             VerificationOtp.Purpose.EMAIL_VERIFICATION,
             response.email(),
+            false,
             null,
+            null,
+            request.getSourceIp(),
             null);
 
         return ResponseEntity.ok(ApiResponse.ok("Registration successful. Verification required.", response));
@@ -146,7 +155,10 @@ public class AuthController {
             VerificationOtp.Channel.SMS,
             VerificationOtp.Purpose.MOBILE_VERIFICATION,
             response.phone(),
+            false,
             null,
+            null,
+            request.getSourceIp(),
             null);
 
         return ResponseEntity.ok(ApiResponse.ok("Registration successful. Verification required.", response));
@@ -169,7 +181,9 @@ public class AuthController {
         OtpService.OtpVerificationResult result = otpService.verifyOtp(user,
                 VerificationOtp.Purpose.EMAIL_VERIFICATION,
                 request.getOtpCode(),
-                request.getRequestId());
+            request.getRequestId(),
+            request.getSourceIp(),
+            request.getDeviceId());
 
         if (result.success()) {
             user.setEmailVerified(true);
@@ -192,7 +206,9 @@ public class AuthController {
         OtpService.OtpVerificationResult result = otpService.verifyOtp(user,
                 VerificationOtp.Purpose.MOBILE_VERIFICATION,
                 request.getOtpCode(),
-                request.getRequestId());
+            request.getRequestId(),
+            request.getSourceIp(),
+            request.getDeviceId());
 
         if (result.success()) {
             user.setMobileVerified(true);
@@ -216,8 +232,11 @@ public class AuthController {
                 VerificationOtp.Channel.EMAIL,
                 VerificationOtp.Purpose.EMAIL_VERIFICATION,
                 user.getEmail(),
+            true,
                 request.getRequestId(),
-                null);
+            null,
+            request.getSourceIp(),
+            request.getDeviceId());
 
         return ResponseEntity.ok(ApiResponse.ok(
                 "If the account exists, a verification code has been sent.",
@@ -236,8 +255,11 @@ public class AuthController {
                 VerificationOtp.Channel.SMS,
                 VerificationOtp.Purpose.MOBILE_VERIFICATION,
                 user.getPhone(),
+            true,
                 request.getRequestId(),
-                null);
+            null,
+            request.getSourceIp(),
+            request.getDeviceId());
 
         return ResponseEntity.ok(ApiResponse.ok(
                 "If the account exists, a verification code has been sent.",

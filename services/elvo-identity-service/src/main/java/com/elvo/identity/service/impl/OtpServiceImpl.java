@@ -13,6 +13,7 @@ import com.elvo.identity.entity.VerificationOtp;
 import com.elvo.identity.repository.VerificationOtpRepository;
 import com.elvo.identity.security.OtpCryptoService;
 import com.elvo.identity.service.EmailSenderService;
+import com.elvo.identity.service.OtpRateLimitService;
 import com.elvo.identity.service.OtpService;
 import com.elvo.identity.service.SmsSenderService;
 import com.elvo.identity.service.VerificationPolicyService;
@@ -22,17 +23,20 @@ public class OtpServiceImpl implements OtpService {
 
     private final VerificationOtpRepository verificationOtpRepository;
     private final VerificationPolicyService verificationPolicyService;
+    private final OtpRateLimitService otpRateLimitService;
     private final OtpCryptoService otpCryptoService;
     private final EmailSenderService emailSenderService;
     private final SmsSenderService smsSenderService;
 
     public OtpServiceImpl(VerificationOtpRepository verificationOtpRepository,
                           VerificationPolicyService verificationPolicyService,
+                          OtpRateLimitService otpRateLimitService,
                           OtpCryptoService otpCryptoService,
                           EmailSenderService emailSenderService,
                           SmsSenderService smsSenderService) {
         this.verificationOtpRepository = verificationOtpRepository;
         this.verificationPolicyService = verificationPolicyService;
+        this.otpRateLimitService = otpRateLimitService;
         this.otpCryptoService = otpCryptoService;
         this.emailSenderService = emailSenderService;
         this.smsSenderService = smsSenderService;
@@ -44,11 +48,33 @@ public class OtpServiceImpl implements OtpService {
                                                   VerificationOtp.Channel channel,
                                                   VerificationOtp.Purpose purpose,
                                                   String destination,
+                                                  boolean resend,
                                                   String requestId,
-                                                  String correlationId) {
+                                                  String correlationId,
+                                                  String sourceIp,
+                                                  String deviceId) {
         String effectiveRequestId = requestId == null || requestId.isBlank() ? UUID.randomUUID().toString() : requestId.trim();
+        Instant now = Instant.now();
+
+        if (resend) {
+            otpRateLimitService.enforceSendLimit(purpose, sourceIp, deviceId);
+            long recentOtpCount = verificationOtpRepository.countByUserAndPurposeSince(
+                    user.getId(),
+                    purpose,
+                    now.minus(verificationPolicyService.resendWindow()));
+            if (recentOtpCount >= verificationPolicyService.maxResendsPerWindow() + 1L) {
+                throw new IllegalStateException("OTP resend limit reached");
+            }
+        }
 
         List<VerificationOtp> activeOtps = verificationOtpRepository.lockActiveOtps(user.getId(), purpose);
+        VerificationOtp latestActiveOtp = activeOtps.isEmpty() ? null : activeOtps.get(0);
+
+        if (resend && latestActiveOtp != null
+                && now.isBefore(latestActiveOtp.getCreatedAt().plus(verificationPolicyService.resendCooldown()))) {
+            throw new IllegalStateException("OTP resend cooldown active");
+        }
+
         for (VerificationOtp activeOtp : activeOtps) {
             activeOtp.setStatus(VerificationOtp.Status.REVOKED);
         }
@@ -61,11 +87,11 @@ public class OtpServiceImpl implements OtpService {
         otp.setDestination(normalizeDestination(channel, destination));
         otp.setRequestId(effectiveRequestId);
         otp.setCorrelationId(correlationId);
-        otp.setExpiresAt(Instant.now().plus(verificationPolicyService.otpTtl()));
+        otp.setExpiresAt(now.plus(verificationPolicyService.otpTtl()));
         otp.setOtpHash(otpCryptoService.hashOtp(user.getId(), purpose, otp.getDestination(), otpCode, effectiveRequestId));
         otp.setStatus(VerificationOtp.Status.ACTIVE);
         otp.setAttemptCount(0);
-        otp.setResendCount(0);
+        otp.setResendCount(resend && latestActiveOtp != null ? latestActiveOtp.getResendCount() + 1 : 0);
         VerificationOtp savedOtp = verificationOtpRepository.save(otp);
 
         dispatchOtp(savedOtp, otpCode);
@@ -77,7 +103,11 @@ public class OtpServiceImpl implements OtpService {
     public OtpVerificationResult verifyOtp(User user,
                                            VerificationOtp.Purpose purpose,
                                            String otpCode,
-                                           String requestId) {
+                                           String requestId,
+                                           String sourceIp,
+                                           String deviceId) {
+        otpRateLimitService.enforceVerifyLimit(purpose, sourceIp, deviceId);
+
         VerificationOtp otp = resolveActiveOtp(user.getId(), purpose, requestId);
         if (otp == null) {
             return new OtpVerificationResult(false, "OTP_REQUIRED", "Verification code is required");
