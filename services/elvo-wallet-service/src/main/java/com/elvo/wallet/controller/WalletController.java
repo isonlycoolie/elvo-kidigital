@@ -47,6 +47,7 @@ import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.DestinationRiskService;
 import com.elvo.wallet.security.DeviceLocationRiskService;
 import com.elvo.wallet.security.EtcCodePolicyService;
+import com.elvo.wallet.security.IpGeovelocityRiskService;
 import com.elvo.wallet.security.UserJwtPrincipal;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
@@ -86,6 +87,7 @@ public class WalletController {
     private final WalletOperationRateLimitService operationRateLimitService;
     private final DeviceLocationRiskService deviceLocationRiskService;
     private final DestinationRiskService destinationRiskService;
+    private final IpGeovelocityRiskService ipGeovelocityRiskService;
 
     public WalletController(WalletService walletService, WalletRepository walletRepository,
                           TransactionRepository transactionRepository, ReservationRepository reservationRepository,
@@ -93,7 +95,8 @@ public class WalletController {
                           EtcCodePolicyService etcCodePolicyService,
                           WalletOperationRateLimitService operationRateLimitService,
                           DeviceLocationRiskService deviceLocationRiskService,
-                          DestinationRiskService destinationRiskService) {
+                          DestinationRiskService destinationRiskService,
+                          IpGeovelocityRiskService ipGeovelocityRiskService) {
         this.walletService = walletService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -104,6 +107,7 @@ public class WalletController {
         this.operationRateLimitService = operationRateLimitService;
         this.deviceLocationRiskService = deviceLocationRiskService;
         this.destinationRiskService = destinationRiskService;
+        this.ipGeovelocityRiskService = ipGeovelocityRiskService;
     }
 
     /**
@@ -237,6 +241,18 @@ public class WalletController {
 
         String withdrawalDeviceId = httpRequest.getHeader("X-Device-Id");
         String withdrawalLocationHint = resolveLocationHint(httpRequest);
+        IpGeovelocityRiskService.RiskDecision withdrawalIpDecision = ipGeovelocityRiskService.evaluate(
+            userId,
+            httpRequest.getRemoteAddr(),
+            withdrawalLocationHint);
+        if (withdrawalIpDecision.blocked()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, withdrawalIpDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
+        }
+        if (withdrawalIpDecision.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new FlowResultResponseDto(false, withdrawalIpDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
+        }
         boolean withdrawalRisky = deviceLocationRiskService.requiresAdditionalVerification(userId, withdrawalDeviceId, withdrawalLocationHint);
         if (withdrawalRisky && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -324,6 +340,18 @@ public class WalletController {
 
         String transferDeviceId = httpRequest.getHeader("X-Device-Id");
         String transferLocationHint = resolveLocationHint(httpRequest);
+        IpGeovelocityRiskService.RiskDecision transferIpDecision = ipGeovelocityRiskService.evaluate(
+            userId,
+            httpRequest.getRemoteAddr(),
+            transferLocationHint);
+        if (transferIpDecision.blocked()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, transferIpDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
+        }
+        if (transferIpDecision.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new FlowResultResponseDto(false, transferIpDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
+        }
         boolean transferRisky = deviceLocationRiskService.requiresAdditionalVerification(userId, transferDeviceId, transferLocationHint);
         if (transferRisky && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

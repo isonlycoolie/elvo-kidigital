@@ -151,6 +151,9 @@ elvo:
       unusual-amount-threshold: ${ELVO_DESTINATION_RISK_UNUSUAL_AMOUNT_THRESHOLD:500.00}
       max-failures-before-block: ${ELVO_DESTINATION_RISK_MAX_FAILURES_BEFORE_BLOCK:3}
       failure-window-seconds: ${ELVO_DESTINATION_RISK_FAILURE_WINDOW_SECONDS:900}
+      ip-risk:
+        blocked-ips: ${ELVO_IP_RISK_BLOCKED_IPS:}
+        rapid-location-change-seconds: ${ELVO_IP_RISK_RAPID_LOCATION_CHANGE_SECONDS:1800}
     device-trust:
       key-prefix: ${ELVO_DEVICE_TRUST_KEY_PREFIX:elvo:wallet:device-trust:}
       risk-threshold: ${ELVO_DEVICE_TRUST_RISK_THRESHOLD:60}

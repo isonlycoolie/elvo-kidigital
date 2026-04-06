@@ -16,6 +16,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -36,6 +37,7 @@ import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.DestinationRiskService;
 import com.elvo.wallet.security.DeviceLocationRiskService;
 import com.elvo.wallet.security.EtcCodePolicyService;
+import com.elvo.wallet.security.IpGeovelocityRiskService;
 import com.elvo.wallet.security.SecretManagerService;
 import com.elvo.wallet.security.UserJwtPrincipal;
 import com.elvo.wallet.security.WalletFieldEncryptionService;
@@ -81,6 +83,9 @@ class WalletControllerTest {
 
     @MockBean
     private DestinationRiskService destinationRiskService;
+
+    @MockBean
+    private IpGeovelocityRiskService ipGeovelocityRiskService;
     
     @MockBean
     private WalletFieldEncryptionService fieldEncryptionService;
@@ -136,6 +141,64 @@ class WalletControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void transferShouldRejectBlockedIpAddress() throws Exception {
+        Wallet sourceWallet = new Wallet();
+        ReflectionTestUtils.setField(sourceWallet, "id", UUID.randomUUID());
+        Wallet targetWallet = new Wallet();
+        ReflectionTestUtils.setField(targetWallet, "id", UUID.randomUUID());
+
+        when(walletRepository.findByUserId(AUTHENTICATED_USER_ID)).thenReturn(java.util.Optional.of(sourceWallet));
+        when(operationRateLimitService.enforce(any(), any(), any(), any(), any()))
+            .thenReturn(WalletOperationRateLimitService.RateLimitResult.allow());
+        when(ipGeovelocityRiskService.evaluate(any(), any(), any()))
+            .thenReturn(new IpGeovelocityRiskService.RiskDecision(true, true, "IP reputation policy blocked this request"));
+
+        String payload = String.format(
+            "{\"targetWalletId\":\"%s\",\"amount\":20.00,\"idempotencyKey\":\"idem-transfer-1\"}",
+            targetWallet.getId());
+
+        mockMvc.perform(post("/wallets/transfers")
+                .with(csrf())
+                .contentType("application/json")
+                .content(payload))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.message").value("IP reputation policy blocked this request"));
+
+        verify(walletService, never()).processTransfer(any());
+    }
+
+    @Test
+    void withdrawalShouldRequireAdditionalVerificationOnLocationAnomaly() throws Exception {
+        Wallet wallet = new Wallet();
+        ReflectionTestUtils.setField(wallet, "id", UUID.randomUUID());
+        when(walletRepository.findByUserId(AUTHENTICATED_USER_ID)).thenReturn(java.util.Optional.of(wallet));
+        when(operationRateLimitService.enforce(any(), any(), any(), any(), any()))
+            .thenReturn(WalletOperationRateLimitService.RateLimitResult.allow());
+        when(ipGeovelocityRiskService.evaluate(any(), any(), any()))
+            .thenReturn(new IpGeovelocityRiskService.RiskDecision(false, true, "Location anomaly detected; additional verification required"));
+
+        mockMvc.perform(post("/wallets/withdrawals")
+                .with(csrf())
+                .contentType("application/json")
+                .content("""
+                    {
+                      "amount":20.00,
+                      "mode":"REGISTERED_NUMBER",
+                      "targetNumber":"+1234567890",
+                      "espCode":"esp-1234",
+                      "eacCode":"eac-1234",
+                      "idempotencyKey":"idem-withdraw-1"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.message").value("Location anomaly detected; additional verification required"));
+
+        verify(walletService, never()).processWithdrawal(any());
     }
 
     @Test
