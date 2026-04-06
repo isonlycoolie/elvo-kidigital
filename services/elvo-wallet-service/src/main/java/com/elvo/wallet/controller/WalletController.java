@@ -40,6 +40,7 @@ import com.elvo.wallet.entity.Reservation;
 import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.mapper.WalletMapper;
+import com.elvo.wallet.monitoring.WalletMetricsRecorder;
 import com.elvo.wallet.monitoring.SecurityAlertStreamingService;
 import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.ReservationRepository;
@@ -102,6 +103,7 @@ public class WalletController {
     private final EmergencyControlService emergencyControlService;
     private final SanctionsScreeningService sanctionsScreeningService;
     private final AmlCaseWorkflowService amlCaseWorkflowService;
+    private final WalletMetricsRecorder walletMetricsRecorder;
 
     public WalletController(WalletService walletService, WalletRepository walletRepository,
                           TransactionRepository transactionRepository, ReservationRepository reservationRepository,
@@ -117,7 +119,8 @@ public class WalletController {
                           ApiAbuseProtectionService apiAbuseProtectionService,
                           EmergencyControlService emergencyControlService,
                           SanctionsScreeningService sanctionsScreeningService,
-                          AmlCaseWorkflowService amlCaseWorkflowService) {
+                          AmlCaseWorkflowService amlCaseWorkflowService,
+                          WalletMetricsRecorder walletMetricsRecorder) {
         this.walletService = walletService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
@@ -136,6 +139,7 @@ public class WalletController {
         this.emergencyControlService = emergencyControlService;
         this.sanctionsScreeningService = sanctionsScreeningService;
         this.amlCaseWorkflowService = amlCaseWorkflowService;
+        this.walletMetricsRecorder = walletMetricsRecorder;
     }
 
     /**
@@ -207,10 +211,12 @@ public class WalletController {
 
         SanctionsScreeningService.ScreeningDecision sanctionsDecision = sanctionsScreeningService.evaluate(userId, null);
         if (!sanctionsDecision.allowed()) {
+            walletMetricsRecorder.recordSecurityControl("sanctions", true);
             createAmlCase("SANCTIONS_OR_BLACKLIST", userId, wallet.getId(), "deposit", sanctionsDecision.reason(), java.util.Map.of());
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new FlowResultResponseDto(false, sanctionsDecision.reason(), wallet.getId(), null, "wallet.deposit.failed"));
         }
+        walletMetricsRecorder.recordSecurityControl("sanctions", false);
 
         try {
             WalletChannel channel = WalletChannel.valueOf(request.getChannel());
@@ -265,11 +271,13 @@ public class WalletController {
 
         SanctionsScreeningService.ScreeningDecision sanctionsDecision = sanctionsScreeningService.evaluate(userId, request.getTargetNumber());
         if (!sanctionsDecision.allowed()) {
+            walletMetricsRecorder.recordSecurityControl("sanctions", true);
             createAmlCase("SANCTIONS_OR_BLACKLIST", userId, wallet.getId(), "withdrawal", sanctionsDecision.reason(), java.util.Map.of(
                 "targetNumber", String.valueOf(request.getTargetNumber())));
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new FlowResultResponseDto(false, sanctionsDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
         }
+        walletMetricsRecorder.recordSecurityControl("sanctions", false);
 
         String sourceIp = resolveClientIp(httpRequest);
         String deviceId = httpRequest.getHeader("X-Device-Id");
@@ -333,6 +341,7 @@ public class WalletController {
             request.getAmount(),
             request.getTargetNumber());
         if (withdrawalFraudDecision.blocked()) {
+            walletMetricsRecorder.recordSecurityControl("fraud_rules", true);
             createAmlCase("FRAUD_RULE_BLOCK", userId, wallet.getId(), "withdrawal", withdrawalFraudDecision.reason(), java.util.Map.of(
                 "targetNumber", String.valueOf(request.getTargetNumber()),
                 "amount", String.valueOf(request.getAmount())));
@@ -342,6 +351,7 @@ public class WalletController {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new FlowResultResponseDto(false, withdrawalFraudDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
         }
+        walletMetricsRecorder.recordSecurityControl("fraud_rules", false);
         if (withdrawalFraudDecision.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new FlowResultResponseDto(false, withdrawalFraudDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
@@ -429,11 +439,13 @@ public class WalletController {
             userId,
             request.getTargetWalletId() == null ? null : request.getTargetWalletId().toString());
         if (!sanctionsDecision.allowed()) {
+            walletMetricsRecorder.recordSecurityControl("sanctions", true);
             createAmlCase("SANCTIONS_OR_BLACKLIST", userId, sourceWallet.getId(), "transfer", sanctionsDecision.reason(), java.util.Map.of(
                 "targetWalletId", String.valueOf(request.getTargetWalletId())));
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new FlowResultResponseDto(false, sanctionsDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
         }
+        walletMetricsRecorder.recordSecurityControl("sanctions", false);
 
         ResponseEntity<FlowResultResponseDto> emergencyBlocked = blockIfEmergencyControlTriggered(sourceWallet.getId(), "wallet.transfer.failed");
         if (emergencyBlocked != null) {
@@ -489,6 +501,7 @@ public class WalletController {
             request.getAmount(),
             request.getTargetWalletId() == null ? null : request.getTargetWalletId().toString());
         if (transferFraudDecision.blocked()) {
+            walletMetricsRecorder.recordSecurityControl("fraud_rules", true);
             createAmlCase("FRAUD_RULE_BLOCK", userId, sourceWallet.getId(), "transfer", transferFraudDecision.reason(), java.util.Map.of(
                 "targetWalletId", String.valueOf(request.getTargetWalletId()),
                 "amount", String.valueOf(request.getAmount())));
@@ -498,6 +511,7 @@ public class WalletController {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new FlowResultResponseDto(false, transferFraudDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
         }
+        walletMetricsRecorder.recordSecurityControl("fraud_rules", false);
         if (transferFraudDecision.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new FlowResultResponseDto(false, transferFraudDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
@@ -922,6 +936,7 @@ public class WalletController {
                                java.util.Map<String, Object> evidence) {
         try {
             amlCaseWorkflowService.createCase(category, userId, walletId, operation, reason, evidence);
+            walletMetricsRecorder.recordAmlCase("opened", category);
         } catch (RuntimeException ex) {
             LOGGER.warn("aml_case_creation_failed category={} userId={} walletId={} operation={} reason={}",
                 category, userId, walletId, operation, ex.getMessage());

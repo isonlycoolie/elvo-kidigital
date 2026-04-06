@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.elvo.wallet.dto.request.AmlCaseResolutionRequestDto;
 import com.elvo.wallet.dto.request.FraudOverrideRequestDto;
 import com.elvo.wallet.dto.request.MakerCheckerDecisionRequestDto;
+import com.elvo.wallet.monitoring.WalletMetricsRecorder;
 import com.elvo.wallet.security.AmlCaseWorkflowService;
 import com.elvo.wallet.security.FraudRulesEngine;
 import com.elvo.wallet.security.MakerCheckerApprovalService;
@@ -33,13 +34,16 @@ public class AdminFraudController {
     private final FraudRulesEngine fraudRulesEngine;
     private final MakerCheckerApprovalService makerCheckerApprovalService;
     private final AmlCaseWorkflowService amlCaseWorkflowService;
+    private final WalletMetricsRecorder walletMetricsRecorder;
 
     public AdminFraudController(FraudRulesEngine fraudRulesEngine,
                                 MakerCheckerApprovalService makerCheckerApprovalService,
-                                AmlCaseWorkflowService amlCaseWorkflowService) {
+                                AmlCaseWorkflowService amlCaseWorkflowService,
+                                WalletMetricsRecorder walletMetricsRecorder) {
         this.fraudRulesEngine = fraudRulesEngine;
         this.makerCheckerApprovalService = makerCheckerApprovalService;
         this.amlCaseWorkflowService = amlCaseWorkflowService;
+        this.walletMetricsRecorder = walletMetricsRecorder;
     }
 
     @PostMapping("/overrides/users/{userId}")
@@ -89,6 +93,7 @@ public class AdminFraudController {
         if (amlCase == null) {
             return ResponseEntity.notFound().build();
         }
+        walletMetricsRecorder.recordAmlCase("under_review", amlCase.category());
         return ResponseEntity.accepted().body(Map.of(
                 "caseId", amlCase.caseId(),
                 "status", amlCase.status().name()));
@@ -107,6 +112,7 @@ public class AdminFraudController {
         if (amlCase == null) {
             return ResponseEntity.notFound().build();
         }
+        walletMetricsRecorder.recordAmlCase("resolved", amlCase.category());
         return ResponseEntity.accepted().body(Map.of(
                 "caseId", amlCase.caseId(),
                 "status", amlCase.status().name(),

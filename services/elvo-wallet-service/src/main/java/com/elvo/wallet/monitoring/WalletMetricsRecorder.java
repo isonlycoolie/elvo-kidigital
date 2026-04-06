@@ -18,6 +18,8 @@ public class WalletMetricsRecorder {
     private static final String METRIC_FREEZE_ACTIONS_TOTAL = "wallet_freeze_actions_total";
     private static final String METRIC_SAGA_COMPENSATIONS_TOTAL = "wallet_saga_compensations_total";
     private static final String METRIC_EVENT_PUBLISH_TOTAL = "wallet_event_publish_total";
+    private static final String METRIC_SECURITY_CONTROLS_TOTAL = "wallet_security_controls_total";
+    private static final String METRIC_AML_CASES_TOTAL = "wallet_aml_cases_total";
 
     private final MeterRegistry meterRegistry;
     private final String serviceTag;
@@ -87,6 +89,26 @@ public class WalletMetricsRecorder {
                 .tag("service", serviceTag)
                 .tag("event_type", sanitize(eventType))
                 .tag("outcome", success ? "success" : "failure")
+                .register(meterRegistry)
+                .increment();
+    }
+
+    public void recordSecurityControl(String control, boolean blocked) {
+        Counter.builder(METRIC_SECURITY_CONTROLS_TOTAL)
+                .description("Security control decisions grouped by control and action")
+                .tag("service", serviceTag)
+                .tag("control", sanitize(control))
+                .tag("action", blocked ? "blocked" : "allowed")
+                .register(meterRegistry)
+                .increment();
+    }
+
+    public void recordAmlCase(String status, String category) {
+        Counter.builder(METRIC_AML_CASES_TOTAL)
+                .description("AML case lifecycle counters")
+                .tag("service", serviceTag)
+                .tag("status", sanitize(status))
+                .tag("category", sanitize(category))
                 .register(meterRegistry)
                 .increment();
     }

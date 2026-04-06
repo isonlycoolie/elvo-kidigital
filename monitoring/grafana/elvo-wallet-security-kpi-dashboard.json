@@ -1,0 +1,55 @@
+{
+  "title": "ELVO Wallet Security KPI Dashboard",
+  "uid": "elvo-wallet-security-kpi",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Security Control Blocks",
+      "targets": [
+        {
+          "expr": "sum by (control) (rate(wallet_security_controls_total{action=\"blocked\"}[5m]))",
+          "legendFormat": "{{control}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "AML Cases Opened",
+      "targets": [
+        {
+          "expr": "sum by (category) (rate(wallet_aml_cases_total{status=\"opened\"}[5m]))",
+          "legendFormat": "{{category}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "AML Cases Under Review",
+      "targets": [
+        {
+          "expr": "sum(increase(wallet_aml_cases_total{status=\"under_review\"}[24h]))"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "AML Cases Resolved (24h)",
+      "targets": [
+        {
+          "expr": "sum(increase(wallet_aml_cases_total{status=\"resolved\"}[24h]))"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+    }
+  ]
+}

@@ -31,6 +31,7 @@ import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.exception.GlobalExceptionHandler;
 import com.elvo.wallet.mapper.WalletMapper;
 import com.elvo.wallet.monitoring.SecurityAlertStreamingService;
+import com.elvo.wallet.monitoring.WalletMetricsRecorder;
 import com.elvo.wallet.repository.EtcRepository;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.repository.TransactionRepository;
@@ -117,6 +118,9 @@ class WalletControllerTest {
     
     @MockBean
     private WalletFieldEncryptionService fieldEncryptionService;
+
+    @MockBean
+    private WalletMetricsRecorder walletMetricsRecorder;
 
     @BeforeEach
     void setUpAuthenticatedUser() {
