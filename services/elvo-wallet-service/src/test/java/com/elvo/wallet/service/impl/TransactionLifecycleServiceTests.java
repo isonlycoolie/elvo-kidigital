@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import static org.mockito.ArgumentMatchers.any;
 import org.mockito.Mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -233,6 +234,38 @@ class TransactionLifecycleServiceTests {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Invalid transaction transition from REVERSED to RETRYING");
             }
+
+    @Test
+    void duplicateTransitionRequestShouldNotCorruptStatusHistory() {
+        Transaction transaction = newTransaction(Transaction.TransactionStatus.PROCESSING);
+
+        Transaction sameStatus = service.transition(
+                transaction,
+                Transaction.TransactionStatus.PROCESSING,
+                "duplicate update",
+                "corr-con-1",
+                null,
+                null);
+
+        assertThat(sameStatus.getStatus()).isEqualTo(Transaction.TransactionStatus.PROCESSING);
+        verify(transactionRepository, never()).save(any(Transaction.class));
+        verify(historyRepository, never()).save(any(TransactionStatusHistory.class));
+    }
+
+    @Test
+    void staleConcurrentUpdateShouldBeRejectedAfterCompletion() {
+        Transaction transaction = newTransaction(Transaction.TransactionStatus.COMPLETED);
+
+        assertThatThrownBy(() -> service.transition(
+                transaction,
+                Transaction.TransactionStatus.FAILED,
+                "stale concurrent update",
+                "corr-con-2",
+                null,
+                null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Invalid transaction transition from COMPLETED to FAILED");
+    }
 
     private Transaction newTransaction(Transaction.TransactionStatus status) {
         Transaction transaction = new Transaction();
