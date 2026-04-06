@@ -22,9 +22,11 @@ public class TransactionSigningChallengeService {
     private final String issuer;
     private final String audience;
     private final long ttlSeconds;
+    private final TransactionChallengeReplayProtectionService replayProtectionService;
 
     public TransactionSigningChallengeService(
             SecretManagerService secretManagerService,
+            TransactionChallengeReplayProtectionService replayProtectionService,
             @Value("${elvo.security.transaction-challenge.secret:}") String configuredSecret,
             @Value("${elvo.security.transaction-challenge.issuer:elvo-wallet-service}") String issuer,
             @Value("${elvo.security.transaction-challenge.audience:wallet-transaction-challenge}") String audience,
@@ -42,20 +44,23 @@ public class TransactionSigningChallengeService {
         this.issuer = issuer;
         this.audience = audience;
         this.ttlSeconds = ttlSeconds;
+        this.replayProtectionService = replayProtectionService;
     }
 
     public String generateChallenge(UUID userId, String transactionType, BigDecimal amount, String destination) {
         Instant now = Instant.now();
+        String challengeId = UUID.randomUUID().toString();
         return Jwts.builder()
                 .issuer(issuer)
                 .audience().add(audience).and()
                 .issuedAt(java.util.Date.from(now))
                 .expiration(java.util.Date.from(now.plusSeconds(ttlSeconds)))
                 .subject(userId == null ? "" : userId.toString())
+            .id(challengeId)
                 .claim("transactionType", normalizeType(transactionType))
                 .claim("amount", normalizeAmount(amount))
                 .claim("destination", normalizeDestination(destination))
-                .claim("challengeId", UUID.randomUUID().toString())
+            .claim("nonce", challengeId)
                 .signWith(secretKey)
                 .compact();
     }
@@ -82,6 +87,16 @@ public class TransactionSigningChallengeService {
             String claimType = claims.get("transactionType", String.class);
             String claimAmount = claims.get("amount", String.class);
             String claimDestination = claims.get("destination", String.class);
+            String challengeId = claims.getId();
+            String nonce = claims.get("nonce", String.class);
+
+            if (challengeId == null || challengeId.isBlank() || nonce == null || nonce.isBlank() || !challengeId.equals(nonce)) {
+                return false;
+            }
+
+            if (!replayProtectionService.consume(challengeId, claims.getExpiration().toInstant())) {
+                return false;
+            }
 
             return userId.toString().equals(claimUserId)
                     && normalizeType(transactionType).equals(normalizeType(claimType))
