@@ -17,6 +17,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID>,
 
     List<Reservation> findByWalletIdOrderByCreatedAtDesc(UUID walletId);
 
+    Optional<Reservation> findByIdAndWalletUserId(UUID reservationId, UUID userId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from Reservation r where r.id = :reservationId")
     Optional<Reservation> findByIdForUpdate(@Param("reservationId") UUID reservationId);

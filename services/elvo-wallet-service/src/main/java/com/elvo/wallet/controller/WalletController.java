@@ -55,10 +55,10 @@ import com.elvo.wallet.service.model.WalletFlowResult;
 import com.elvo.wallet.service.model.WithdrawalCommand;
 import com.elvo.wallet.service.model.WithdrawalMode;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/wallets")
@@ -559,15 +559,8 @@ public class WalletController {
     }
 
     private Reservation findOwnedReservation(UUID reservationId, UUID userId) {
-        Reservation reservation = reservationRepository.findById(reservationId)
+        Reservation reservation = reservationRepository.findByIdAndWalletUserId(reservationId, userId)
             .orElseThrow(() -> new WalletNotFoundException("Reservation not found: " + reservationId));
-
-        UUID ownerUserId = reservation.getWallet() != null ? reservation.getWallet().getUserId() : null;
-        if (!userId.equals(ownerUserId)) {
-            AUDIT_LOG.warn("wallet_controller_ownership_mismatch userId={} reservationId={} ownerUserId={}",
-                userId, reservationId, ownerUserId);
-            throw new WalletNotFoundException("Reservation not found: " + reservationId);
-        }
 
         return reservation;
     }

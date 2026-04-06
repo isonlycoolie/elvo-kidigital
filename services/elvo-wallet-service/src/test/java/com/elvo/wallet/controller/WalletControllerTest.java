@@ -1,27 +1,25 @@
 package com.elvo.wallet.controller;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-
 import java.math.BigDecimal;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import org.springframework.test.web.servlet.MockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.elvo.wallet.entity.Wallet;
-import com.elvo.wallet.entity.Reservation;
 import com.elvo.wallet.exception.GlobalExceptionHandler;
 import com.elvo.wallet.mapper.WalletMapper;
 import com.elvo.wallet.repository.EtcRepository;
@@ -95,14 +93,10 @@ class WalletControllerTest {
     @WithMockUser(username = "11111111-1111-1111-1111-111111111111")
     void releaseReservationShouldReturnNotFoundWhenReservationOwnedByAnotherUser() throws Exception {
         UUID reservationId = UUID.randomUUID();
+        UUID userId = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-        Wallet ownerWallet = new Wallet();
-        ownerWallet.setUserId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
-
-        Reservation reservation = new Reservation();
-        reservation.setWallet(ownerWallet);
-
-        when(reservationRepository.findById(reservationId)).thenReturn(java.util.Optional.of(reservation));
+        when(reservationRepository.findByIdAndWalletUserId(reservationId, userId))
+            .thenReturn(java.util.Optional.empty());
 
         mockMvc.perform(post("/wallets/me/reservations/{id}/release", reservationId)
                         .with(csrf())
@@ -118,14 +112,10 @@ class WalletControllerTest {
     @WithMockUser(username = "11111111-1111-1111-1111-111111111111")
     void confirmReservationShouldReturnNotFoundWhenReservationOwnedByAnotherUser() throws Exception {
         UUID reservationId = UUID.randomUUID();
+        UUID userId = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-        Wallet ownerWallet = new Wallet();
-        ownerWallet.setUserId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
-
-        Reservation reservation = new Reservation();
-        reservation.setWallet(ownerWallet);
-
-        when(reservationRepository.findById(reservationId)).thenReturn(java.util.Optional.of(reservation));
+        when(reservationRepository.findByIdAndWalletUserId(reservationId, userId))
+            .thenReturn(java.util.Optional.empty());
 
         mockMvc.perform(post("/wallets/me/reservations/{id}/confirm", reservationId)
                         .with(csrf())
