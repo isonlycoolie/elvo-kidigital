@@ -83,7 +83,18 @@ public class DefaultDepositFlowService implements DepositFlowService {
             return WalletFlowResult.failure("Idempotency key is required", command.walletId(), "wallet.deposit.failed");
         }
 
-        WalletFlowResult duplicate = idempotencyService.get(command.idempotencyKey()).orElse(null);
+        String endpointScope = "wallet.deposit.process";
+        String userScope = scope(command.userId());
+        String payloadFingerprint = WalletIdempotencyService.hashPayloadValue(String.join("|",
+                String.valueOf(command.walletId()),
+                String.valueOf(command.userId()),
+                String.valueOf(command.amount()),
+                String.valueOf(command.channel()),
+                String.valueOf(command.reference()),
+                String.valueOf(command.agentFloatAvailable()),
+                String.valueOf(command.mobileCallbackReference())));
+
+        WalletFlowResult duplicate = findDuplicate(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, command.walletId(), "wallet.deposit.failed");
         if (duplicate != null) {
             return duplicate;
         }
@@ -92,25 +103,25 @@ public class DefaultDepositFlowService implements DepositFlowService {
         sagaOrchestrator.begin("deposit", command.walletId(), command.amount(), sagaReference);
 
         if (!identityServiceClient.isUserActive(command.userId())) {
-            return failed(command.walletId(), command.idempotencyKey(), "User is not active");
+            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "User is not active");
         }
 
         if (command.channel() == WalletChannel.AGENT
                 && (!command.agentFloatAvailable() || !agentServiceClient.hasAvailableFloat(command.userId(), command.amount()))) {
-            return failed(command.walletId(), command.idempotencyKey(), "Agent float is insufficient");
+            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Agent float is insufficient");
         }
 
         Wallet wallet = walletRepository.findByIdForUpdate(command.walletId()).orElse(null);
         if (wallet == null) {
-            return failed(command.walletId(), command.idempotencyKey(), "Wallet not found");
+            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Wallet not found");
         }
 
         if (!limitEnforcementService.validate(wallet.getId(), WalletLimitEnforcementService.FlowType.DEPOSIT, command.amount())) {
-            return failed(command.walletId(), command.idempotencyKey(), "Deposit limits exceeded");
+            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Deposit limits exceeded");
         }
 
         if (wallet.getStatus() == Wallet.WalletStatus.FROZEN) {
-            return failed(command.walletId(), command.idempotencyKey(), "Wallet is frozen");
+            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Wallet is frozen");
         }
 
         String resolvedReference = resolveReference(command.reference(), command.idempotencyKey());
@@ -123,7 +134,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
                     command.walletId(),
                     existing != null ? existing.getId() : null,
                     "wallet.deposit.completed");
-            idempotencyService.put(command.idempotencyKey(), result);
+                idempotencyService.put(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, result);
             return result;
         }
 
@@ -145,7 +156,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
             if (command.mobileCallbackReference() == null || command.mobileCallbackReference().isBlank()) {
                 transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.EXPIRED,
                     "Mobile callback timed out", correlationId(), "CALLBACK_TIMEOUT", "Mobile callback reference is missing");
-                return failed(wallet.getId(), command.idempotencyKey(), "Mobile callback confirmation required");
+                return failed(wallet.getId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Mobile callback confirmation required");
             }
 
             callbackReconciliationService.scheduleRetry(command.mobileCallbackReference(), wallet.getId(), command.amount());
@@ -174,7 +185,7 @@ public class DefaultDepositFlowService implements DepositFlowService {
                 wallet.getId(),
                 transaction.getId(),
                 "wallet.deposit.completed");
-            idempotencyService.put(command.idempotencyKey(), result);
+            idempotencyService.put(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, result);
             return result;
         } catch (RuntimeException ex) {
             if (balanceApplied) {
@@ -185,16 +196,38 @@ public class DefaultDepositFlowService implements DepositFlowService {
             transitionSafely(transaction, Transaction.TransactionStatus.FAILED,
                 "Deposit failed before posting", "DEPOSIT_FAILED", ex.getMessage());
             }
-            return failed(wallet.getId(), command.idempotencyKey(), "Deposit processing failed");
+            return failed(wallet.getId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Deposit processing failed");
         }
     }
 
-    private WalletFlowResult failed(UUID walletId, String idempotencyKey, String message) {
+    private WalletFlowResult failed(UUID walletId,
+                                    String idempotencyKey,
+                                    String userScope,
+                                    String endpointScope,
+                                    String payloadFingerprint,
+                                    String message) {
         emitDepositEvent(false, walletId, idempotencyKey, null, message);
         WalletFlowResult result = WalletFlowResult.failure(message, walletId, "wallet.deposit.failed");
         sagaOrchestrator.compensate("deposit", walletId, null, idempotencyKey, new IllegalStateException(message));
-        idempotencyService.put(idempotencyKey, result);
+        idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
         return result;
+    }
+
+    private WalletFlowResult findDuplicate(String key,
+                                           String userScope,
+                                           String endpointScope,
+                                           String payloadFingerprint,
+                                           UUID walletId,
+                                           String eventType) {
+        try {
+            return idempotencyService.get(key, userScope, endpointScope, payloadFingerprint).orElse(null);
+        } catch (IllegalArgumentException ex) {
+            return WalletFlowResult.failure(ex.getMessage(), walletId, eventType);
+        }
+    }
+
+    private String scope(UUID userId) {
+        return userId == null ? "anonymous" : userId.toString();
     }
 
     private void emitDepositEvent(boolean success, UUID walletId, String reference, BigDecimal amount, String reason) {

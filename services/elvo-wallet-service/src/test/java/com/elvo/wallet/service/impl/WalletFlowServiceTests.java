@@ -111,13 +111,15 @@ class WalletFlowServiceTests {
                                 });
                 lenient().when(transactionRepository.findByExternalReferenceAndStatusIn(anyString(), any()))
                                 .thenReturn(java.util.List.of());
+                lenient().when(idempotencyService.get(anyString(), anyString(), anyString(), anyString()))
+                                .thenReturn(Optional.empty());
     }
 
     @Test
     void depositShouldPersistTransactionAndPublishEvent() {
         UUID walletId = UUID.randomUUID();
         wallet.setBalance(new BigDecimal("100.00"));
-        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
         when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
@@ -166,7 +168,7 @@ class WalletFlowServiceTests {
 
     @Test
     void withdrawalShouldFailWhenEspVerificationFails() {
-        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(identityServiceClient.verifyEsp(any(), any())).thenReturn(false);
 
@@ -207,7 +209,7 @@ class WalletFlowServiceTests {
 
     @Test
     void withdrawalShouldFailWhenEacReplayDetected() {
-        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
         when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
@@ -284,7 +286,7 @@ class WalletFlowServiceTests {
 
     @Test
     void withdrawalShouldFailWhenStepUpConfirmationMissingForDeviceFreeFlow() {
-        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
         when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
@@ -401,7 +403,7 @@ class WalletFlowServiceTests {
 
     @Test
     void withdrawalShouldFailWhenTransactionChallengeMissingForHighRiskFlow() {
-        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
         when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
@@ -445,7 +447,7 @@ class WalletFlowServiceTests {
 
     @Test
     void transferShouldFailWhenVelocityRiskDetected() {
-        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(true);
 
         DefaultTransferFlowService service = new DefaultTransferFlowService(
@@ -479,7 +481,7 @@ class WalletFlowServiceTests {
 
     @Test
     void transferShouldFailWhenAnotherTransferIsProcessing() {
-        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
         when(stepUpAuthenticationService.requiresStepUpForTransfer(any())).thenReturn(false);
         when(walletRepository.findByIdForUpdate(any())).thenReturn(Optional.of(wallet));
@@ -521,7 +523,7 @@ class WalletFlowServiceTests {
     @Test
     void mobileDepositShouldFailWhenCallbackReferenceIsMissing() {
         UUID walletId = UUID.randomUUID();
-        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
         when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
@@ -558,7 +560,7 @@ class WalletFlowServiceTests {
 
     @Test
     void withdrawalShouldFailWhenVelocityRiskDetected() {
-        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(true);
 
         DefaultWithdrawalFlowService service = new DefaultWithdrawalFlowService(
@@ -597,7 +599,7 @@ class WalletFlowServiceTests {
 
     @Test
     void reservationCreateShouldPersistReservation() {
-        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
         when(reservationRepository.createReservation(any(), any(), any())).thenAnswer(invocation -> {
             Reservation reservation = new Reservation();
@@ -634,7 +636,7 @@ class WalletFlowServiceTests {
 
     @Test
     void etcGenerateShouldPublishEvent() {
-        when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
+        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
         when(etcRepository.generateCode(any(), anyString(), any())).thenAnswer(invocation -> {
             Etc etc = new Etc();
             etc.setWallet(wallet);

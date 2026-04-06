@@ -1,9 +1,9 @@
 package com.elvo.wallet.service.impl;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -22,9 +22,9 @@ class WalletIdempotencyServiceTest {
     void putShouldReturnCachedResultForSameKey() {
         WalletFlowResult result = WalletFlowResult.success("ok", UUID.randomUUID(), UUID.randomUUID(), "wallet.deposit.completed");
 
-        service.put("key-123", result);
+        service.put("key-123", "user-1", "wallet.deposit.process", "payload-hash", result);
 
-        assertThat(service.get("key-123")).contains(result);
+        assertThat(service.get("key-123", "user-1", "wallet.deposit.process", "payload-hash")).contains(result);
     }
 
     @Test
@@ -34,5 +34,15 @@ class WalletIdempotencyServiceTest {
         service.put("   ", result);
 
         assertThat(service.get("   ")).isEmpty();
+    }
+
+    @Test
+    void keyReuseWithDifferentPayloadShouldBeRejected() {
+        WalletFlowResult result = WalletFlowResult.success("ok", UUID.randomUUID(), UUID.randomUUID(), "wallet.deposit.completed");
+        service.put("key-123", "user-1", "wallet.deposit.process", "payload-hash-1", result);
+
+        assertThatThrownBy(() -> service.get("key-123", "user-1", "wallet.deposit.process", "payload-hash-2"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("different request context");
     }
 }

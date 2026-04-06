@@ -4,7 +4,6 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,14 +44,23 @@ public class DefaultReservationFlowService implements ReservationFlowService {
             return WalletFlowResult.failure("Invalid reservation request", null, "wallet.reservation.failed");
         }
 
-        WalletFlowResult duplicate = idempotencyService.get(command.idempotencyKey()).orElse(null);
+        String endpointScope = "wallet.reservation.create";
+        String userScope = scope(command.userId());
+        String payloadFingerprint = WalletIdempotencyService.hashPayloadValue(String.join("|",
+                String.valueOf(command.walletId()),
+                String.valueOf(command.userId()),
+                String.valueOf(command.amount()),
+                String.valueOf(command.expiryDate()),
+                String.valueOf(command.reference())));
+
+        WalletFlowResult duplicate = findDuplicate(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, command.walletId(), "wallet.reservation.failed");
         if (duplicate != null) {
             return duplicate;
         }
 
         if (!limitEnforcementService.validate(command.walletId(), WalletLimitEnforcementService.FlowType.RESERVATION, command.amount())) {
             WalletFlowResult result = WalletFlowResult.failure("Reservation limits exceeded", command.walletId(), "wallet.reservation.failed");
-            idempotencyService.put(command.idempotencyKey(), result);
+            idempotencyService.put(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, result);
             return result;
         }
 
@@ -74,14 +82,17 @@ public class DefaultReservationFlowService implements ReservationFlowService {
                 command.walletId(),
                 reservation.getId(),
                 "wallet.reservation.created");
-        idempotencyService.put(command.idempotencyKey(), result);
+        idempotencyService.put(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, result);
         return result;
     }
 
     @Override
     @Transactional
     public WalletFlowResult release(UUID reservationId, String idempotencyKey) {
-        WalletFlowResult duplicate = idempotencyService.get(idempotencyKey).orElse(null);
+        String endpointScope = "wallet.reservation.release";
+        String userScope = "internal-service";
+        String payloadFingerprint = WalletIdempotencyService.hashPayloadValue(String.valueOf(reservationId));
+        WalletFlowResult duplicate = findDuplicate(idempotencyKey, userScope, endpointScope, payloadFingerprint, null, "wallet.reservation.failed");
         if (duplicate != null) {
             return duplicate;
         }
@@ -89,7 +100,7 @@ public class DefaultReservationFlowService implements ReservationFlowService {
         boolean released = reservationRepository.releaseReservation(reservationId);
         if (!released) {
             WalletFlowResult result = WalletFlowResult.failure("Reservation release failed", null, "wallet.reservation.failed");
-            idempotencyService.put(idempotencyKey, result);
+            idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
             return result;
         }
 
@@ -110,14 +121,17 @@ public class DefaultReservationFlowService implements ReservationFlowService {
                 walletId,
                 reservationId,
                 "wallet.reservation.released");
-        idempotencyService.put(idempotencyKey, result);
+        idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
         return result;
     }
 
     @Override
     @Transactional
     public WalletFlowResult confirm(UUID reservationId, String idempotencyKey) {
-        WalletFlowResult duplicate = idempotencyService.get(idempotencyKey).orElse(null);
+        String endpointScope = "wallet.reservation.confirm";
+        String userScope = "internal-service";
+        String payloadFingerprint = WalletIdempotencyService.hashPayloadValue(String.valueOf(reservationId));
+        WalletFlowResult duplicate = findDuplicate(idempotencyKey, userScope, endpointScope, payloadFingerprint, null, "wallet.reservation.failed");
         if (duplicate != null) {
             return duplicate;
         }
@@ -125,7 +139,7 @@ public class DefaultReservationFlowService implements ReservationFlowService {
         boolean confirmed = reservationRepository.confirmDebit(reservationId);
         if (!confirmed) {
             WalletFlowResult result = WalletFlowResult.failure("Reservation confirm failed", null, "wallet.reservation.failed");
-            idempotencyService.put(idempotencyKey, result);
+            idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
             return result;
         }
 
@@ -145,7 +159,24 @@ public class DefaultReservationFlowService implements ReservationFlowService {
                 walletId,
                 reservationId,
                 "wallet.reservation.confirmed");
-        idempotencyService.put(idempotencyKey, result);
+        idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
         return result;
+    }
+
+    private WalletFlowResult findDuplicate(String key,
+                                           String userScope,
+                                           String endpointScope,
+                                           String payloadFingerprint,
+                                           UUID walletId,
+                                           String eventType) {
+        try {
+            return idempotencyService.get(key, userScope, endpointScope, payloadFingerprint).orElse(null);
+        } catch (IllegalArgumentException ex) {
+            return WalletFlowResult.failure(ex.getMessage(), walletId, eventType);
+        }
+    }
+
+    private String scope(UUID userId) {
+        return userId == null ? "anonymous" : userId.toString();
     }
 }

@@ -87,6 +87,15 @@ public class DefaultTransferFlowService implements TransferFlowService {
             return WalletFlowResult.failure("Idempotency key is required", command.sourceWalletId(), "wallet.transfer.failed");
         }
 
+        String endpointScope = "wallet.transfer.process";
+        String userScope = scope(command.userId());
+        String payloadFingerprint = WalletIdempotencyService.hashPayloadValue(String.join("|",
+            String.valueOf(command.sourceWalletId()),
+            String.valueOf(command.targetWalletId()),
+            String.valueOf(command.userId()),
+            String.valueOf(command.amount()),
+            String.valueOf(command.reference())));
+
         boolean requiresStepUp = stepUpAuthenticationService.requiresStepUpForTransfer(command.amount());
         if (requiresStepUp && !transactionSigningChallengeService.isValidChallenge(
                 command.transactionChallengeToken(),
@@ -94,23 +103,23 @@ public class DefaultTransferFlowService implements TransferFlowService {
                 "TRANSFER",
                 command.amount(),
                 command.targetWalletId() == null ? null : command.targetWalletId().toString())) {
-            return failed(command.sourceWalletId(), command.idempotencyKey(), "Transaction challenge confirmation required");
+            return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Transaction challenge confirmation required");
         }
 
         if (requiresStepUp && !stepUpAuthenticationService.isValidConfirmation(
                 command.stepUpMethod(),
                 command.stepUpToken(),
                 transferBinding(command))) {
-            return failed(command.sourceWalletId(), command.idempotencyKey(), "Step-up authentication required");
+            return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Step-up authentication required");
         }
 
-        WalletFlowResult duplicate = idempotencyService.get(command.idempotencyKey()).orElse(null);
+        WalletFlowResult duplicate = findDuplicate(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, command.sourceWalletId(), "wallet.transfer.failed");
         if (duplicate != null) {
             return duplicate;
         }
 
         if (fraudVelocityService.isSuspicious(WalletFraudVelocityService.Operation.TRANSFER, command.userId(), command.amount())) {
-            return failed(command.sourceWalletId(), command.idempotencyKey(), "Velocity risk detected");
+            return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Velocity risk detected");
         }
 
         String sagaReference = resolveReference(command.reference(), command.idempotencyKey());
@@ -120,15 +129,15 @@ public class DefaultTransferFlowService implements TransferFlowService {
         Wallet target = walletRepository.findByIdForUpdate(command.targetWalletId()).orElse(null);
 
         if (source != null && !limitEnforcementService.validate(source.getId(), WalletLimitEnforcementService.FlowType.TRANSFER, command.amount())) {
-            return failed(command.sourceWalletId(), command.idempotencyKey(), "Transfer limits exceeded");
+            return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Transfer limits exceeded");
         }
 
         if (source == null || target == null) {
-            return failed(command.sourceWalletId(), command.idempotencyKey(), "Source or target wallet not found");
+            return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Source or target wallet not found");
         }
 
         if (source.getStatus() == Wallet.WalletStatus.FROZEN || target.getStatus() == Wallet.WalletStatus.FROZEN) {
-            return failed(command.sourceWalletId(), command.idempotencyKey(), "Source or target wallet is frozen");
+            return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Source or target wallet is frozen");
         }
 
         String transferReference = resolveReference(command.reference(), command.idempotencyKey());
@@ -136,7 +145,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
         if (!transactionRepository.findByExternalReferenceAndStatusIn(
                 transferReference,
                 transactionLifecycleService.activeStatuses()).isEmpty()) {
-            return failed(command.sourceWalletId(), command.idempotencyKey(), "Transfer is already processing");
+            return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Transfer is already processing");
         }
 
         if (transactionRepository.existsByReference(encryptedTransferReference)) {
@@ -146,13 +155,13 @@ public class DefaultTransferFlowService implements TransferFlowService {
                     command.sourceWalletId(),
                     existing != null ? existing.getId() : null,
                     "wallet.transfer.completed");
-            idempotencyService.put(command.idempotencyKey(), result);
+                idempotencyService.put(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, result);
             return result;
         }
 
         BigDecimal available = source.getBalance().subtract(source.getReservedBalance());
         if (available.compareTo(command.amount()) < 0) {
-            return failed(command.sourceWalletId(), command.idempotencyKey(), "Insufficient balance for transfer");
+            return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Insufficient balance for transfer");
         }
 
         source.setBalance(source.getBalance().subtract(command.amount()));
@@ -212,26 +221,48 @@ public class DefaultTransferFlowService implements TransferFlowService {
                 source.getId(),
                 debit.getId(),
                 "wallet.transfer.completed");
-            idempotencyService.put(command.idempotencyKey(), result);
+            idempotencyService.put(command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, result);
             return result;
         } catch (RuntimeException ex) {
             transitionSafely(debit, Transaction.TransactionStatus.REVERSED,
                 "Transfer compensated after failure", "TRANSFER_REVERSED", ex.getMessage());
             transitionSafely(credit, Transaction.TransactionStatus.REVERSED,
                 "Transfer compensated after failure", "TRANSFER_REVERSED", ex.getMessage());
-            return failed(command.sourceWalletId(), command.idempotencyKey(), "Transfer processing failed");
+            return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Transfer processing failed");
         }
     }
 
-    private WalletFlowResult failed(UUID walletId, String idempotencyKey, String message) {
+    private WalletFlowResult failed(UUID walletId,
+                                    String idempotencyKey,
+                                    String userScope,
+                                    String endpointScope,
+                                    String payloadFingerprint,
+                                    String message) {
         AUDIT_LOG.warn("event=wallet.transfer.failed sourceWalletId={} reason={}", walletId, message);
         eventPublisher.publish("wallet.transfer.failed", java.util.Map.of(
                 "sourceWalletId", walletId,
                 "reason", message));
         WalletFlowResult result = WalletFlowResult.failure(message, walletId, "wallet.transfer.failed");
         sagaOrchestrator.compensate("transfer", walletId, null, idempotencyKey, new IllegalStateException(message));
-        idempotencyService.put(idempotencyKey, result);
+        idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
         return result;
+    }
+
+    private WalletFlowResult findDuplicate(String key,
+                                           String userScope,
+                                           String endpointScope,
+                                           String payloadFingerprint,
+                                           UUID walletId,
+                                           String eventType) {
+        try {
+            return idempotencyService.get(key, userScope, endpointScope, payloadFingerprint).orElse(null);
+        } catch (IllegalArgumentException ex) {
+            return WalletFlowResult.failure(ex.getMessage(), walletId, eventType);
+        }
+    }
+
+    private String scope(UUID userId) {
+        return userId == null ? "anonymous" : userId.toString();
     }
 
     private String resolveReference(String reference, String idempotencyKey) {
