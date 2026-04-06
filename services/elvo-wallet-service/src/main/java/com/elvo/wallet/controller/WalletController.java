@@ -513,15 +513,14 @@ public class WalletController {
 
         AUDIT_LOG.info("wallet_controller_release_reservation userId={} reservationId={}", userId, id);
 
-        Wallet wallet = walletRepository.findByUserId(userId)
-            .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
+        Reservation reservation = findOwnedReservation(id, userId);
 
         WalletFlowResult result = walletService.releaseReservation(id, idempotencyKey);
         FlowResultResponseDto response = walletMapper.toFlowResultResponseDto(result);
 
         if (result.success()) {
             AUDIT_LOG.info("wallet_reservation_released userId={} reservationId={} walletId={}",
-                userId, id, wallet.getId());
+                userId, id, reservation.getWallet().getId());
             return ResponseEntity.ok(response);
         } else {
             AUDIT_LOG.warn("wallet_reservation_release_failed userId={} reservationId={} reason={}",
@@ -543,21 +542,34 @@ public class WalletController {
 
         AUDIT_LOG.info("wallet_controller_confirm_reservation userId={} reservationId={}", userId, id);
 
-        Wallet wallet = walletRepository.findByUserId(userId)
-            .orElseThrow(() -> new WalletNotFoundException("Wallet not found for user: " + userId));
+        Reservation reservation = findOwnedReservation(id, userId);
 
         WalletFlowResult result = walletService.confirmReservation(id, idempotencyKey);
         FlowResultResponseDto response = walletMapper.toFlowResultResponseDto(result);
 
         if (result.success()) {
             AUDIT_LOG.info("wallet_reservation_confirmed userId={} reservationId={} walletId={}",
-                userId, id, wallet.getId());
+                userId, id, reservation.getWallet().getId());
             return ResponseEntity.ok(response);
         } else {
             AUDIT_LOG.warn("wallet_reservation_confirm_failed userId={} reservationId={} reason={}",
                 userId, id, result.message());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
+    }
+
+    private Reservation findOwnedReservation(UUID reservationId, UUID userId) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+            .orElseThrow(() -> new WalletNotFoundException("Reservation not found: " + reservationId));
+
+        UUID ownerUserId = reservation.getWallet() != null ? reservation.getWallet().getUserId() : null;
+        if (!userId.equals(ownerUserId)) {
+            AUDIT_LOG.warn("wallet_controller_ownership_mismatch userId={} reservationId={} ownerUserId={}",
+                userId, reservationId, ownerUserId);
+            throw new WalletNotFoundException("Reservation not found: " + reservationId);
+        }
+
+        return reservation;
     }
 
     /**

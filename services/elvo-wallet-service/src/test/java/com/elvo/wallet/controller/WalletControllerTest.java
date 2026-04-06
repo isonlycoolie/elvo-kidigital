@@ -1,6 +1,8 @@
 package com.elvo.wallet.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -19,6 +21,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.elvo.wallet.entity.Wallet;
+import com.elvo.wallet.entity.Reservation;
 import com.elvo.wallet.exception.GlobalExceptionHandler;
 import com.elvo.wallet.mapper.WalletMapper;
 import com.elvo.wallet.repository.EtcRepository;
@@ -86,5 +89,51 @@ class WalletControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @WithMockUser(username = "11111111-1111-1111-1111-111111111111")
+    void releaseReservationShouldReturnNotFoundWhenReservationOwnedByAnotherUser() throws Exception {
+        UUID reservationId = UUID.randomUUID();
+
+        Wallet ownerWallet = new Wallet();
+        ownerWallet.setUserId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
+
+        Reservation reservation = new Reservation();
+        reservation.setWallet(ownerWallet);
+
+        when(reservationRepository.findById(reservationId)).thenReturn(java.util.Optional.of(reservation));
+
+        mockMvc.perform(post("/wallets/me/reservations/{id}/release", reservationId)
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{" + "\"reason\":\"idem-release-1\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("WALLET_NOT_FOUND"));
+
+        verify(walletService, never()).releaseReservation(any(), any());
+    }
+
+    @Test
+    @WithMockUser(username = "11111111-1111-1111-1111-111111111111")
+    void confirmReservationShouldReturnNotFoundWhenReservationOwnedByAnotherUser() throws Exception {
+        UUID reservationId = UUID.randomUUID();
+
+        Wallet ownerWallet = new Wallet();
+        ownerWallet.setUserId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
+
+        Reservation reservation = new Reservation();
+        reservation.setWallet(ownerWallet);
+
+        when(reservationRepository.findById(reservationId)).thenReturn(java.util.Optional.of(reservation));
+
+        mockMvc.perform(post("/wallets/me/reservations/{id}/confirm", reservationId)
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{" + "\"reason\":\"idem-confirm-1\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("WALLET_NOT_FOUND"));
+
+        verify(walletService, never()).confirmReservation(any(), any());
     }
 }
