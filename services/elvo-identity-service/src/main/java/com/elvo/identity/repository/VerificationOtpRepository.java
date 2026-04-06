@@ -44,15 +44,9 @@ public interface VerificationOtpRepository extends JpaRepository<VerificationOtp
                                               @Param("requestId") String requestId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-            select otp from VerificationOtp otp
-            where otp.userId = :userId
-              and otp.purpose = :purpose
-              and otp.status = com.elvo.identity.entity.VerificationOtp$Status.ACTIVE
-            order by otp.createdAt desc
-            """)
-    Optional<VerificationOtp> lockLatestActiveOtp(@Param("userId") UUID userId,
-                                                   @Param("purpose") VerificationOtp.Purpose purpose);
+    Optional<VerificationOtp> findFirstByUserIdAndPurposeAndStatusOrderByCreatedAtDesc(UUID userId,
+                                                                                         VerificationOtp.Purpose purpose,
+                                                                                         VerificationOtp.Status status);
 
     @Modifying
     @Transactional
