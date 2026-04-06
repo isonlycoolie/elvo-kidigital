@@ -91,6 +91,19 @@ class UserJwtAuthenticationFilterTest {
         assertThat(response.getContentAsString()).contains("Token type is invalid");
     }
 
+    @Test
+    void shouldRejectBasicAuthorizationHeader() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/wallets/me/balance");
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Basic dXNlcjpwYXNz");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = (req, res) -> { };
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentAsString()).contains("Missing or invalid user bearer token");
+    }
+
     private String token(UUID userId, String tokenType) {
         return Jwts.builder()
                 .issuer(ISSUER)
