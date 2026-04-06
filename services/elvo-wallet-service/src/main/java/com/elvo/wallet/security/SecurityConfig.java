@@ -29,6 +29,12 @@ public class SecurityConfig {
     }
 
     @Bean
+    @ConfigurationProperties(prefix = "elvo.security.jwt")
+    public UserJwtProperties userJwtProperties() {
+        return new UserJwtProperties();
+    }
+
+    @Bean
     @ConfigurationProperties(prefix = "elvo.security.internal-authz")
     public InternalServiceAuthorizationProperties internalServiceAuthorizationProperties() {
         return new InternalServiceAuthorizationProperties();
@@ -75,12 +81,18 @@ public class SecurityConfig {
     }
 
     @Bean
+    public UserJwtAuthenticationFilter userJwtAuthenticationFilter(UserJwtProperties jwtProperties, ObjectMapper objectMapper) {
+        return new UserJwtAuthenticationFilter(jwtProperties, objectMapper);
+    }
+
+    @Bean
     public AuthenticationEntryPoint authenticationEntryPoint(WalletBruteForceGuardService guardService) {
         return new WalletBruteForceAuthenticationEntryPoint(guardService);
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
+            UserJwtAuthenticationFilter userJwtAuthenticationFilter,
             InternalServiceJwtAuthenticationFilter internalServiceJwtAuthenticationFilter,
             WalletBruteForceProtectionFilter bruteForceProtectionFilter,
             AuthenticationEntryPoint authenticationEntryPoint,
@@ -95,6 +107,7 @@ public class SecurityConfig {
                     .requestMatchers("/api/v1/internal/wallets/**").hasRole("INTERNAL_SERVICE")
                         .anyRequest().authenticated())
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(authenticationEntryPoint))
+                .addFilterBefore(userJwtAuthenticationFilter, org.springframework.security.web.authentication.www.BasicAuthenticationFilter.class)
                 .addFilterBefore(internalServiceJwtAuthenticationFilter, org.springframework.security.web.authentication.www.BasicAuthenticationFilter.class)
                 .addFilterBefore(bruteForceProtectionFilter, org.springframework.security.web.authentication.www.BasicAuthenticationFilter.class)
                 .httpBasic(Customizer.withDefaults());

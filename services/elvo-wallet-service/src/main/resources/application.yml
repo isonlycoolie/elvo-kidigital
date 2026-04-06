@@ -64,6 +64,11 @@ elvo:
   security:
     jwt:
       secret: ${ELVO_JWT_SECRET:}
+      issuer: ${ELVO_JWT_ISSUER:elvo-identity-service}
+      audience: ${ELVO_JWT_AUDIENCE:elvo-platform}
+      signing:
+        key-id: ${ELVO_JWT_SIGNING_KEY_ID:}
+        public-key-pem: ${ELVO_JWT_SIGNING_PUBLIC_KEY_PEM:}
       access-token-ttl-minutes: ${ELVO_JWT_ACCESS_TTL_MINUTES:15}
       refresh-token-ttl-days: ${ELVO_JWT_REFRESH_TTL_DAYS:7}
     internal-jwt:
