@@ -4,6 +4,9 @@ import com.elvo.billing.service.event.BillingEventPublisher;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
+import java.util.Map;
+
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -19,7 +22,7 @@ class BillingEventPublisherStubTest {
 
         publisher.publish("billing.payment.reversed", "req-1", "{\"paymentId\":\"p-1\"}", "v2");
 
-        verify(rabbitTemplate).convertAndSend(eq("elvo.billing.exchange"), eq("billing.payment.reversed"), any());
+        verify(rabbitTemplate).convertAndSend(eq("elvo.billing.exchange"), eq("billing.payment.reversed"), any(Map.class));
     }
 
     @Test
@@ -30,8 +33,8 @@ class BillingEventPublisherStubTest {
         publisher.publishTransactionRequested("req-2", "{\"transactionId\":\"t-1\"}");
         publisher.publishTransactionCompleted("req-2", "{\"transactionId\":\"t-1\",\"status\":\"SUCCESS\"}");
 
-        verify(rabbitTemplate).convertAndSend(eq("elvo.billing.exchange"), eq(BillingEventPublisher.TRANSACTION_REQUESTED), any());
-        verify(rabbitTemplate).convertAndSend(eq("elvo.billing.exchange"), eq(BillingEventPublisher.TRANSACTION_COMPLETED), any());
-        verify(rabbitTemplate, times(2)).convertAndSend(eq("elvo.billing.exchange"), any(), any());
+        verify(rabbitTemplate).convertAndSend(eq("elvo.billing.exchange"), eq(BillingEventPublisher.TRANSACTION_REQUESTED), any(Map.class));
+        verify(rabbitTemplate).convertAndSend(eq("elvo.billing.exchange"), eq(BillingEventPublisher.TRANSACTION_COMPLETED), any(Map.class));
+        verify(rabbitTemplate, times(2)).convertAndSend(eq("elvo.billing.exchange"), anyString(), any(Map.class));
     }
 }
