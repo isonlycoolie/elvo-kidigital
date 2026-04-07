@@ -43,6 +43,10 @@ elvo:
           enabled: ${ELVO_BILLING_MOCK_ADAPTER_ENABLED:true}
 
 management:
+  metrics:
+    export:
+      prometheus:
+        enabled: ${ELVO_METRICS_PROMETHEUS_ENABLED:true}
   endpoints:
     web:
       exposure:
