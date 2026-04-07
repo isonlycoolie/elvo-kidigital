@@ -84,11 +84,6 @@
                 </dependency>
                 <dependency>
                     <groupId>com.elvo.shared</groupId>
-                    <artifactId>config-lib</artifactId>
-                    <version>${elvo.shared.version}</version>
-                </dependency>
-                <dependency>
-                    <groupId>com.elvo.shared</groupId>
                     <artifactId>messaging-lib</artifactId>
                     <version>${elvo.shared.version}</version>
                 </dependency>
@@ -99,17 +94,12 @@
                 </dependency>
                 <dependency>
                     <groupId>com.elvo.shared</groupId>
-                    <artifactId>security-lib</artifactId>
-                    <version>${elvo.shared.version}</version>
-                </dependency>
-                <dependency>
-                    <groupId>com.elvo.shared</groupId>
                     <artifactId>idempotency-lib</artifactId>
                     <version>${elvo.shared.version}</version>
                 </dependency>
                 <dependency>
                     <groupId>com.elvo.shared</groupId>
-                    <artifactId>saga-lib</artifactId>
+                    <artifactId>billing-adapter-lib</artifactId>
                     <version>${elvo.shared.version}</version>
                 </dependency>
             </dependencies>
