@@ -10,10 +10,13 @@ import org.springframework.stereotype.Component;
 public class SentryExceptionMapper {
 
     public void capture(Exception exception, String errorCode) {
+        String errorType = exception == null ? "UNKNOWN" : exception.getClass().getSimpleName();
         Sentry.withScope(scope -> {
             scope.setTag("domain", "billing");
             scope.setTag("errorCode", defaultTag(errorCode));
-            scope.setTag("exceptionType", exception.getClass().getSimpleName());
+            scope.setTag("exceptionType", defaultTag(errorType));
+            scope.setTag("errorType", defaultTag(errorType));
+            scope.setTag("issueGroup", "domain:" + defaultTag(errorCode) + ":" + defaultTag(errorType));
 
             if (exception instanceof PaymentValidationException paymentValidationException) {
                 scope.setLevel(SentryLevel.WARNING);

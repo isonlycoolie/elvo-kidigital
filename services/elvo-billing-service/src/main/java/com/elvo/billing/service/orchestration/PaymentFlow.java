@@ -90,7 +90,11 @@ public class PaymentFlow {
         } catch (RuntimeException ex) {
             adapterSpan.setThrowable(ex);
             adapterSpan.setStatus(SpanStatus.INTERNAL_ERROR);
-            sentryErrorCapture.capturePaymentFailure(serviceCode, paymentRequest.getReferenceNumber(), ex);
+            sentryErrorCapture.capturePaymentFailure(
+                    billCategory == null ? null : billCategory.name(),
+                    serviceCode,
+                    paymentRequest.getReferenceNumber(),
+                    ex);
             billingMetricsRecorder.recordPaymentOutcome(PaymentStatus.FAILED, System.nanoTime() - startNanos);
             transaction.setThrowable(ex);
             transaction.setStatus(SpanStatus.INTERNAL_ERROR);

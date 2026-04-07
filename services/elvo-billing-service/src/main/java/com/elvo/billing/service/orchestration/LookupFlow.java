@@ -79,7 +79,11 @@ public class LookupFlow {
         } catch (RuntimeException ex) {
             adapterSpan.setThrowable(ex);
             adapterSpan.setStatus(SpanStatus.INTERNAL_ERROR);
-            sentryErrorCapture.captureLookupFailure(serviceCode, lookupRequest.getReferenceNumber(), ex);
+            sentryErrorCapture.captureLookupFailure(
+                    billCategory == null ? null : billCategory.name(),
+                    serviceCode,
+                    lookupRequest.getReferenceNumber(),
+                    ex);
             billingMetricsRecorder.recordLookupOutcome(LookupStatus.FAILED, System.nanoTime() - startNanos);
             transaction.setThrowable(ex);
             transaction.setStatus(SpanStatus.INTERNAL_ERROR);
