@@ -7,6 +7,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class SentryBreadcrumbLogger {
 
+    private final SentrySensitiveDataMasker sentrySensitiveDataMasker;
+
+    public SentryBreadcrumbLogger(SentrySensitiveDataMasker sentrySensitiveDataMasker) {
+        this.sentrySensitiveDataMasker = sentrySensitiveDataMasker;
+    }
+
     public void addPaymentBreadcrumb(String stage, String referenceNumber, String serviceCode) {
         Breadcrumb breadcrumb = new Breadcrumb();
         breadcrumb.setCategory("billing.payment");
@@ -14,7 +20,7 @@ public class SentryBreadcrumbLogger {
         breadcrumb.setLevel(io.sentry.SentryLevel.INFO);
         breadcrumb.setMessage("payment lifecycle stage: " + stage);
         breadcrumb.setData("stage", stage);
-        breadcrumb.setData("referenceNumber", defaultValue(referenceNumber));
+        breadcrumb.setData("referenceNumber", sentrySensitiveDataMasker.maskReference(referenceNumber));
         breadcrumb.setData("serviceCode", defaultValue(serviceCode));
         Sentry.addBreadcrumb(breadcrumb);
     }
@@ -26,7 +32,7 @@ public class SentryBreadcrumbLogger {
         breadcrumb.setLevel(io.sentry.SentryLevel.INFO);
         breadcrumb.setMessage("lookup lifecycle stage: " + stage);
         breadcrumb.setData("stage", stage);
-        breadcrumb.setData("referenceNumber", defaultValue(referenceNumber));
+        breadcrumb.setData("referenceNumber", sentrySensitiveDataMasker.maskReference(referenceNumber));
         breadcrumb.setData("serviceCode", defaultValue(serviceCode));
         Sentry.addBreadcrumb(breadcrumb);
     }
@@ -38,7 +44,7 @@ public class SentryBreadcrumbLogger {
         breadcrumb.setLevel(io.sentry.SentryLevel.INFO);
         breadcrumb.setMessage("provider callback stage: " + stage);
         breadcrumb.setData("stage", stage);
-        breadcrumb.setData("referenceNumber", defaultValue(referenceNumber));
+        breadcrumb.setData("referenceNumber", sentrySensitiveDataMasker.maskReference(referenceNumber));
         breadcrumb.setData("status", defaultValue(callbackStatus));
         Sentry.addBreadcrumb(breadcrumb);
     }

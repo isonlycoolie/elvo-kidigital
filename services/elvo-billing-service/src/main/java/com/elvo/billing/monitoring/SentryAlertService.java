@@ -8,9 +8,11 @@ import org.springframework.stereotype.Component;
 public class SentryAlertService {
 
     private final SentryAlertProperties alertProperties;
+    private final SentrySensitiveDataMasker sentrySensitiveDataMasker;
 
-    public SentryAlertService(SentryAlertProperties alertProperties) {
+    public SentryAlertService(SentryAlertProperties alertProperties, SentrySensitiveDataMasker sentrySensitiveDataMasker) {
         this.alertProperties = alertProperties;
+        this.sentrySensitiveDataMasker = sentrySensitiveDataMasker;
     }
 
     public void alertCriticalError(String source, String errorType, String message) {
@@ -24,7 +26,7 @@ public class SentryAlertService {
             scope.setTag("source", defaultTag(source));
             scope.setTag("errorType", defaultTag(errorType));
             scope.setTag("threshold", String.valueOf(alertProperties.getCriticalErrorThreshold()));
-            Sentry.captureMessage(defaultTag(message));
+            Sentry.captureMessage(sentrySensitiveDataMasker.maskText(defaultTag(message)));
         });
     }
 
@@ -38,7 +40,7 @@ public class SentryAlertService {
             scope.setTag("alertType", "adapter-failure");
             scope.setTag("adapter", defaultTag(adapterName));
             scope.setTag("attempts", String.valueOf(attempts));
-            Sentry.captureMessage(defaultTag(message));
+            Sentry.captureMessage(sentrySensitiveDataMasker.maskText(defaultTag(message)));
         });
     }
 
