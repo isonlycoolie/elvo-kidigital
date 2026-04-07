@@ -2,9 +2,16 @@ package com.elvo.billing.dto.request;
 
 import java.math.BigDecimal;
 
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+
 public class UtilityPaymentRequestDto {
 
+    @NotBlank(message = "referenceNumber is required")
     private String referenceNumber;
+
+    @Positive(message = "amount must be greater than zero")
     private BigDecimal amount;
     private String customerPhone;
     private String customerName;
@@ -57,5 +64,13 @@ public class UtilityPaymentRequestDto {
 
     public void setLookupRequired(boolean lookupRequired) {
         this.lookupRequired = lookupRequired;
+    }
+
+    @AssertTrue(message = "amount is required when lookupRequired is false")
+    public boolean isAmountValidForLookupRule() {
+        if (lookupRequired) {
+            return true;
+        }
+        return amount != null;
     }
 }
