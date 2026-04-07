@@ -19,6 +19,7 @@ import com.elvo.billing.entity.PaymentHistory;
 import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.monitoring.BillingMetricsRecorder;
+import com.elvo.billing.monitoring.SentryBreadcrumbLogger;
 import com.elvo.billing.monitoring.SentryErrorCapture;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
@@ -64,6 +65,9 @@ class PaymentFlowTest {
     @Mock
     private SentryErrorCapture sentryErrorCapture;
 
+    @Mock
+    private SentryBreadcrumbLogger sentryBreadcrumbLogger;
+
     @Test
     void shouldExecutePaymentAndPersistPaymentHistory() {
         PaymentFlow flow = new PaymentFlow(
@@ -75,7 +79,8 @@ class PaymentFlowTest {
                 idempotencyEnforcer,
                 paymentAuditLogger,
                 billingMetricsRecorder,
-                sentryErrorCapture);
+                sentryErrorCapture,
+                sentryBreadcrumbLogger);
 
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("PAY-001");

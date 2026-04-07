@@ -12,6 +12,7 @@ import com.elvo.billing.entity.PaymentHistory;
 import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.LookupStatus;
 import com.elvo.billing.monitoring.BillingMetricsRecorder;
+import com.elvo.billing.monitoring.SentryBreadcrumbLogger;
 import com.elvo.billing.monitoring.SentryErrorCapture;
 import com.elvo.billing.repository.BillLookupRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
@@ -30,6 +31,7 @@ public class LookupFlow {
     private final LookupAuditLogger lookupAuditLogger;
     private final BillingMetricsRecorder billingMetricsRecorder;
     private final SentryErrorCapture sentryErrorCapture;
+    private final SentryBreadcrumbLogger sentryBreadcrumbLogger;
 
     public LookupFlow(
             UtilityPaymentValidator validator,
@@ -39,7 +41,8 @@ public class LookupFlow {
             BillingEventPublisher billingEventPublisher,
             LookupAuditLogger lookupAuditLogger,
             BillingMetricsRecorder billingMetricsRecorder,
-            SentryErrorCapture sentryErrorCapture) {
+            SentryErrorCapture sentryErrorCapture,
+            SentryBreadcrumbLogger sentryBreadcrumbLogger) {
         this.validator = validator;
         this.providerResolver = providerResolver;
         this.billLookupRepository = billLookupRepository;
@@ -48,6 +51,7 @@ public class LookupFlow {
         this.lookupAuditLogger = lookupAuditLogger;
         this.billingMetricsRecorder = billingMetricsRecorder;
         this.sentryErrorCapture = sentryErrorCapture;
+        this.sentryBreadcrumbLogger = sentryBreadcrumbLogger;
     }
 
     public LookupResponseDto execute(
@@ -57,9 +61,11 @@ public class LookupFlow {
             String requestId,
             String correlationId) {
         long startNanos = System.nanoTime();
+        sentryBreadcrumbLogger.addLookupBreadcrumb("validation", lookupRequest.getReferenceNumber(), serviceCode);
         validator.validateForLookup(lookupRequest, billCategory);
 
         BillingAdapter adapter = providerResolver.resolve(serviceCode);
+        sentryBreadcrumbLogger.addLookupBreadcrumb("execution", lookupRequest.getReferenceNumber(), serviceCode);
         LookupResponseDto adapterResponse;
         try {
             adapterResponse = adapter.lookup(lookupRequest);
@@ -102,6 +108,7 @@ public class LookupFlow {
         paymentHistoryRepository.save(history);
 
         billingEventPublisher.publish("billing.lookup.completed", lookup.getRequestId(), lookupRequest.getMetadata(), "v1");
+        sentryBreadcrumbLogger.addLookupBreadcrumb("completed", lookup.getReferenceNumber(), serviceCode);
         billingMetricsRecorder.recordLookupOutcome(lookup.getLookupStatus(), System.nanoTime() - startNanos);
 
         return adapterResponse;

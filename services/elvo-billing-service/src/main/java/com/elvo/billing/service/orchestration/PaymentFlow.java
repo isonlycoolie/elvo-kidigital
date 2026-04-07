@@ -12,6 +12,7 @@ import com.elvo.billing.entity.PaymentHistory;
 import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.monitoring.BillingMetricsRecorder;
+import com.elvo.billing.monitoring.SentryBreadcrumbLogger;
 import com.elvo.billing.monitoring.SentryErrorCapture;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
@@ -32,6 +33,7 @@ public class PaymentFlow {
     private final PaymentAuditLogger paymentAuditLogger;
     private final BillingMetricsRecorder billingMetricsRecorder;
     private final SentryErrorCapture sentryErrorCapture;
+    private final SentryBreadcrumbLogger sentryBreadcrumbLogger;
 
     public PaymentFlow(
             UtilityPaymentValidator validator,
@@ -42,7 +44,8 @@ public class PaymentFlow {
             IdempotencyEnforcer idempotencyEnforcer,
             PaymentAuditLogger paymentAuditLogger,
             BillingMetricsRecorder billingMetricsRecorder,
-            SentryErrorCapture sentryErrorCapture) {
+            SentryErrorCapture sentryErrorCapture,
+            SentryBreadcrumbLogger sentryBreadcrumbLogger) {
         this.validator = validator;
         this.providerResolver = providerResolver;
         this.billPaymentRepository = billPaymentRepository;
@@ -52,6 +55,7 @@ public class PaymentFlow {
         this.paymentAuditLogger = paymentAuditLogger;
         this.billingMetricsRecorder = billingMetricsRecorder;
         this.sentryErrorCapture = sentryErrorCapture;
+        this.sentryBreadcrumbLogger = sentryBreadcrumbLogger;
     }
 
     public PaymentResponseDto execute(
@@ -64,6 +68,7 @@ public class PaymentFlow {
             UUID userId,
             UUID walletId) {
         long startNanos = System.nanoTime();
+        sentryBreadcrumbLogger.addPaymentBreadcrumb("validation", paymentRequest.getReferenceNumber(), serviceCode);
         validator.validateForPayment(paymentRequest, billCategory);
 
         String normalizedIdempotencyKey = normalizeRequestValue(idempotencyKey);
@@ -71,6 +76,7 @@ public class PaymentFlow {
         idempotencyEnforcer.assertNotProcessed(normalizedIdempotencyKey, "PAYMENT_EXECUTE", requestHash);
 
         BillingAdapter adapter = providerResolver.resolve(serviceCode);
+    sentryBreadcrumbLogger.addPaymentBreadcrumb("execution", paymentRequest.getReferenceNumber(), serviceCode);
         PaymentResponseDto adapterResponse;
         try {
             adapterResponse = adapter.pay(paymentRequest);
@@ -127,6 +133,7 @@ public class PaymentFlow {
         if (adapterResponse.getPaymentId() == null) {
             adapterResponse.setPaymentId(payment.getPaymentId());
         }
+        sentryBreadcrumbLogger.addPaymentBreadcrumb("completed", payment.getReferenceNumber(), serviceCode);
         billingMetricsRecorder.recordPaymentOutcome(payment.getStatus(), System.nanoTime() - startNanos);
         billingMetricsRecorder.recordPendingPayments(billPaymentRepository.countByStatus(PaymentStatus.PENDING));
         return adapterResponse;

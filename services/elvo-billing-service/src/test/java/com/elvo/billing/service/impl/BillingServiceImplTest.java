@@ -15,6 +15,7 @@ import com.elvo.billing.dto.response.PaymentResponseDto;
 import com.elvo.billing.entity.BillPayment;
 import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.monitoring.BillingMetricsRecorder;
+import com.elvo.billing.monitoring.SentryBreadcrumbLogger;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.service.event.BillingEventPublisher;
 import com.elvo.billing.service.orchestration.LookupFlow;
@@ -45,6 +46,9 @@ class BillingServiceImplTest {
     @Mock
     private BillingMetricsRecorder billingMetricsRecorder;
 
+    @Mock
+    private SentryBreadcrumbLogger sentryBreadcrumbLogger;
+
     @Test
     void shouldReversePaymentUsingLockedReferenceAndPublishCompensationEvent() {
         BillingServiceImpl service = new BillingServiceImpl(
@@ -53,7 +57,8 @@ class BillingServiceImplTest {
             billPaymentRepository,
             billingEventPublisher,
                 paymentAuditLogger,
-                billingMetricsRecorder);
+                billingMetricsRecorder,
+                sentryBreadcrumbLogger);
 
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("REF-REV-1");

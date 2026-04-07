@@ -13,6 +13,7 @@ import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.exception.DuplicatePaymentException;
 import com.elvo.billing.exception.PaymentValidationException;
 import com.elvo.billing.monitoring.BillingMetricsRecorder;
+import com.elvo.billing.monitoring.SentryBreadcrumbLogger;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.service.BillingService;
 import com.elvo.billing.service.event.BillingEventPublisher;
@@ -31,6 +32,7 @@ public class BillingServiceImpl implements BillingService {
     private final BillingEventPublisher billingEventPublisher;
     private final PaymentAuditLogger paymentAuditLogger;
     private final BillingMetricsRecorder billingMetricsRecorder;
+    private final SentryBreadcrumbLogger sentryBreadcrumbLogger;
 
     public BillingServiceImpl(
             PaymentFlow paymentFlow,
@@ -38,13 +40,15 @@ public class BillingServiceImpl implements BillingService {
             BillPaymentRepository billPaymentRepository,
             BillingEventPublisher billingEventPublisher,
             PaymentAuditLogger paymentAuditLogger,
-            BillingMetricsRecorder billingMetricsRecorder) {
+            BillingMetricsRecorder billingMetricsRecorder,
+            SentryBreadcrumbLogger sentryBreadcrumbLogger) {
         this.paymentFlow = paymentFlow;
         this.lookupFlow = lookupFlow;
         this.billPaymentRepository = billPaymentRepository;
         this.billingEventPublisher = billingEventPublisher;
         this.paymentAuditLogger = paymentAuditLogger;
         this.billingMetricsRecorder = billingMetricsRecorder;
+        this.sentryBreadcrumbLogger = sentryBreadcrumbLogger;
     }
 
     @Override
@@ -204,6 +208,8 @@ public class BillingServiceImpl implements BillingService {
             throw new PaymentValidationException("referenceNumber is required for provider callback");
         }
 
+        sentryBreadcrumbLogger.addCallbackBreadcrumb("received", callback.getReferenceNumber(), callback.getStatus());
+
         BillPayment payment = billPaymentRepository.getPaymentByReferenceWithLock(callback.getReferenceNumber())
                 .orElseThrow(() -> new PaymentValidationException("payment not found for referenceNumber " + callback.getReferenceNumber()));
 
@@ -230,6 +236,7 @@ public class BillingServiceImpl implements BillingService {
         paymentAuditLogger.logCallback(payment, callback);
         billingEventPublisher.publish("billing.payment.callback.received", payment.getRequestId(), response.getMetadata(), "v1");
         billingMetricsRecorder.recordPendingPayments(billPaymentRepository.countByStatus(PaymentStatus.PENDING));
+        sentryBreadcrumbLogger.addCallbackBreadcrumb("processed", callback.getReferenceNumber(), callback.getStatus());
         return response;
     }
 
