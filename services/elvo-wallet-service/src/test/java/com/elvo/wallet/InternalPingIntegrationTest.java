@@ -3,10 +3,13 @@ package com.elvo.wallet;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.context.annotation.Import;
 
+import com.elvo.wallet.config.CorrelationIdFilter;
 import com.elvo.wallet.controller.HealthController;
 import com.elvo.wallet.exception.GlobalExceptionHandler;
 
@@ -14,7 +17,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = HealthController.class)
+@WebMvcTest(
+    controllers = HealthController.class,
+    excludeFilters = @ComponentScan.Filter(
+        type = FilterType.ASSIGNABLE_TYPE,
+        classes = CorrelationIdFilter.class))
 @Import(GlobalExceptionHandler.class)
 class InternalPingIntegrationTest {
 
