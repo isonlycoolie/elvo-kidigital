@@ -28,7 +28,7 @@ class BillLookupRepositoryTest {
         lookup.setServiceCode("waterco");
         lookup.setReferenceNumber("REF-L-001");
         lookup.setCustomerPhone("255700000010");
-        lookup.setMetadata("{}");
+        lookup.setMetadata("{\"provider\":\"waterco\", \"attempt\":1}");
         lookup.setLookupStatus(LookupStatus.SUCCESS);
         lookup.setCustomerName("Test Customer");
         lookup.setAmount(new BigDecimal("50.00"));
@@ -41,6 +41,7 @@ class BillLookupRepositoryTest {
 
         assertThat(created.getLookupId()).isNotNull();
         assertThat(created.getLookupStatus()).isEqualTo(LookupStatus.SUCCESS);
+        assertThat(created.getMetadata()).isEqualTo("{\"provider\":\"waterco\",\"attempt\":1}");
 
         assertThat(billLookupRepository.getLookupById(created.getLookupId()))
                 .isPresent()
@@ -62,7 +63,7 @@ class BillLookupRepositoryTest {
         lookup.setBillCategory(BillCategory.ELECTRICITY);
         lookup.setServiceCode("powerco");
         lookup.setReferenceNumber("REF-L-002");
-        lookup.setMetadata("{}");
+        lookup.setMetadata("{\"provider\":\"powerco\", \"attempt\":2}");
         lookup.setLookupStatus(LookupStatus.FAILED);
 
         BillLookup created = billLookupRepository.createLookup(lookup);

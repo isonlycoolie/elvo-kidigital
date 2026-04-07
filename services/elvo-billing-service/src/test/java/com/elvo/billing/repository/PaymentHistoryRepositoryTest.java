@@ -38,7 +38,7 @@ class PaymentHistoryRepositoryTest {
         payment.setReferenceNumber("REF-H-001");
         payment.setAmount(new BigDecimal("20.00"));
         payment.setCurrency("TZS");
-        payment.setMetadata("{}");
+        payment.setMetadata("{\"category\":\"airtime\", \"attempt\":1}");
 
         BillPayment createdPayment = billPaymentRepository.createPayment(payment);
 
@@ -53,12 +53,13 @@ class PaymentHistoryRepositoryTest {
         history.setAdapterReference("EXT-H-001");
         history.setResponseCode("00");
         history.setResponseMessage("Approved");
-        history.setMetadata("{}");
+        history.setMetadata("{\"provider\":\"selcom\", \"retry\":1}");
 
         PaymentHistory persisted = paymentHistoryRepository.logPaymentEvent(history);
 
         assertThat(persisted.getHistoryId()).isNotNull();
         assertThat(persisted.getCreatedAt()).isNotNull();
+        assertThat(persisted.getMetadata()).isEqualTo("{\"provider\":\"selcom\",\"retry\":1}");
 
         assertThat(paymentHistoryRepository.findById(persisted.getHistoryId()))
                 .isPresent()

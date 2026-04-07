@@ -36,12 +36,13 @@ class BillPaymentRepositoryTest {
         payment.setCurrency("TZS");
         payment.setCustomerPhone("255700000001");
         payment.setCustomerName("Test Customer");
-        payment.setMetadata("{}");
+        payment.setMetadata("{\"category\":\"bill\", \"attempt\":1}");
 
         BillPayment created = billPaymentRepository.createPayment(payment);
 
         assertThat(created.getPaymentId()).isNotNull();
         assertThat(created.getStatus()).isEqualTo(PaymentStatus.INITIATED);
+        assertThat(created.getMetadata()).isEqualTo("{\"category\":\"bill\",\"attempt\":1}");
 
         assertThat(billPaymentRepository.getPaymentById(created.getPaymentId()))
                 .isPresent()
@@ -69,7 +70,7 @@ class BillPaymentRepositoryTest {
         payment.setReferenceNumber("REF-002");
         payment.setAmount(new BigDecimal("75.00"));
         payment.setCurrency("TZS");
-        payment.setMetadata("{}");
+        payment.setMetadata("{\"category\":\"bill\", \"attempt\":2}");
 
         BillPayment created = billPaymentRepository.createPayment(payment);
 

@@ -18,6 +18,12 @@ public class PaymentHistoryRepositoryCustomImpl implements PaymentHistoryReposit
     @PersistenceContext
     private EntityManager entityManager;
 
+    private final BillingMetadataJsonNormalizer metadataJsonNormalizer;
+
+    public PaymentHistoryRepositoryCustomImpl(BillingMetadataJsonNormalizer metadataJsonNormalizer) {
+        this.metadataJsonNormalizer = metadataJsonNormalizer;
+    }
+
     @Override
     public PaymentHistory logPaymentEvent(PaymentHistory paymentHistory) {
         Objects.requireNonNull(paymentHistory, "paymentHistory must not be null");
@@ -28,6 +34,8 @@ public class PaymentHistoryRepositoryCustomImpl implements PaymentHistoryReposit
         if (paymentHistory.getHistoryId() == null) {
             paymentHistory.setHistoryId(UUID.randomUUID());
         }
+
+        paymentHistory.setMetadata(metadataJsonNormalizer.normalize(paymentHistory.getMetadata()));
 
         entityManager.persist(paymentHistory);
         return paymentHistory;

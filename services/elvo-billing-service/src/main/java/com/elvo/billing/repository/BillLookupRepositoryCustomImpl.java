@@ -21,6 +21,12 @@ public class BillLookupRepositoryCustomImpl implements BillLookupRepositoryCusto
     @PersistenceContext
     private EntityManager entityManager;
 
+    private final BillingMetadataJsonNormalizer metadataJsonNormalizer;
+
+    public BillLookupRepositoryCustomImpl(BillingMetadataJsonNormalizer metadataJsonNormalizer) {
+        this.metadataJsonNormalizer = metadataJsonNormalizer;
+    }
+
     @Override
     public BillLookup createLookup(BillLookup lookup) {
         Objects.requireNonNull(lookup, "lookup must not be null");
@@ -29,6 +35,8 @@ public class BillLookupRepositoryCustomImpl implements BillLookupRepositoryCusto
         if (lookup.getLookupId() == null) {
             lookup.setLookupId(UUID.randomUUID());
         }
+
+        lookup.setMetadata(metadataJsonNormalizer.normalize(lookup.getMetadata()));
 
         entityManager.persist(lookup);
         return lookup;

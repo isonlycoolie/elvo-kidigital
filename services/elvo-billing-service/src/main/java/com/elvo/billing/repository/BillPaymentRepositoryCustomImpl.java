@@ -21,6 +21,12 @@ public class BillPaymentRepositoryCustomImpl implements BillPaymentRepositoryCus
     @PersistenceContext
     private EntityManager entityManager;
 
+    private final BillingMetadataJsonNormalizer metadataJsonNormalizer;
+
+    public BillPaymentRepositoryCustomImpl(BillingMetadataJsonNormalizer metadataJsonNormalizer) {
+        this.metadataJsonNormalizer = metadataJsonNormalizer;
+    }
+
     @Override
     public BillPayment createPayment(BillPayment payment) {
         Objects.requireNonNull(payment, "payment must not be null");
@@ -32,6 +38,8 @@ public class BillPaymentRepositoryCustomImpl implements BillPaymentRepositoryCus
         if (payment.getStatus() == null) {
             payment.setStatus(PaymentStatus.INITIATED);
         }
+
+        payment.setMetadata(metadataJsonNormalizer.normalize(payment.getMetadata()));
 
         entityManager.persist(payment);
         return payment;
