@@ -162,4 +162,26 @@ public class BillingServiceImpl implements BillingService {
         response.setMetadata(payment.getMetadata());
         return response;
     }
+
+    @Override
+    public PaymentResponseDto findPaymentByReference(String referenceNumber) {
+        if (referenceNumber == null || referenceNumber.isBlank()) {
+            throw new PaymentValidationException("referenceNumber is required");
+        }
+
+        BillPayment payment = billPaymentRepository.getPaymentByReference(referenceNumber)
+                .orElseThrow(() -> new PaymentValidationException("payment not found for referenceNumber " + referenceNumber));
+
+        PaymentResponseDto response = new PaymentResponseDto();
+        response.setPaymentId(payment.getPaymentId());
+        response.setStatus(payment.getStatus());
+        response.setExternalReference(payment.getExternalReference());
+        response.setMessage("payment found");
+        response.setReceiptNumber(payment.getReceiptNumber());
+        response.setPaidAmount(payment.getPaidAmount() == null ? payment.getAmount() : payment.getPaidAmount());
+        response.setCurrency(payment.getCurrency());
+        response.setCompletedAt(payment.getCompletedAt());
+        response.setMetadata(payment.getMetadata());
+        return response;
+    }
 }

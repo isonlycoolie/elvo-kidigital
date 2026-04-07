@@ -17,4 +17,6 @@ public interface BillingService {
     PaymentResponseDto reversePayment(UtilityPaymentRequestDto reversalRequest);
 
     PaymentResponseDto findPaymentById(UUID paymentId);
+
+    PaymentResponseDto findPaymentByReference(String referenceNumber);
 }

@@ -94,4 +94,19 @@ public class BillPaymentControllerTest {
 
         verify(billingService).findPaymentById(paymentId);
     }
+
+    @Test
+    void testGetPaymentByReferenceSuccess() {
+        String referenceNumber = "REF_001";
+        when(billingService.findPaymentByReference(referenceNumber))
+                .thenReturn(paymentResponse);
+
+        ResponseEntity<PaymentResponseDto> response = billPaymentController.getPaymentByReference(referenceNumber);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo(PaymentStatus.PENDING);
+
+        verify(billingService).findPaymentByReference(referenceNumber);
+    }
 }

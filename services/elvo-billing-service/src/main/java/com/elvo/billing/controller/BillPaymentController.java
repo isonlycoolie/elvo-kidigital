@@ -44,4 +44,10 @@ public class BillPaymentController {
         PaymentResponseDto response = billingService.findPaymentById(paymentId);
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/reference/{reference}")
+    public ResponseEntity<PaymentResponseDto> getPaymentByReference(@PathVariable String reference) {
+        PaymentResponseDto response = billingService.findPaymentByReference(reference);
+        return ResponseEntity.ok(response);
+    }
 }
