@@ -1,6 +1,7 @@
 package com.elvo.billing.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -82,5 +83,62 @@ class BillPaymentRepositoryTest {
                 .get()
                 .extracting(BillPayment::getStatus)
                 .isEqualTo(PaymentStatus.SUCCESS);
+    }
+
+    @Test
+    void createPaymentShouldBeIdempotentByIdempotencyKey() {
+        String idempotencyKey = "idem-replay-001";
+
+        BillPayment first = new BillPayment();
+        first.setRequestId("req-replay-001");
+        first.setCorrelationId("corr-replay-001");
+        first.setIdempotencyKey(idempotencyKey);
+        first.setUserId(UUID.randomUUID());
+        first.setWalletId(UUID.randomUUID());
+        first.setBillCategory(BillCategory.AIRTIME);
+        first.setServiceCode("airtimeco");
+        first.setReferenceNumber("REF-REPLAY-001");
+        first.setAmount(new BigDecimal("20.00"));
+        first.setCurrency("TZS");
+        first.setMetadata("{}");
+
+        BillPayment second = new BillPayment();
+        second.setRequestId("req-replay-002");
+        second.setCorrelationId("corr-replay-002");
+        second.setIdempotencyKey(idempotencyKey);
+        second.setUserId(UUID.randomUUID());
+        second.setWalletId(UUID.randomUUID());
+        second.setBillCategory(BillCategory.AIRTIME);
+        second.setServiceCode("airtimeco");
+        second.setReferenceNumber("REF-REPLAY-002");
+        second.setAmount(new BigDecimal("30.00"));
+        second.setCurrency("TZS");
+        second.setMetadata("{}");
+
+        BillPayment createdFirst = billPaymentRepository.createPayment(first);
+        BillPayment createdSecond = billPaymentRepository.createPayment(second);
+
+        assertThat(createdSecond.getPaymentId()).isEqualTo(createdFirst.getPaymentId());
+        assertThat(createdSecond.getRequestId()).isEqualTo(createdFirst.getRequestId());
+        assertThat(createdSecond.getReferenceNumber()).isEqualTo(createdFirst.getReferenceNumber());
+    }
+
+    @Test
+    void createPaymentShouldRejectMissingBillCategory() {
+        BillPayment payment = new BillPayment();
+        payment.setRequestId("req-missing-category");
+        payment.setCorrelationId("corr-missing-category");
+        payment.setIdempotencyKey("idem-missing-category");
+        payment.setUserId(UUID.randomUUID());
+        payment.setWalletId(UUID.randomUUID());
+        payment.setServiceCode("service");
+        payment.setReferenceNumber("REF-MISSING-CATEGORY");
+        payment.setAmount(new BigDecimal("5.00"));
+        payment.setCurrency("TZS");
+        payment.setMetadata("{}");
+
+        assertThatThrownBy(() -> billPaymentRepository.createPayment(payment))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("billCategory must not be null");
     }
 }

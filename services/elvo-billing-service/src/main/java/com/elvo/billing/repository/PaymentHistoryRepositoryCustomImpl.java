@@ -3,6 +3,8 @@ package com.elvo.billing.repository;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +16,8 @@ import jakarta.persistence.PersistenceContext;
 @Repository
 @Transactional
 public class PaymentHistoryRepositoryCustomImpl implements PaymentHistoryRepositoryCustom {
+
+    private static final Logger auditLog = LoggerFactory.getLogger("audit.billing.repository");
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -38,6 +42,13 @@ public class PaymentHistoryRepositoryCustomImpl implements PaymentHistoryReposit
         paymentHistory.setMetadata(metadataJsonNormalizer.normalize(paymentHistory.getMetadata()));
 
         entityManager.persist(paymentHistory);
+        auditLog.info(
+            "billing_payment_history_logged historyId={} paymentId={} eventType={} requestId={} toStatus={}",
+            paymentHistory.getHistoryId(),
+            paymentHistory.getPaymentId(),
+            paymentHistory.getEventType(),
+            paymentHistory.getRequestId(),
+            paymentHistory.getToStatus());
         return paymentHistory;
     }
 }

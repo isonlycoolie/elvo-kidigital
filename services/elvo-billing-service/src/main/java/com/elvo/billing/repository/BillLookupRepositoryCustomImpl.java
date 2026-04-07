@@ -4,6 +4,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,8 @@ import jakarta.persistence.PersistenceContext;
 @Transactional
 public class BillLookupRepositoryCustomImpl implements BillLookupRepositoryCustom {
 
+    private static final Logger auditLog = LoggerFactory.getLogger("audit.billing.repository");
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -30,6 +34,7 @@ public class BillLookupRepositoryCustomImpl implements BillLookupRepositoryCusto
     @Override
     public BillLookup createLookup(BillLookup lookup) {
         Objects.requireNonNull(lookup, "lookup must not be null");
+        Objects.requireNonNull(lookup.getBillCategory(), "billCategory must not be null");
         Objects.requireNonNull(lookup.getLookupStatus(), "lookupStatus must not be null");
 
         if (lookup.getLookupId() == null) {
@@ -39,6 +44,13 @@ public class BillLookupRepositoryCustomImpl implements BillLookupRepositoryCusto
         lookup.setMetadata(metadataJsonNormalizer.normalize(lookup.getMetadata()));
 
         entityManager.persist(lookup);
+        auditLog.info(
+            "billing_lookup_created lookupId={} requestId={} referenceNumber={} status={} category={}",
+            lookup.getLookupId(),
+            lookup.getRequestId(),
+            lookup.getReferenceNumber(),
+            lookup.getLookupStatus(),
+            lookup.getBillCategory());
         return lookup;
     }
 
@@ -52,7 +64,14 @@ public class BillLookupRepositoryCustomImpl implements BillLookupRepositoryCusto
             throw new IllegalArgumentException("Lookup not found for id: " + lookupId);
         }
 
+        LookupStatus previousStatus = lookup.getLookupStatus();
         lookup.setLookupStatus(status);
+        auditLog.info(
+                "billing_lookup_status_updated lookupId={} fromStatus={} toStatus={} requestId={}",
+                lookup.getLookupId(),
+                previousStatus,
+                lookup.getLookupStatus(),
+                lookup.getRequestId());
         return lookup;
     }
 

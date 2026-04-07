@@ -1,6 +1,7 @@
 package com.elvo.billing.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 
@@ -76,5 +77,19 @@ class BillLookupRepositoryTest {
                 .get()
                 .extracting(BillLookup::getLookupStatus)
                 .isEqualTo(LookupStatus.NOT_FOUND);
+    }
+
+    @Test
+    void createLookupShouldRejectMissingBillCategory() {
+        BillLookup lookup = new BillLookup();
+        lookup.setRequestId("lookup-missing-category");
+        lookup.setServiceCode("lookupco");
+        lookup.setReferenceNumber("REF-MISSING-CATEGORY");
+        lookup.setMetadata("{}");
+        lookup.setLookupStatus(LookupStatus.SUCCESS);
+
+        assertThatThrownBy(() -> billLookupRepository.createLookup(lookup))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("billCategory must not be null");
     }
 }
