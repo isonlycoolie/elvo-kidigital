@@ -2,6 +2,7 @@ package com.elvo.billing.service;
 
 import java.util.UUID;
 
+import com.elvo.billing.dto.request.ProviderCallbackDto;
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
 import com.elvo.billing.dto.response.LookupResponseDto;
 import com.elvo.billing.dto.response.PaymentResponseDto;
@@ -19,4 +20,6 @@ public interface BillingService {
     PaymentResponseDto findPaymentById(UUID paymentId);
 
     PaymentResponseDto findPaymentByReference(String referenceNumber);
+
+    PaymentResponseDto handleProviderCallback(ProviderCallbackDto callback);
 }

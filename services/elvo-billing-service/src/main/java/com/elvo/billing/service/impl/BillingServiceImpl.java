@@ -2,6 +2,7 @@ package com.elvo.billing.service.impl;
 
 import java.util.UUID;
 
+import com.elvo.billing.dto.request.ProviderCallbackDto;
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
 import com.elvo.billing.dto.response.LookupResponseDto;
 import com.elvo.billing.dto.response.PaymentResponseDto;
@@ -183,5 +184,49 @@ public class BillingServiceImpl implements BillingService {
         response.setCompletedAt(payment.getCompletedAt());
         response.setMetadata(payment.getMetadata());
         return response;
+    }
+
+    @Override
+    public PaymentResponseDto handleProviderCallback(ProviderCallbackDto callback) {
+        if (callback == null || callback.getReferenceNumber() == null || callback.getReferenceNumber().isBlank()) {
+            throw new PaymentValidationException("referenceNumber is required for provider callback");
+        }
+
+        BillPayment payment = billPaymentRepository.getPaymentByReferenceWithLock(callback.getReferenceNumber())
+                .orElseThrow(() -> new PaymentValidationException("payment not found for referenceNumber " + callback.getReferenceNumber()));
+
+        PaymentStatus callbackStatus = resolvePaymentStatus(callback.getStatus());
+        billPaymentRepository.updatePaymentStatus(payment.getPaymentId(), callbackStatus);
+
+        if (callback.getReceiptNumber() != null) {
+            payment.setReceiptNumber(callback.getReceiptNumber());
+        }
+        if (callback.getExternalReference() != null) {
+            payment.setExternalReference(callback.getExternalReference());
+        }
+
+        PaymentResponseDto response = new PaymentResponseDto();
+        response.setPaymentId(payment.getPaymentId());
+        response.setStatus(callbackStatus);
+        response.setExternalReference(callback.getExternalReference());
+        response.setReceiptNumber(callback.getReceiptNumber());
+        response.setMessage("provider callback processed");
+        response.setPaidAmount(payment.getAmount());
+        response.setCurrency(payment.getCurrency());
+        response.setMetadata(callback.getMetadata());
+        
+        billingEventPublisher.publish("billing.payment.callback.received", payment.getRequestId(), response.getMetadata());
+        return response;
+    }
+
+    private static PaymentStatus resolvePaymentStatus(String statusString) {
+        if (statusString == null || statusString.isBlank()) {
+            return PaymentStatus.FAILED;
+        }
+        try {
+            return PaymentStatus.valueOf(statusString.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return PaymentStatus.FAILED;
+        }
     }
 }
