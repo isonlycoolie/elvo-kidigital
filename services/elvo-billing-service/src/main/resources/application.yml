@@ -63,3 +63,10 @@ logging:
     name: ${ELVO_LOG_FILE:}
   pattern:
     level: "%5p [corr:%X{correlationId}] [req:%X{requestId}] [idemp:%X{idempotencyKey}]"
+
+sentry:
+  enabled: ${ELVO_SENTRY_ENABLED:false}
+  dsn: ${ELVO_SENTRY_DSN:}
+  environment: ${ELVO_SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:default}}
+  release: ${ELVO_SENTRY_RELEASE:elvo-billing-service@local}
+  traces-sample-rate: ${ELVO_SENTRY_TRACES_SAMPLE_RATE:0.0}
