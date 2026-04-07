@@ -56,4 +56,25 @@ class MockAdapterTest {
         assertThat(response.getCompletedAt()).isEqualTo(Instant.parse("2026-04-07T00:00:00Z"));
         assertThat(response.getMetadata()).isEqualTo("{\"provider\":\"mock\",\"mode\":\"deterministic\",\"referenceNumber\":\"MOCK-PAY-001\",\"lookupRequired\":false}");
     }
+
+    @Test
+    void shouldUseFallbackCustomerNameWhenMissingInLookup() {
+        UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
+        request.setReferenceNumber("MOCK-LOOKUP-002");
+
+        LookupResponseDto response = adapter.lookup(request);
+
+        assertThat(response.getCustomerName()).isEqualTo("Mock Customer");
+    }
+
+    @Test
+    void shouldComputeLookupAmountWhenAmountIsMissing() {
+        UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
+        request.setReferenceNumber("MOCK-LOOKUP-003");
+
+        LookupResponseDto response = adapter.lookup(request);
+
+        assertThat(response.getAmount())
+                .isEqualByComparingTo(BigDecimal.valueOf(Math.abs("MOCK-LOOKUP-003".hashCode() % 100_000) / 100.0));
+    }
 }

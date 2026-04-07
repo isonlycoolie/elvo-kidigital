@@ -22,6 +22,13 @@ class SelcomAdapterTest {
             "test-key",
             "test-secret");
 
+        private final SelcomAdapter adapterWithoutCredentials = new SelcomAdapter(
+            new GenericRequestMapper(),
+            new GenericResponseMapper(),
+            "https://api.sandbox.selcom.example",
+            "",
+            "");
+
     @Test
     void shouldProduceDeterministicLookupResponse() {
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
@@ -56,5 +63,28 @@ class SelcomAdapterTest {
         assertThat(response.getCurrency()).isEqualTo("TZS");
         assertThat(response.getMetadata()).contains("\"provider\":\"selcom\"");
         assertThat(response.getMetadata()).contains("\"authConfigured\":true");
+    }
+
+    @Test
+    void shouldUseFallbackValuesWhenOptionalFieldsAreMissing() {
+        UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
+        request.setReferenceNumber("SEL-LOOKUP-002");
+
+        LookupResponseDto response = adapter.lookup(request);
+
+        assertThat(response.getCustomerName()).isEqualTo("Selcom Customer");
+        assertThat(response.getAmount()).isNotNull();
+        assertThat(response.getCurrency()).isEqualTo("TZS");
+    }
+
+    @Test
+    void shouldMarkAuthAsNotConfiguredWhenCredentialsAreMissing() {
+        UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
+        request.setReferenceNumber("SEL-PAY-002");
+        request.setAmount(BigDecimal.valueOf(99));
+
+        PaymentResponseDto response = adapterWithoutCredentials.pay(request);
+
+        assertThat(response.getMetadata()).contains("\"authConfigured\":false");
     }
 }
