@@ -7,8 +7,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class SentryErrorCapture {
 
+    private final SentryAlertService sentryAlertService;
+
+    public SentryErrorCapture(SentryAlertService sentryAlertService) {
+        this.sentryAlertService = sentryAlertService;
+    }
+
     public void capturePaymentFailure(String paymentCategory, String serviceCode, String referenceNumber, Throwable throwable) {
         String errorType = throwable == null ? "UNKNOWN" : throwable.getClass().getSimpleName();
+        sentryAlertService.alertCriticalError("payment", errorType, throwable == null ? "UNKNOWN" : throwable.getMessage());
         Sentry.withScope(scope -> {
             scope.setLevel(SentryLevel.ERROR);
             scope.setTag("domain", "billing-payment");
@@ -23,6 +30,7 @@ public class SentryErrorCapture {
 
     public void captureLookupFailure(String paymentCategory, String serviceCode, String referenceNumber, Throwable throwable) {
         String errorType = throwable == null ? "UNKNOWN" : throwable.getClass().getSimpleName();
+        sentryAlertService.alertCriticalError("lookup", errorType, throwable == null ? "UNKNOWN" : throwable.getMessage());
         Sentry.withScope(scope -> {
             scope.setLevel(SentryLevel.ERROR);
             scope.setTag("domain", "billing-lookup");
@@ -37,6 +45,7 @@ public class SentryErrorCapture {
 
     public void captureAdapterRetryFailure(String adapterName, int attempt, Throwable throwable) {
         String errorType = throwable == null ? "UNKNOWN" : throwable.getClass().getSimpleName();
+        sentryAlertService.alertAdapterFailure(adapterName, attempt, throwable == null ? "UNKNOWN" : throwable.getMessage());
         Sentry.withScope(scope -> {
             scope.setLevel(SentryLevel.WARNING);
             scope.setTag("domain", "billing-adapter");
@@ -50,6 +59,7 @@ public class SentryErrorCapture {
 
     public void captureAdapterRetriesExhausted(String adapterName, int maxAttempts, Throwable throwable) {
         String errorType = throwable == null ? "UNKNOWN" : throwable.getClass().getSimpleName();
+        sentryAlertService.alertCriticalError("adapter", errorType, throwable == null ? "UNKNOWN" : throwable.getMessage());
         Sentry.withScope(scope -> {
             scope.setLevel(SentryLevel.ERROR);
             scope.setTag("domain", "billing-adapter");

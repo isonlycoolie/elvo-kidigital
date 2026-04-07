@@ -13,10 +13,12 @@ import org.springframework.stereotype.Component;
 public class BillingMetricsRecorder {
 
     private final MeterRegistry meterRegistry;
+    private final SentryAlertService sentryAlertService;
     private final AtomicLong pendingPaymentsGauge = new AtomicLong(0L);
 
-    public BillingMetricsRecorder(MeterRegistry meterRegistry) {
+    public BillingMetricsRecorder(MeterRegistry meterRegistry, SentryAlertService sentryAlertService) {
         this.meterRegistry = meterRegistry;
+        this.sentryAlertService = sentryAlertService;
         meterRegistry.gauge("billing.payment.pending", pendingPaymentsGauge);
     }
 
@@ -31,6 +33,7 @@ public class BillingMetricsRecorder {
                 .tag("status", statusTag)
                 .register(meterRegistry)
                 .record(durationNanos, java.util.concurrent.TimeUnit.NANOSECONDS);
+        sentryAlertService.alertAnomaly("billing.payment.latency", java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(durationNanos));
     }
 
     public void recordLookupOutcome(LookupStatus status, long durationNanos) {
@@ -44,6 +47,7 @@ public class BillingMetricsRecorder {
                 .tag("status", statusTag)
                 .register(meterRegistry)
                 .record(durationNanos, java.util.concurrent.TimeUnit.NANOSECONDS);
+        sentryAlertService.alertAnomaly("billing.lookup.latency", java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(durationNanos));
     }
 
     public void recordRetry(String adapterName) {

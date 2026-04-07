@@ -41,6 +41,12 @@ elvo:
           secret: ${ELVO_BILLING_SELCOM_SECRET:}
         mock:
           enabled: ${ELVO_BILLING_MOCK_ADAPTER_ENABLED:true}
+    sentry:
+      alerts:
+        enabled: ${ELVO_BILLING_SENTRY_ALERTS_ENABLED:true}
+        critical-error-threshold: ${ELVO_BILLING_SENTRY_CRITICAL_THRESHOLD:1}
+        adapter-failure-threshold: ${ELVO_BILLING_SENTRY_ADAPTER_FAILURE_THRESHOLD:3}
+        anomaly-latency-threshold-ms: ${ELVO_BILLING_SENTRY_ANOMALY_LATENCY_MS:2000}
 
 management:
   prometheus:
