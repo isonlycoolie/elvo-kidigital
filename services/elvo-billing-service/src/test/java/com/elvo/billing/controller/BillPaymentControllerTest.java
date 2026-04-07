@@ -79,4 +79,19 @@ public class BillPaymentControllerTest {
 
         verify(billingService).executePayment(any(UtilityPaymentRequestDto.class));
     }
+
+    @Test
+    void testGetPaymentSuccess() {
+        UUID paymentId = UUID.randomUUID();
+        when(billingService.findPaymentById(paymentId))
+                .thenReturn(paymentResponse);
+
+        ResponseEntity<PaymentResponseDto> response = billPaymentController.getPayment(paymentId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo(PaymentStatus.PENDING);
+
+        verify(billingService).findPaymentById(paymentId);
+    }
 }

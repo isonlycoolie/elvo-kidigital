@@ -8,6 +8,8 @@ import com.elvo.billing.service.BillingService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -35,5 +37,11 @@ public class BillPaymentController {
         
         PaymentResponseDto response = billingService.executePayment(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{paymentId}")
+    public ResponseEntity<PaymentResponseDto> getPayment(@PathVariable UUID paymentId) {
+        PaymentResponseDto response = billingService.findPaymentById(paymentId);
+        return ResponseEntity.ok(response);
     }
 }

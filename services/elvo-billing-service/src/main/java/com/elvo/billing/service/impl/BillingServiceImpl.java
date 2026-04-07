@@ -140,4 +140,26 @@ public class BillingServiceImpl implements BillingService {
         }
         return "LUKU";
     }
+
+    @Override
+    public PaymentResponseDto findPaymentById(UUID paymentId) {
+        if (paymentId == null) {
+            throw new PaymentValidationException("paymentId is required");
+        }
+
+        BillPayment payment = billPaymentRepository.findById(paymentId)
+                .orElseThrow(() -> new PaymentValidationException("payment not found for paymentId " + paymentId));
+
+        PaymentResponseDto response = new PaymentResponseDto();
+        response.setPaymentId(payment.getPaymentId());
+        response.setStatus(payment.getStatus());
+        response.setExternalReference(payment.getExternalReference());
+        response.setMessage("payment found");
+        response.setReceiptNumber(payment.getReceiptNumber());
+        response.setPaidAmount(payment.getPaidAmount() == null ? payment.getAmount() : payment.getPaidAmount());
+        response.setCurrency(payment.getCurrency());
+        response.setCompletedAt(payment.getCompletedAt());
+        response.setMetadata(payment.getMetadata());
+        return response;
+    }
 }
