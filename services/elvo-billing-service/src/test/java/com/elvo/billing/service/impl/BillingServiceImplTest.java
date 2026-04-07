@@ -14,6 +14,7 @@ import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
 import com.elvo.billing.dto.response.PaymentResponseDto;
 import com.elvo.billing.entity.BillPayment;
 import com.elvo.billing.entity.enums.PaymentStatus;
+import com.elvo.billing.monitoring.BillingMetricsRecorder;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.service.event.BillingEventPublisher;
 import com.elvo.billing.service.orchestration.LookupFlow;
@@ -41,6 +42,9 @@ class BillingServiceImplTest {
     @Mock
     private PaymentAuditLogger paymentAuditLogger;
 
+    @Mock
+    private BillingMetricsRecorder billingMetricsRecorder;
+
     @Test
     void shouldReversePaymentUsingLockedReferenceAndPublishCompensationEvent() {
         BillingServiceImpl service = new BillingServiceImpl(
@@ -48,7 +52,8 @@ class BillingServiceImplTest {
             lookupFlow,
             billPaymentRepository,
             billingEventPublisher,
-            paymentAuditLogger);
+                paymentAuditLogger,
+                billingMetricsRecorder);
 
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("REF-REV-1");
@@ -61,6 +66,7 @@ class BillingServiceImplTest {
         payment.setCurrency("TZS");
 
         when(billPaymentRepository.getPaymentByReferenceWithLock("REF-REV-1")).thenReturn(Optional.of(payment));
+        when(billPaymentRepository.countByStatus(PaymentStatus.PENDING)).thenReturn(3L);
 
         PaymentResponseDto response = service.reversePayment(request);
 
@@ -69,5 +75,6 @@ class BillingServiceImplTest {
         verify(billPaymentRepository).updatePaymentStatus(payment.getPaymentId(), PaymentStatus.REVERSED);
         verify(paymentAuditLogger).logReverse(payment);
         verify(billingEventPublisher).publish(eq("billing.payment.reversed"), eq("REQ-REV-1"), eq(response.getMetadata()), eq("v1"));
+        verify(billingMetricsRecorder).recordPendingPayments(3L);
     }
 }

@@ -16,6 +16,7 @@ import com.elvo.billing.entity.BillLookup;
 import com.elvo.billing.entity.PaymentHistory;
 import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.LookupStatus;
+import com.elvo.billing.monitoring.BillingMetricsRecorder;
 import com.elvo.billing.repository.BillLookupRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
 import com.elvo.billing.service.event.BillingEventPublisher;
@@ -50,6 +51,9 @@ class LookupFlowTest {
     @Mock
     private LookupAuditLogger lookupAuditLogger;
 
+    @Mock
+    private BillingMetricsRecorder billingMetricsRecorder;
+
     @Test
     void shouldExecuteLookupAndPersistLookupHistory() {
         LookupFlow flow = new LookupFlow(
@@ -58,7 +62,8 @@ class LookupFlowTest {
             billLookupRepository,
             paymentHistoryRepository,
             billingEventPublisher,
-            lookupAuditLogger);
+            lookupAuditLogger,
+            billingMetricsRecorder);
 
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("LOOKUP-001");
@@ -101,5 +106,6 @@ class LookupFlowTest {
         assertThat(historyCaptor.getValue().getEventType()).isEqualTo("LOOKUP_EXECUTED");
         assertThat(historyCaptor.getValue().getToStatus()).isEqualTo("SUCCESS");
         verify(billingEventPublisher).publish(eq("billing.lookup.completed"), eq("REQ-L-1"), eq("{}"), eq("v1"));
+        verify(billingMetricsRecorder).recordLookupOutcome(eq(LookupStatus.SUCCESS), org.mockito.ArgumentMatchers.anyLong());
     }
 }

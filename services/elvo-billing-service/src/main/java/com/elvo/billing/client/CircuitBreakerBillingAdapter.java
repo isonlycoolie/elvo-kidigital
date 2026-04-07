@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
 import com.elvo.billing.dto.response.LookupResponseDto;
 import com.elvo.billing.dto.response.PaymentResponseDto;
+import com.elvo.billing.monitoring.BillingMetricsRecorder;
 
 public final class CircuitBreakerBillingAdapter implements BillingAdapter {
 
@@ -33,21 +34,34 @@ public final class CircuitBreakerBillingAdapter implements BillingAdapter {
     private final int failureThreshold;
     private final Duration openDuration;
     private final Duration requestTimeout;
+    private final BillingMetricsRecorder billingMetricsRecorder;
 
     private int consecutiveFailures;
     private Instant openUntil;
 
     public CircuitBreakerBillingAdapter(BillingAdapter delegate, int maxAttempts, long baseBackoffMillis, int failureThreshold, Duration openDuration) {
-        this(delegate, maxAttempts, baseBackoffMillis, failureThreshold, openDuration, Duration.ofSeconds(5));
+        this(delegate, maxAttempts, baseBackoffMillis, failureThreshold, openDuration, Duration.ofSeconds(5), null);
     }
 
     public CircuitBreakerBillingAdapter(BillingAdapter delegate, int maxAttempts, long baseBackoffMillis, int failureThreshold, Duration openDuration, Duration requestTimeout) {
+        this(delegate, maxAttempts, baseBackoffMillis, failureThreshold, openDuration, requestTimeout, null);
+    }
+
+    public CircuitBreakerBillingAdapter(
+            BillingAdapter delegate,
+            int maxAttempts,
+            long baseBackoffMillis,
+            int failureThreshold,
+            Duration openDuration,
+            Duration requestTimeout,
+            BillingMetricsRecorder billingMetricsRecorder) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
         this.maxAttempts = Math.max(1, maxAttempts);
         this.baseBackoffMillis = Math.max(0L, baseBackoffMillis);
         this.failureThreshold = Math.max(1, failureThreshold);
         this.openDuration = Objects.requireNonNull(openDuration, "openDuration must not be null");
         this.requestTimeout = requestTimeout == null || requestTimeout.isNegative() ? Duration.ZERO : requestTimeout;
+        this.billingMetricsRecorder = billingMetricsRecorder;
     }
 
     @Override
@@ -84,6 +98,9 @@ public final class CircuitBreakerBillingAdapter implements BillingAdapter {
                             attempt,
                             computeBackoffMillis(attempt),
                             delegate.getClass().getSimpleName());
+                    if (billingMetricsRecorder != null) {
+                        billingMetricsRecorder.recordRetry(delegate.getClass().getSimpleName());
+                    }
                     sleepBackoff(attempt);
                     continue;
                 }

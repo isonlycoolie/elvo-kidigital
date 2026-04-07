@@ -18,6 +18,7 @@ import com.elvo.billing.entity.BillPayment;
 import com.elvo.billing.entity.PaymentHistory;
 import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.PaymentStatus;
+import com.elvo.billing.monitoring.BillingMetricsRecorder;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
 import com.elvo.billing.service.event.BillingEventPublisher;
@@ -56,6 +57,9 @@ class PaymentFlowTest {
     @Mock
     private PaymentAuditLogger paymentAuditLogger;
 
+    @Mock
+    private BillingMetricsRecorder billingMetricsRecorder;
+
     @Test
     void shouldExecutePaymentAndPersistPaymentHistory() {
         PaymentFlow flow = new PaymentFlow(
@@ -65,7 +69,8 @@ class PaymentFlowTest {
                 paymentHistoryRepository,
                 billingEventPublisher,
                 idempotencyEnforcer,
-                paymentAuditLogger);
+                paymentAuditLogger,
+                billingMetricsRecorder);
 
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("PAY-001");
@@ -114,5 +119,6 @@ class PaymentFlowTest {
         verify(paymentAuditLogger).logUpdate(paymentCaptor.getValue(), "PAYMENT_EXECUTED", "PENDING", "SUCCESS");
         verify(billingEventPublisher).publish(eq("billing.payment.completed"), eq("REQ-1"), eq("{}"), eq("v1"));
         verify(idempotencyEnforcer).markProcessed(eq("IDEMP-1"), eq("PAYMENT_EXECUTE"), eq("LUKU|PAY-001|1200"), eq("{}"));
+        verify(billingMetricsRecorder).recordPaymentOutcome(eq(PaymentStatus.SUCCESS), org.mockito.ArgumentMatchers.anyLong());
     }
 }

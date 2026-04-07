@@ -12,6 +12,7 @@ import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.exception.DuplicatePaymentException;
 import com.elvo.billing.exception.PaymentValidationException;
+import com.elvo.billing.monitoring.BillingMetricsRecorder;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.service.BillingService;
 import com.elvo.billing.service.event.BillingEventPublisher;
@@ -29,18 +30,21 @@ public class BillingServiceImpl implements BillingService {
     private final BillPaymentRepository billPaymentRepository;
     private final BillingEventPublisher billingEventPublisher;
     private final PaymentAuditLogger paymentAuditLogger;
+    private final BillingMetricsRecorder billingMetricsRecorder;
 
     public BillingServiceImpl(
             PaymentFlow paymentFlow,
             LookupFlow lookupFlow,
             BillPaymentRepository billPaymentRepository,
             BillingEventPublisher billingEventPublisher,
-            PaymentAuditLogger paymentAuditLogger) {
+            PaymentAuditLogger paymentAuditLogger,
+            BillingMetricsRecorder billingMetricsRecorder) {
         this.paymentFlow = paymentFlow;
         this.lookupFlow = lookupFlow;
         this.billPaymentRepository = billPaymentRepository;
         this.billingEventPublisher = billingEventPublisher;
         this.paymentAuditLogger = paymentAuditLogger;
+        this.billingMetricsRecorder = billingMetricsRecorder;
     }
 
     @Override
@@ -76,6 +80,7 @@ public class BillingServiceImpl implements BillingService {
         response.setMetadata(persisted.getMetadata());
         response.setMessage("payment created");
         paymentAuditLogger.logCreate(persisted);
+        billingMetricsRecorder.recordPendingPayments(billPaymentRepository.countByStatus(PaymentStatus.PENDING));
         return response;
     }
 
@@ -126,6 +131,7 @@ public class BillingServiceImpl implements BillingService {
 
         paymentAuditLogger.logReverse(payment);
         billingEventPublisher.publish("billing.payment.reversed", payment.getRequestId(), response.getMetadata(), "v1");
+        billingMetricsRecorder.recordPendingPayments(billPaymentRepository.countByStatus(PaymentStatus.PENDING));
         return response;
     }
 
@@ -223,6 +229,7 @@ public class BillingServiceImpl implements BillingService {
 
         paymentAuditLogger.logCallback(payment, callback);
         billingEventPublisher.publish("billing.payment.callback.received", payment.getRequestId(), response.getMetadata(), "v1");
+        billingMetricsRecorder.recordPendingPayments(billPaymentRepository.countByStatus(PaymentStatus.PENDING));
         return response;
     }
 

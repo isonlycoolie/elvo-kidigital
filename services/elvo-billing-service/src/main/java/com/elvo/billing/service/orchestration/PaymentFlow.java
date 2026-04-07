@@ -11,6 +11,7 @@ import com.elvo.billing.entity.BillPayment;
 import com.elvo.billing.entity.PaymentHistory;
 import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.PaymentStatus;
+import com.elvo.billing.monitoring.BillingMetricsRecorder;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
 import com.elvo.billing.service.event.BillingEventPublisher;
@@ -28,6 +29,7 @@ public class PaymentFlow {
     private final BillingEventPublisher billingEventPublisher;
     private final IdempotencyEnforcer idempotencyEnforcer;
     private final PaymentAuditLogger paymentAuditLogger;
+    private final BillingMetricsRecorder billingMetricsRecorder;
 
     public PaymentFlow(
             UtilityPaymentValidator validator,
@@ -36,7 +38,8 @@ public class PaymentFlow {
             PaymentHistoryRepository paymentHistoryRepository,
             BillingEventPublisher billingEventPublisher,
             IdempotencyEnforcer idempotencyEnforcer,
-            PaymentAuditLogger paymentAuditLogger) {
+            PaymentAuditLogger paymentAuditLogger,
+            BillingMetricsRecorder billingMetricsRecorder) {
         this.validator = validator;
         this.providerResolver = providerResolver;
         this.billPaymentRepository = billPaymentRepository;
@@ -44,6 +47,7 @@ public class PaymentFlow {
         this.billingEventPublisher = billingEventPublisher;
         this.idempotencyEnforcer = idempotencyEnforcer;
         this.paymentAuditLogger = paymentAuditLogger;
+        this.billingMetricsRecorder = billingMetricsRecorder;
     }
 
     public PaymentResponseDto execute(
@@ -55,6 +59,7 @@ public class PaymentFlow {
             String idempotencyKey,
             UUID userId,
             UUID walletId) {
+        long startNanos = System.nanoTime();
         validator.validateForPayment(paymentRequest, billCategory);
 
         String normalizedIdempotencyKey = normalizeRequestValue(idempotencyKey);
@@ -111,6 +116,8 @@ public class PaymentFlow {
         if (adapterResponse.getPaymentId() == null) {
             adapterResponse.setPaymentId(payment.getPaymentId());
         }
+        billingMetricsRecorder.recordPaymentOutcome(payment.getStatus(), System.nanoTime() - startNanos);
+        billingMetricsRecorder.recordPendingPayments(billPaymentRepository.countByStatus(PaymentStatus.PENDING));
         return adapterResponse;
     }
 

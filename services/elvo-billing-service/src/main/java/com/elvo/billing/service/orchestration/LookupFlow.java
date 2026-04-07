@@ -11,6 +11,7 @@ import com.elvo.billing.entity.BillLookup;
 import com.elvo.billing.entity.PaymentHistory;
 import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.LookupStatus;
+import com.elvo.billing.monitoring.BillingMetricsRecorder;
 import com.elvo.billing.repository.BillLookupRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
 import com.elvo.billing.service.event.BillingEventPublisher;
@@ -26,6 +27,7 @@ public class LookupFlow {
     private final PaymentHistoryRepository paymentHistoryRepository;
     private final BillingEventPublisher billingEventPublisher;
     private final LookupAuditLogger lookupAuditLogger;
+    private final BillingMetricsRecorder billingMetricsRecorder;
 
     public LookupFlow(
             UtilityPaymentValidator validator,
@@ -33,13 +35,15 @@ public class LookupFlow {
             BillLookupRepository billLookupRepository,
             PaymentHistoryRepository paymentHistoryRepository,
             BillingEventPublisher billingEventPublisher,
-            LookupAuditLogger lookupAuditLogger) {
+            LookupAuditLogger lookupAuditLogger,
+            BillingMetricsRecorder billingMetricsRecorder) {
         this.validator = validator;
         this.providerResolver = providerResolver;
         this.billLookupRepository = billLookupRepository;
         this.paymentHistoryRepository = paymentHistoryRepository;
         this.billingEventPublisher = billingEventPublisher;
         this.lookupAuditLogger = lookupAuditLogger;
+        this.billingMetricsRecorder = billingMetricsRecorder;
     }
 
     public LookupResponseDto execute(
@@ -48,6 +52,7 @@ public class LookupFlow {
             String serviceCode,
             String requestId,
             String correlationId) {
+        long startNanos = System.nanoTime();
         validator.validateForLookup(lookupRequest, billCategory);
 
         BillingAdapter adapter = providerResolver.resolve(serviceCode);
@@ -86,6 +91,7 @@ public class LookupFlow {
         paymentHistoryRepository.save(history);
 
         billingEventPublisher.publish("billing.lookup.completed", lookup.getRequestId(), lookupRequest.getMetadata(), "v1");
+        billingMetricsRecorder.recordLookupOutcome(lookup.getLookupStatus(), System.nanoTime() - startNanos);
 
         return adapterResponse;
     }
