@@ -12,6 +12,7 @@ import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.LookupStatus;
 import com.elvo.billing.repository.BillLookupRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
+import com.elvo.billing.service.event.BillingEventPublisher;
 import com.elvo.billing.validator.UtilityPaymentValidator;
 import org.springframework.stereotype.Component;
 
@@ -22,16 +23,19 @@ public class LookupFlow {
     private final ProviderResolver providerResolver;
     private final BillLookupRepository billLookupRepository;
     private final PaymentHistoryRepository paymentHistoryRepository;
+    private final BillingEventPublisher billingEventPublisher;
 
     public LookupFlow(
             UtilityPaymentValidator validator,
             ProviderResolver providerResolver,
             BillLookupRepository billLookupRepository,
-            PaymentHistoryRepository paymentHistoryRepository) {
+            PaymentHistoryRepository paymentHistoryRepository,
+            BillingEventPublisher billingEventPublisher) {
         this.validator = validator;
         this.providerResolver = providerResolver;
         this.billLookupRepository = billLookupRepository;
         this.paymentHistoryRepository = paymentHistoryRepository;
+        this.billingEventPublisher = billingEventPublisher;
     }
 
     public LookupResponseDto execute(
@@ -75,6 +79,8 @@ public class LookupFlow {
         history.setResponseMessage(adapterResponse.getDescription());
         history.setMetadata(lookupRequest.getMetadata() == null ? "{}" : lookupRequest.getMetadata());
         paymentHistoryRepository.save(history);
+
+        billingEventPublisher.publish("billing.lookup.completed", lookup.getRequestId(), lookupRequest.getMetadata());
 
         return adapterResponse;
     }

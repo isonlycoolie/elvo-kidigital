@@ -12,6 +12,7 @@ import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
+import com.elvo.billing.service.event.BillingEventPublisher;
 import com.elvo.billing.validator.UtilityPaymentValidator;
 import org.springframework.stereotype.Component;
 
@@ -22,16 +23,19 @@ public class PaymentFlow {
     private final ProviderResolver providerResolver;
     private final BillPaymentRepository billPaymentRepository;
     private final PaymentHistoryRepository paymentHistoryRepository;
+    private final BillingEventPublisher billingEventPublisher;
 
     public PaymentFlow(
             UtilityPaymentValidator validator,
             ProviderResolver providerResolver,
             BillPaymentRepository billPaymentRepository,
-            PaymentHistoryRepository paymentHistoryRepository) {
+            PaymentHistoryRepository paymentHistoryRepository,
+            BillingEventPublisher billingEventPublisher) {
         this.validator = validator;
         this.providerResolver = providerResolver;
         this.billPaymentRepository = billPaymentRepository;
         this.paymentHistoryRepository = paymentHistoryRepository;
+        this.billingEventPublisher = billingEventPublisher;
     }
 
     public PaymentResponseDto execute(
@@ -83,6 +87,8 @@ public class PaymentFlow {
         history.setResponseMessage(adapterResponse.getMessage());
         history.setMetadata(adapterResponse.getMetadata() == null ? "{}" : adapterResponse.getMetadata());
         paymentHistoryRepository.save(history);
+
+        billingEventPublisher.publish("billing.payment.completed", payment.getRequestId(), adapterResponse.getMetadata());
 
         if (adapterResponse.getPaymentId() == null) {
             adapterResponse.setPaymentId(payment.getPaymentId());

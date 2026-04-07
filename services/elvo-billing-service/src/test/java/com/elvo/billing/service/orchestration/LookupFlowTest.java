@@ -17,6 +17,7 @@ import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.LookupStatus;
 import com.elvo.billing.repository.BillLookupRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
+import com.elvo.billing.service.event.BillingEventPublisher;
 import com.elvo.billing.validator.UtilityPaymentValidator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,9 +43,17 @@ class LookupFlowTest {
     @Mock
     private BillingAdapter adapter;
 
+    @Mock
+    private BillingEventPublisher billingEventPublisher;
+
     @Test
     void shouldExecuteLookupAndPersistLookupHistory() {
-        LookupFlow flow = new LookupFlow(validator, providerResolver, billLookupRepository, paymentHistoryRepository);
+        LookupFlow flow = new LookupFlow(
+            validator,
+            providerResolver,
+            billLookupRepository,
+            paymentHistoryRepository,
+            billingEventPublisher);
 
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("LOOKUP-001");
@@ -85,5 +94,6 @@ class LookupFlowTest {
         verify(paymentHistoryRepository).save(historyCaptor.capture());
         assertThat(historyCaptor.getValue().getEventType()).isEqualTo("LOOKUP_EXECUTED");
         assertThat(historyCaptor.getValue().getToStatus()).isEqualTo("SUCCESS");
+        verify(billingEventPublisher).publish(eq("billing.lookup.completed"), eq("REQ-L-1"), eq("{}"));
     }
 }

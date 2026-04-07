@@ -20,6 +20,7 @@ import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
+import com.elvo.billing.service.event.BillingEventPublisher;
 import com.elvo.billing.validator.UtilityPaymentValidator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,9 +46,17 @@ class PaymentFlowTest {
     @Mock
     private BillingAdapter adapter;
 
+    @Mock
+    private BillingEventPublisher billingEventPublisher;
+
     @Test
     void shouldExecutePaymentAndPersistPaymentHistory() {
-        PaymentFlow flow = new PaymentFlow(validator, providerResolver, billPaymentRepository, paymentHistoryRepository);
+        PaymentFlow flow = new PaymentFlow(
+            validator,
+            providerResolver,
+            billPaymentRepository,
+            paymentHistoryRepository,
+            billingEventPublisher);
 
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("PAY-001");
@@ -92,5 +101,6 @@ class PaymentFlowTest {
         verify(paymentHistoryRepository).save(historyCaptor.capture());
         assertThat(historyCaptor.getValue().getEventType()).isEqualTo("PAYMENT_EXECUTED");
         assertThat(historyCaptor.getValue().getToStatus()).isEqualTo("SUCCESS");
+        verify(billingEventPublisher).publish(eq("billing.payment.completed"), eq("REQ-1"), eq("{}"));
     }
 }
