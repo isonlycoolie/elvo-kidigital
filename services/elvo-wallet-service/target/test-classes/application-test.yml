@@ -1,0 +1,38 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:elvo_wallet_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  data:
+    redis:
+      url: redis://localhost:6379
+  rabbitmq:
+    addresses: amqp://guest:guest@localhost:5672
+
+logging:
+  level:
+    root: INFO
+
+elvo:
+  security:
+    jwt:
+      secret: test-wallet-jwt-secret-which-is-at-least-32-bytes
+    internal-jwt:
+      secret: test-wallet-internal-jwt-secret-at-least-32-bytes
+    correlation:
+      signature-secret: test-wallet-correlation-signature-secret
+    transaction-challenge:
+      secret: test-wallet-transaction-challenge-secret-32-bytes
+    field-encryption:
+      key: test-wallet-field-encryption-key-material
+  mobile:
+    callback:
+      signature-secret: test-mobile-callback-signature-secret

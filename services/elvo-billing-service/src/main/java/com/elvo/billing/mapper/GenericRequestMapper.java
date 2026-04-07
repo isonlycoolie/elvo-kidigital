@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
@@ -23,6 +24,7 @@ public class GenericRequestMapper {
         putIfPresent(providerRequest, "customerPhone", paymentRequest.getCustomerPhone());
         putIfPresent(providerRequest, "customerName", paymentRequest.getCustomerName());
         providerRequest.put("lookupRequired", paymentRequest.isLookupRequired());
+        putIfPresent(providerRequest, "idempotencyKey", firstNonBlank(MDC.get("idempotencyKey")));
         providerRequest.put("metadata", parseMetadata(paymentRequest.getMetadata()));
 
         return providerRequest;
@@ -32,6 +34,13 @@ public class GenericRequestMapper {
         if (value != null) {
             target.put(key, value);
         }
+    }
+
+    private static String firstNonBlank(String value) {
+        if (value == null || value.isBlank() || "n/a".equalsIgnoreCase(value.trim())) {
+            return null;
+        }
+        return value.trim();
     }
 
     private static Map<String, Object> parseMetadata(String metadata) {

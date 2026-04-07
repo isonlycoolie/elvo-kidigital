@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.util.Map;
 
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
+import org.slf4j.MDC;
 import org.junit.jupiter.api.Test;
 
 class GenericRequestMapperTest {
@@ -15,6 +16,7 @@ class GenericRequestMapperTest {
 
     @Test
     void shouldMapUtilityRequestToProviderPayload() {
+        MDC.put("idempotencyKey", "idem-123");
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("REF-100");
         request.setAmount(BigDecimal.valueOf(1200));
@@ -34,6 +36,8 @@ class GenericRequestMapperTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> metadata = (Map<String, Object>) providerRequest.get("metadata");
         assertThat(metadata).containsEntry("source", "unit-test");
+        assertThat(providerRequest).containsEntry("idempotencyKey", "idem-123");
+        MDC.clear();
     }
 
     @Test
@@ -57,5 +61,15 @@ class GenericRequestMapperTest {
         assertThatThrownBy(() -> mapper.toProviderRequest(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("metadata must contain valid JSON");
+    }
+
+    @Test
+    void shouldIgnoreMissingIdempotencyKey() {
+        UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
+        request.setReferenceNumber("REF-400");
+
+        Map<String, Object> providerRequest = mapper.toProviderRequest(request);
+
+        assertThat(providerRequest).doesNotContainKey("idempotencyKey");
     }
 }
