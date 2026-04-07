@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 public class SentrySensitiveDataMasker {
 
     private static final Pattern PHONE_PATTERN = Pattern.compile("(?<!\\d)(?:\\+?\\d[\\d\\s-]{7,}\\d)(?!\\d)");
-    private static final Pattern AMOUNT_PATTERN = Pattern.compile("\\b\\d+(?:\\.\\d{1,2})?\\b");
+    private static final Pattern AMOUNT_PATTERN = Pattern.compile("(?<![\\d*])\\d+(?:\\.\\d{1,2})?(?!\\d)");
 
     public String maskReference(String value) {
         if (value == null || value.isBlank()) {
