@@ -6,6 +6,9 @@ import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
 import com.elvo.billing.dto.response.LookupResponseDto;
 import com.elvo.billing.dto.response.PaymentResponseDto;
 import com.elvo.billing.service.BillingService;
+import io.sentry.ITransaction;
+import io.sentry.Sentry;
+import io.sentry.SpanStatus;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,37 +34,77 @@ public class BillPaymentController {
     public ResponseEntity<PaymentResponseDto> createPayment(
             @Valid @RequestBody UtilityPaymentRequestDto request,
             @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
-        
+        ITransaction transaction = Sentry.startTransaction("api.bill-payments.create", "http.server");
+
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
         }
-        
-        PaymentResponseDto response = billingService.executePayment(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+
+        try {
+            PaymentResponseDto response = billingService.executePayment(request);
+            transaction.setStatus(SpanStatus.OK);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (RuntimeException ex) {
+            transaction.setThrowable(ex);
+            transaction.setStatus(SpanStatus.INTERNAL_ERROR);
+            throw ex;
+        } finally {
+            transaction.finish();
+        }
     }
 
     @GetMapping("/{paymentId}")
     public ResponseEntity<PaymentResponseDto> getPayment(@PathVariable UUID paymentId) {
-        PaymentResponseDto response = billingService.findPaymentById(paymentId);
-        return ResponseEntity.ok(response);
+        ITransaction transaction = Sentry.startTransaction("api.bill-payments.get-by-id", "http.server");
+        try {
+            PaymentResponseDto response = billingService.findPaymentById(paymentId);
+            transaction.setStatus(SpanStatus.OK);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException ex) {
+            transaction.setThrowable(ex);
+            transaction.setStatus(SpanStatus.INTERNAL_ERROR);
+            throw ex;
+        } finally {
+            transaction.finish();
+        }
     }
 
     @GetMapping("/reference/{reference}")
     public ResponseEntity<PaymentResponseDto> getPaymentByReference(@PathVariable String reference) {
-        PaymentResponseDto response = billingService.findPaymentByReference(reference);
-        return ResponseEntity.ok(response);
+        ITransaction transaction = Sentry.startTransaction("api.bill-payments.get-by-reference", "http.server");
+        try {
+            PaymentResponseDto response = billingService.findPaymentByReference(reference);
+            transaction.setStatus(SpanStatus.OK);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException ex) {
+            transaction.setThrowable(ex);
+            transaction.setStatus(SpanStatus.INTERNAL_ERROR);
+            throw ex;
+        } finally {
+            transaction.finish();
+        }
     }
 
     @PostMapping("/lookup")
     public ResponseEntity<LookupResponseDto> lookupPayment(
             @Valid @RequestBody UtilityPaymentRequestDto request,
             @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
-        
+        ITransaction transaction = Sentry.startTransaction("api.bill-payments.lookup", "http.server");
+
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
         }
-        
-        LookupResponseDto response = billingService.lookupPayment(request);
-        return ResponseEntity.ok(response);
+
+        try {
+            LookupResponseDto response = billingService.lookupPayment(request);
+            transaction.setStatus(SpanStatus.OK);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException ex) {
+            transaction.setThrowable(ex);
+            transaction.setStatus(SpanStatus.INTERNAL_ERROR);
+            throw ex;
+        } finally {
+            transaction.finish();
+        }
     }
 }

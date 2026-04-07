@@ -18,6 +18,10 @@ import com.elvo.billing.repository.BillLookupRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
 import com.elvo.billing.service.event.BillingEventPublisher;
 import com.elvo.billing.validator.UtilityPaymentValidator;
+import io.sentry.ISpan;
+import io.sentry.ITransaction;
+import io.sentry.Sentry;
+import io.sentry.SpanStatus;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -60,6 +64,7 @@ public class LookupFlow {
             String serviceCode,
             String requestId,
             String correlationId) {
+        ITransaction transaction = Sentry.startTransaction("billing.lookup.execute", "service");
         long startNanos = System.nanoTime();
         sentryBreadcrumbLogger.addLookupBreadcrumb("validation", lookupRequest.getReferenceNumber(), serviceCode);
         validator.validateForLookup(lookupRequest, billCategory);
@@ -67,13 +72,22 @@ public class LookupFlow {
         BillingAdapter adapter = providerResolver.resolve(serviceCode);
         sentryBreadcrumbLogger.addLookupBreadcrumb("execution", lookupRequest.getReferenceNumber(), serviceCode);
         LookupResponseDto adapterResponse;
+        ISpan adapterSpan = transaction.startChild("adapter.call", "billing adapter lookup");
         try {
             adapterResponse = adapter.lookup(lookupRequest);
+            adapterSpan.setStatus(SpanStatus.OK);
         } catch (RuntimeException ex) {
+            adapterSpan.setThrowable(ex);
+            adapterSpan.setStatus(SpanStatus.INTERNAL_ERROR);
             sentryErrorCapture.captureLookupFailure(serviceCode, lookupRequest.getReferenceNumber(), ex);
             billingMetricsRecorder.recordLookupOutcome(LookupStatus.FAILED, System.nanoTime() - startNanos);
+            transaction.setThrowable(ex);
+            transaction.setStatus(SpanStatus.INTERNAL_ERROR);
+            adapterSpan.finish();
+            transaction.finish();
             throw ex;
         }
+        adapterSpan.finish();
 
         BillLookup lookup = new BillLookup();
         lookup.setLookupId(UUID.randomUUID());
@@ -90,7 +104,10 @@ public class LookupFlow {
         lookup.setDescription(adapterResponse.getDescription());
         lookup.setBillItems(adapterResponse.getBillItems());
         lookup.setRawProviderReference(adapterResponse.getRawProviderReference());
+        ISpan lookupDbSpan = transaction.startChild("db.query", "save bill lookup");
         billLookupRepository.save(lookup);
+        lookupDbSpan.setStatus(SpanStatus.OK);
+        lookupDbSpan.finish();
         lookupAuditLogger.logLookupExecuted(lookup);
 
         PaymentHistory history = new PaymentHistory();
@@ -105,11 +122,16 @@ public class LookupFlow {
         history.setResponseCode(lookup.getLookupStatus().name());
         history.setResponseMessage(adapterResponse.getDescription());
         history.setMetadata(lookupRequest.getMetadata() == null ? "{}" : lookupRequest.getMetadata());
+        ISpan historyDbSpan = transaction.startChild("db.query", "save lookup history");
         paymentHistoryRepository.save(history);
+        historyDbSpan.setStatus(SpanStatus.OK);
+        historyDbSpan.finish();
 
         billingEventPublisher.publish("billing.lookup.completed", lookup.getRequestId(), lookupRequest.getMetadata(), "v1");
         sentryBreadcrumbLogger.addLookupBreadcrumb("completed", lookup.getReferenceNumber(), serviceCode);
         billingMetricsRecorder.recordLookupOutcome(lookup.getLookupStatus(), System.nanoTime() - startNanos);
+        transaction.setStatus(SpanStatus.OK);
+        transaction.finish();
 
         return adapterResponse;
     }

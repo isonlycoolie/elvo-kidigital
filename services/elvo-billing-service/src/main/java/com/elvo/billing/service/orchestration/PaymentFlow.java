@@ -19,6 +19,10 @@ import com.elvo.billing.repository.PaymentHistoryRepository;
 import com.elvo.billing.service.event.BillingEventPublisher;
 import com.elvo.billing.service.impl.IdempotencyEnforcer;
 import com.elvo.billing.validator.UtilityPaymentValidator;
+import io.sentry.ISpan;
+import io.sentry.ITransaction;
+import io.sentry.Sentry;
+import io.sentry.SpanStatus;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -67,6 +71,7 @@ public class PaymentFlow {
             String idempotencyKey,
             UUID userId,
             UUID walletId) {
+        ITransaction transaction = Sentry.startTransaction("billing.payment.execute", "service");
         long startNanos = System.nanoTime();
         sentryBreadcrumbLogger.addPaymentBreadcrumb("validation", paymentRequest.getReferenceNumber(), serviceCode);
         validator.validateForPayment(paymentRequest, billCategory);
@@ -78,13 +83,22 @@ public class PaymentFlow {
         BillingAdapter adapter = providerResolver.resolve(serviceCode);
     sentryBreadcrumbLogger.addPaymentBreadcrumb("execution", paymentRequest.getReferenceNumber(), serviceCode);
         PaymentResponseDto adapterResponse;
+        ISpan adapterSpan = transaction.startChild("adapter.call", "billing adapter pay");
         try {
             adapterResponse = adapter.pay(paymentRequest);
+            adapterSpan.setStatus(SpanStatus.OK);
         } catch (RuntimeException ex) {
+            adapterSpan.setThrowable(ex);
+            adapterSpan.setStatus(SpanStatus.INTERNAL_ERROR);
             sentryErrorCapture.capturePaymentFailure(serviceCode, paymentRequest.getReferenceNumber(), ex);
             billingMetricsRecorder.recordPaymentOutcome(PaymentStatus.FAILED, System.nanoTime() - startNanos);
+            transaction.setThrowable(ex);
+            transaction.setStatus(SpanStatus.INTERNAL_ERROR);
+            adapterSpan.finish();
+            transaction.finish();
             throw ex;
         }
+        adapterSpan.finish();
 
         BillPayment payment = new BillPayment();
         payment.setPaymentId(adapterResponse.getPaymentId() != null ? adapterResponse.getPaymentId() : UUID.randomUUID());
@@ -106,7 +120,10 @@ public class PaymentFlow {
         payment.setReceiptNumber(adapterResponse.getReceiptNumber());
         payment.setPaidAmount(adapterResponse.getPaidAmount());
         payment.setCompletedAt(adapterResponse.getCompletedAt());
+        ISpan paymentDbSpan = transaction.startChild("db.query", "save bill payment");
         billPaymentRepository.save(payment);
+        paymentDbSpan.setStatus(SpanStatus.OK);
+        paymentDbSpan.finish();
 
         PaymentHistory history = new PaymentHistory();
         history.setPaymentId(payment.getPaymentId());
@@ -120,7 +137,10 @@ public class PaymentFlow {
         history.setResponseCode(payment.getStatus().name());
         history.setResponseMessage(adapterResponse.getMessage());
         history.setMetadata(adapterResponse.getMetadata() == null ? "{}" : adapterResponse.getMetadata());
+        ISpan historyDbSpan = transaction.startChild("db.query", "save payment history");
         paymentHistoryRepository.save(history);
+        historyDbSpan.setStatus(SpanStatus.OK);
+        historyDbSpan.finish();
         paymentAuditLogger.logUpdate(payment, "PAYMENT_EXECUTED", "PENDING", payment.getStatus().name());
 
         billingEventPublisher.publish("billing.payment.completed", payment.getRequestId(), adapterResponse.getMetadata(), "v1");
@@ -136,6 +156,8 @@ public class PaymentFlow {
         sentryBreadcrumbLogger.addPaymentBreadcrumb("completed", payment.getReferenceNumber(), serviceCode);
         billingMetricsRecorder.recordPaymentOutcome(payment.getStatus(), System.nanoTime() - startNanos);
         billingMetricsRecorder.recordPendingPayments(billPaymentRepository.countByStatus(PaymentStatus.PENDING));
+        transaction.setStatus(SpanStatus.OK);
+        transaction.finish();
         return adapterResponse;
     }
 
