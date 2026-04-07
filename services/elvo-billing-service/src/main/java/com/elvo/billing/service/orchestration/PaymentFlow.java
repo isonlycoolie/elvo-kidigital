@@ -12,6 +12,7 @@ import com.elvo.billing.entity.PaymentHistory;
 import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.monitoring.BillingMetricsRecorder;
+import com.elvo.billing.monitoring.SentryErrorCapture;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
 import com.elvo.billing.service.event.BillingEventPublisher;
@@ -30,6 +31,7 @@ public class PaymentFlow {
     private final IdempotencyEnforcer idempotencyEnforcer;
     private final PaymentAuditLogger paymentAuditLogger;
     private final BillingMetricsRecorder billingMetricsRecorder;
+    private final SentryErrorCapture sentryErrorCapture;
 
     public PaymentFlow(
             UtilityPaymentValidator validator,
@@ -39,7 +41,8 @@ public class PaymentFlow {
             BillingEventPublisher billingEventPublisher,
             IdempotencyEnforcer idempotencyEnforcer,
             PaymentAuditLogger paymentAuditLogger,
-            BillingMetricsRecorder billingMetricsRecorder) {
+            BillingMetricsRecorder billingMetricsRecorder,
+            SentryErrorCapture sentryErrorCapture) {
         this.validator = validator;
         this.providerResolver = providerResolver;
         this.billPaymentRepository = billPaymentRepository;
@@ -48,6 +51,7 @@ public class PaymentFlow {
         this.idempotencyEnforcer = idempotencyEnforcer;
         this.paymentAuditLogger = paymentAuditLogger;
         this.billingMetricsRecorder = billingMetricsRecorder;
+        this.sentryErrorCapture = sentryErrorCapture;
     }
 
     public PaymentResponseDto execute(
@@ -67,7 +71,14 @@ public class PaymentFlow {
         idempotencyEnforcer.assertNotProcessed(normalizedIdempotencyKey, "PAYMENT_EXECUTE", requestHash);
 
         BillingAdapter adapter = providerResolver.resolve(serviceCode);
-        PaymentResponseDto adapterResponse = adapter.pay(paymentRequest);
+        PaymentResponseDto adapterResponse;
+        try {
+            adapterResponse = adapter.pay(paymentRequest);
+        } catch (RuntimeException ex) {
+            sentryErrorCapture.capturePaymentFailure(serviceCode, paymentRequest.getReferenceNumber(), ex);
+            billingMetricsRecorder.recordPaymentOutcome(PaymentStatus.FAILED, System.nanoTime() - startNanos);
+            throw ex;
+        }
 
         BillPayment payment = new BillPayment();
         payment.setPaymentId(adapterResponse.getPaymentId() != null ? adapterResponse.getPaymentId() : UUID.randomUUID());

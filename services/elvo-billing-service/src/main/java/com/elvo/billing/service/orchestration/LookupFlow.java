@@ -12,6 +12,7 @@ import com.elvo.billing.entity.PaymentHistory;
 import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.LookupStatus;
 import com.elvo.billing.monitoring.BillingMetricsRecorder;
+import com.elvo.billing.monitoring.SentryErrorCapture;
 import com.elvo.billing.repository.BillLookupRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
 import com.elvo.billing.service.event.BillingEventPublisher;
@@ -28,6 +29,7 @@ public class LookupFlow {
     private final BillingEventPublisher billingEventPublisher;
     private final LookupAuditLogger lookupAuditLogger;
     private final BillingMetricsRecorder billingMetricsRecorder;
+    private final SentryErrorCapture sentryErrorCapture;
 
     public LookupFlow(
             UtilityPaymentValidator validator,
@@ -36,7 +38,8 @@ public class LookupFlow {
             PaymentHistoryRepository paymentHistoryRepository,
             BillingEventPublisher billingEventPublisher,
             LookupAuditLogger lookupAuditLogger,
-            BillingMetricsRecorder billingMetricsRecorder) {
+            BillingMetricsRecorder billingMetricsRecorder,
+            SentryErrorCapture sentryErrorCapture) {
         this.validator = validator;
         this.providerResolver = providerResolver;
         this.billLookupRepository = billLookupRepository;
@@ -44,6 +47,7 @@ public class LookupFlow {
         this.billingEventPublisher = billingEventPublisher;
         this.lookupAuditLogger = lookupAuditLogger;
         this.billingMetricsRecorder = billingMetricsRecorder;
+        this.sentryErrorCapture = sentryErrorCapture;
     }
 
     public LookupResponseDto execute(
@@ -56,7 +60,14 @@ public class LookupFlow {
         validator.validateForLookup(lookupRequest, billCategory);
 
         BillingAdapter adapter = providerResolver.resolve(serviceCode);
-        LookupResponseDto adapterResponse = adapter.lookup(lookupRequest);
+        LookupResponseDto adapterResponse;
+        try {
+            adapterResponse = adapter.lookup(lookupRequest);
+        } catch (RuntimeException ex) {
+            sentryErrorCapture.captureLookupFailure(serviceCode, lookupRequest.getReferenceNumber(), ex);
+            billingMetricsRecorder.recordLookupOutcome(LookupStatus.FAILED, System.nanoTime() - startNanos);
+            throw ex;
+        }
 
         BillLookup lookup = new BillLookup();
         lookup.setLookupId(UUID.randomUUID());

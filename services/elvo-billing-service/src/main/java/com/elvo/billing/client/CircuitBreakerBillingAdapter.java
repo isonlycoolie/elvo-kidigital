@@ -17,6 +17,7 @@ import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
 import com.elvo.billing.dto.response.LookupResponseDto;
 import com.elvo.billing.dto.response.PaymentResponseDto;
 import com.elvo.billing.monitoring.BillingMetricsRecorder;
+import com.elvo.billing.monitoring.SentryErrorCapture;
 
 public final class CircuitBreakerBillingAdapter implements BillingAdapter {
 
@@ -35,16 +36,17 @@ public final class CircuitBreakerBillingAdapter implements BillingAdapter {
     private final Duration openDuration;
     private final Duration requestTimeout;
     private final BillingMetricsRecorder billingMetricsRecorder;
+    private final SentryErrorCapture sentryErrorCapture;
 
     private int consecutiveFailures;
     private Instant openUntil;
 
     public CircuitBreakerBillingAdapter(BillingAdapter delegate, int maxAttempts, long baseBackoffMillis, int failureThreshold, Duration openDuration) {
-        this(delegate, maxAttempts, baseBackoffMillis, failureThreshold, openDuration, Duration.ofSeconds(5), null);
+        this(delegate, maxAttempts, baseBackoffMillis, failureThreshold, openDuration, Duration.ofSeconds(5), null, null);
     }
 
     public CircuitBreakerBillingAdapter(BillingAdapter delegate, int maxAttempts, long baseBackoffMillis, int failureThreshold, Duration openDuration, Duration requestTimeout) {
-        this(delegate, maxAttempts, baseBackoffMillis, failureThreshold, openDuration, requestTimeout, null);
+        this(delegate, maxAttempts, baseBackoffMillis, failureThreshold, openDuration, requestTimeout, null, null);
     }
 
     public CircuitBreakerBillingAdapter(
@@ -54,7 +56,8 @@ public final class CircuitBreakerBillingAdapter implements BillingAdapter {
             int failureThreshold,
             Duration openDuration,
             Duration requestTimeout,
-            BillingMetricsRecorder billingMetricsRecorder) {
+            BillingMetricsRecorder billingMetricsRecorder,
+            SentryErrorCapture sentryErrorCapture) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
         this.maxAttempts = Math.max(1, maxAttempts);
         this.baseBackoffMillis = Math.max(0L, baseBackoffMillis);
@@ -62,6 +65,7 @@ public final class CircuitBreakerBillingAdapter implements BillingAdapter {
         this.openDuration = Objects.requireNonNull(openDuration, "openDuration must not be null");
         this.requestTimeout = requestTimeout == null || requestTimeout.isNegative() ? Duration.ZERO : requestTimeout;
         this.billingMetricsRecorder = billingMetricsRecorder;
+        this.sentryErrorCapture = sentryErrorCapture;
     }
 
     @Override
@@ -92,6 +96,9 @@ public final class CircuitBreakerBillingAdapter implements BillingAdapter {
                         maxAttempts,
                         openUntil,
                         ex.getMessage());
+                if (sentryErrorCapture != null) {
+                    sentryErrorCapture.captureAdapterRetryFailure(delegate.getClass().getSimpleName(), attempt, ex);
+                }
                 if (attempt < maxAttempts) {
                     auditLog.info(
                             "billing_adapter_retry_scheduled attempt={} delayMillis={} adapter={}",
@@ -111,6 +118,9 @@ public final class CircuitBreakerBillingAdapter implements BillingAdapter {
                         consecutiveFailures,
                         failureThreshold,
                         openUntil);
+                if (sentryErrorCapture != null) {
+                    sentryErrorCapture.captureAdapterRetriesExhausted(delegate.getClass().getSimpleName(), maxAttempts, lastFailure);
+                }
                 throw lastFailure;
             }
         }

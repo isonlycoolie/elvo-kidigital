@@ -17,6 +17,7 @@ import com.elvo.billing.entity.PaymentHistory;
 import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.LookupStatus;
 import com.elvo.billing.monitoring.BillingMetricsRecorder;
+import com.elvo.billing.monitoring.SentryErrorCapture;
 import com.elvo.billing.repository.BillLookupRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
 import com.elvo.billing.service.event.BillingEventPublisher;
@@ -54,6 +55,9 @@ class LookupFlowTest {
     @Mock
     private BillingMetricsRecorder billingMetricsRecorder;
 
+    @Mock
+    private SentryErrorCapture sentryErrorCapture;
+
     @Test
     void shouldExecuteLookupAndPersistLookupHistory() {
         LookupFlow flow = new LookupFlow(
@@ -63,7 +67,8 @@ class LookupFlowTest {
             paymentHistoryRepository,
             billingEventPublisher,
             lookupAuditLogger,
-            billingMetricsRecorder);
+            billingMetricsRecorder,
+            sentryErrorCapture);
 
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("LOOKUP-001");
