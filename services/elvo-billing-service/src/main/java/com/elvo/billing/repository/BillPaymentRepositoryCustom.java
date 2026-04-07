@@ -15,13 +15,4 @@ public interface BillPaymentRepositoryCustom {
     Optional<BillPayment> getPaymentById(UUID paymentId);
 
     Optional<BillPayment> getPaymentByReference(String referenceNumber);
-
-    /**
-     * Acquire a pessimistic lock on a payment by reference number.
-     * Used to prevent race conditions when multiple payments target the same reference.
-     * 
-     * @param referenceNumber the payment reference number
-     * @return Optional containing the locked BillPayment if found
-     */
-    Optional<BillPayment> getPaymentByReferenceWithLock(String referenceNumber);
 }
