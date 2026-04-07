@@ -49,6 +49,9 @@ elvo:
         anomaly-latency-threshold-ms: ${ELVO_BILLING_SENTRY_ANOMALY_LATENCY_MS:2000}
 
 management:
+  metrics:
+    tags:
+      service: ${ELVO_SERVICE_TAG:billing-service}
   prometheus:
     metrics:
       export:
@@ -68,7 +71,7 @@ logging:
   file:
     name: ${ELVO_LOG_FILE:}
   pattern:
-    level: "%5p [corr:%X{correlationId}] [req:%X{requestId}] [idemp:%X{idempotencyKey}]"
+    level: "%5p [service:${ELVO_SERVICE_TAG:billing-service}] [corr:%X{correlationId}] [req:%X{requestId}] [idemp:%X{idempotencyKey}]"
 
 sentry:
   enabled: ${ELVO_SENTRY_ENABLED:false}
