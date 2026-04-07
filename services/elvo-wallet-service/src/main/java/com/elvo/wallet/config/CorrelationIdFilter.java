@@ -30,8 +30,10 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
     public static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
     public static final String CORRELATION_SIGNATURE_HEADER = "X-Correlation-Signature";
+    public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
     public static final String REQUEST_ID_KEY = "requestId";
     public static final String CORRELATION_ID_KEY = "correlationId";
+    public static final String IDEMPOTENCY_KEY = "idempotencyKey";
     private static final String INTERNAL_PATH_PREFIX = "/api/v1/internal/";
 
     private final String correlationSignatureSecret;
@@ -64,6 +66,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String incomingCorrelationId = request.getHeader(CORRELATION_ID_HEADER);
         String requestId = request.getHeader(REQUEST_ID_HEADER);
+        String idempotencyKey = request.getHeader(IDEMPOTENCY_KEY_HEADER);
         if (requestId == null || requestId.isBlank()) {
             requestId = UUID.randomUUID().toString();
         }
@@ -89,14 +92,21 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
 
         MDC.put(REQUEST_ID_KEY, requestId);
         MDC.put(CORRELATION_ID_KEY, correlationId);
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            MDC.put(IDEMPOTENCY_KEY, idempotencyKey);
+        }
         response.setHeader(REQUEST_ID_HEADER, requestId);
         response.setHeader(CORRELATION_ID_HEADER, correlationId);
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            response.setHeader(IDEMPOTENCY_KEY_HEADER, idempotencyKey);
+        }
         response.setHeader(CORRELATION_SIGNATURE_HEADER, propagatedSignature);
         try {
             filterChain.doFilter(request, response);
         } finally {
             MDC.remove(REQUEST_ID_KEY);
             MDC.remove(CORRELATION_ID_KEY);
+            MDC.remove(IDEMPOTENCY_KEY);
         }
     }
 

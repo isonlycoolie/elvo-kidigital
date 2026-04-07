@@ -39,6 +39,7 @@ class CorrelationIdFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/internal/wallets/u1/balance");
         request.addHeader(CorrelationIdFilter.REQUEST_ID_HEADER, "req-2");
         request.addHeader(CorrelationIdFilter.CORRELATION_ID_HEADER, "corr-2");
+        request.addHeader(CorrelationIdFilter.IDEMPOTENCY_KEY_HEADER, "idem-2");
         request.addHeader(CorrelationIdFilter.CORRELATION_SIGNATURE_HEADER, sign("req-2", "corr-2"));
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -47,6 +48,7 @@ class CorrelationIdFilterTest {
 
         assertThat(invoked).isTrue();
         assertThat(response.getHeader(CorrelationIdFilter.CORRELATION_SIGNATURE_HEADER)).isNotBlank();
+        assertThat(response.getHeader(CorrelationIdFilter.IDEMPOTENCY_KEY_HEADER)).isEqualTo("idem-2");
     }
 
     private FilterChain noopChain() {
