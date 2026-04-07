@@ -43,9 +43,9 @@ elvo:
           enabled: ${ELVO_BILLING_MOCK_ADAPTER_ENABLED:true}
 
 management:
-  metrics:
-    export:
-      prometheus:
+  prometheus:
+    metrics:
+      export:
         enabled: ${ELVO_METRICS_PROMETHEUS_ENABLED:true}
   endpoints:
     web:
@@ -58,7 +58,7 @@ management:
 logging:
   level:
     root: ${ELVO_LOG_LEVEL_ROOT:INFO}
-    com.elvo.billing: ${ELVO_LOG_LEVEL_BILLING:INFO}
+    '[com.elvo.billing]': ${ELVO_LOG_LEVEL_BILLING:INFO}
   file:
     name: ${ELVO_LOG_FILE:}
   pattern:
