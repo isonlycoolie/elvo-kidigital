@@ -55,7 +55,7 @@ class BillingFlowIntegrationTest {
         request.setReferenceNumber("INT-PAY-001");
         request.setAmount(new BigDecimal("1550.00"));
         request.setCustomerName("Integration Customer");
-        request.setMetadata("{}");
+        request.setMetadata("{\"meterType\":\"PREPAID\"}");
 
         PaymentResponseDto response = billingService.executePayment(request);
 
@@ -73,7 +73,7 @@ class BillingFlowIntegrationTest {
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("INT-LOOKUP-001");
         request.setLookupRequired(true);
-        request.setMetadata("{}");
+        request.setMetadata("{\"meterType\":\"PREPAID\"}");
 
         LookupResponseDto response = billingService.lookupPayment(request);
 
