@@ -83,6 +83,7 @@ class BillPaymentRepositoryTest {
                 .get()
                 .extracting(BillPayment::getStatus)
                 .isEqualTo(PaymentStatus.SUCCESS);
+        assertThat(billPaymentRepository.countByStatus(PaymentStatus.SUCCESS)).isGreaterThanOrEqualTo(1L);
     }
 
     @Test
