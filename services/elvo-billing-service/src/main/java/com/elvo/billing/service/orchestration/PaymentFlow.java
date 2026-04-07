@@ -101,7 +101,7 @@ public class PaymentFlow {
         paymentHistoryRepository.save(history);
         paymentAuditLogger.logUpdate(payment, "PAYMENT_EXECUTED", "PENDING", payment.getStatus().name());
 
-        billingEventPublisher.publish("billing.payment.completed", payment.getRequestId(), adapterResponse.getMetadata());
+        billingEventPublisher.publish("billing.payment.completed", payment.getRequestId(), adapterResponse.getMetadata(), "v1");
         idempotencyEnforcer.markProcessed(
                 normalizedIdempotencyKey,
                 "PAYMENT_EXECUTE",

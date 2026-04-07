@@ -125,7 +125,7 @@ public class BillingServiceImpl implements BillingService {
         response.setMessage("payment reversed");
 
         paymentAuditLogger.logReverse(payment);
-        billingEventPublisher.publish("billing.payment.reversed", payment.getRequestId(), response.getMetadata());
+        billingEventPublisher.publish("billing.payment.reversed", payment.getRequestId(), response.getMetadata(), "v1");
         return response;
     }
 
@@ -222,7 +222,7 @@ public class BillingServiceImpl implements BillingService {
         response.setMetadata(callback.getMetadata());
 
         paymentAuditLogger.logCallback(payment, callback);
-        billingEventPublisher.publish("billing.payment.callback.received", payment.getRequestId(), response.getMetadata());
+        billingEventPublisher.publish("billing.payment.callback.received", payment.getRequestId(), response.getMetadata(), "v1");
         return response;
     }
 

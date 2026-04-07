@@ -85,7 +85,7 @@ public class LookupFlow {
         history.setMetadata(lookupRequest.getMetadata() == null ? "{}" : lookupRequest.getMetadata());
         paymentHistoryRepository.save(history);
 
-        billingEventPublisher.publish("billing.lookup.completed", lookup.getRequestId(), lookupRequest.getMetadata());
+        billingEventPublisher.publish("billing.lookup.completed", lookup.getRequestId(), lookupRequest.getMetadata(), "v1");
 
         return adapterResponse;
     }

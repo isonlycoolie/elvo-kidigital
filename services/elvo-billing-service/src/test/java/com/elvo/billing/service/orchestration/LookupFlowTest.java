@@ -100,6 +100,6 @@ class LookupFlowTest {
         verify(paymentHistoryRepository).save(historyCaptor.capture());
         assertThat(historyCaptor.getValue().getEventType()).isEqualTo("LOOKUP_EXECUTED");
         assertThat(historyCaptor.getValue().getToStatus()).isEqualTo("SUCCESS");
-        verify(billingEventPublisher).publish(eq("billing.lookup.completed"), eq("REQ-L-1"), eq("{}"));
+        verify(billingEventPublisher).publish(eq("billing.lookup.completed"), eq("REQ-L-1"), eq("{}"), eq("v1"));
     }
 }

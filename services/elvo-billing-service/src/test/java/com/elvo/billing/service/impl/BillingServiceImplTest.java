@@ -68,6 +68,6 @@ class BillingServiceImplTest {
         assertThat(response.getMetadata()).contains("compensationTriggered");
         verify(billPaymentRepository).updatePaymentStatus(payment.getPaymentId(), PaymentStatus.REVERSED);
         verify(paymentAuditLogger).logReverse(payment);
-        verify(billingEventPublisher).publish(eq("billing.payment.reversed"), eq("REQ-REV-1"), eq(response.getMetadata()));
+        verify(billingEventPublisher).publish(eq("billing.payment.reversed"), eq("REQ-REV-1"), eq(response.getMetadata()), eq("v1"));
     }
 }

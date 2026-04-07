@@ -11,7 +11,12 @@ public class BillingEventPublisherStub implements BillingEventPublisher {
     private static final Logger eventLog = LoggerFactory.getLogger("event.billing.publisher");
 
     @Override
-    public void publish(String eventType, String requestId, String payload) {
-        eventLog.info("billing_event eventType={} requestId={} payload={}", eventType, requestId, payload);
+    public void publish(String eventType, String requestId, String payload, String eventVersion) {
+        eventLog.info(
+                "billing_event eventType={} eventVersion={} requestId={} payload={}",
+                eventType,
+                eventVersion,
+                requestId,
+                payload);
     }
 }

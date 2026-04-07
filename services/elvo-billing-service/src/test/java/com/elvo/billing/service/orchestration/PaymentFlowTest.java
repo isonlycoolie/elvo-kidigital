@@ -112,7 +112,7 @@ class PaymentFlowTest {
         assertThat(historyCaptor.getValue().getEventType()).isEqualTo("PAYMENT_EXECUTED");
         assertThat(historyCaptor.getValue().getToStatus()).isEqualTo("SUCCESS");
         verify(paymentAuditLogger).logUpdate(paymentCaptor.getValue(), "PAYMENT_EXECUTED", "PENDING", "SUCCESS");
-        verify(billingEventPublisher).publish(eq("billing.payment.completed"), eq("REQ-1"), eq("{}"));
+        verify(billingEventPublisher).publish(eq("billing.payment.completed"), eq("REQ-1"), eq("{}"), eq("v1"));
         verify(idempotencyEnforcer).markProcessed(eq("IDEMP-1"), eq("PAYMENT_EXECUTE"), eq("LUKU|PAY-001|1200"), eq("{}"));
     }
 }
