@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 
+import com.elvo.billing.audit.LookupAuditLogger;
 import com.elvo.billing.client.BillingAdapter;
 import com.elvo.billing.client.ProviderResolver;
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
@@ -46,6 +47,9 @@ class LookupFlowTest {
     @Mock
     private BillingEventPublisher billingEventPublisher;
 
+    @Mock
+    private LookupAuditLogger lookupAuditLogger;
+
     @Test
     void shouldExecuteLookupAndPersistLookupHistory() {
         LookupFlow flow = new LookupFlow(
@@ -53,7 +57,8 @@ class LookupFlowTest {
             providerResolver,
             billLookupRepository,
             paymentHistoryRepository,
-            billingEventPublisher);
+            billingEventPublisher,
+            lookupAuditLogger);
 
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("LOOKUP-001");
@@ -89,6 +94,7 @@ class LookupFlowTest {
         verify(billLookupRepository).save(lookupCaptor.capture());
         assertThat(lookupCaptor.getValue().getServiceCode()).isEqualTo("LUKU");
         assertThat(lookupCaptor.getValue().getLookupStatus()).isEqualTo(LookupStatus.SUCCESS);
+        verify(lookupAuditLogger).logLookupExecuted(lookupCaptor.getValue());
 
         ArgumentCaptor<PaymentHistory> historyCaptor = ArgumentCaptor.forClass(PaymentHistory.class);
         verify(paymentHistoryRepository).save(historyCaptor.capture());

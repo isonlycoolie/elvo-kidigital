@@ -2,6 +2,7 @@ package com.elvo.billing.service.orchestration;
 
 import java.util.UUID;
 
+import com.elvo.billing.audit.LookupAuditLogger;
 import com.elvo.billing.client.BillingAdapter;
 import com.elvo.billing.client.ProviderResolver;
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
@@ -24,18 +25,21 @@ public class LookupFlow {
     private final BillLookupRepository billLookupRepository;
     private final PaymentHistoryRepository paymentHistoryRepository;
     private final BillingEventPublisher billingEventPublisher;
+    private final LookupAuditLogger lookupAuditLogger;
 
     public LookupFlow(
             UtilityPaymentValidator validator,
             ProviderResolver providerResolver,
             BillLookupRepository billLookupRepository,
             PaymentHistoryRepository paymentHistoryRepository,
-            BillingEventPublisher billingEventPublisher) {
+            BillingEventPublisher billingEventPublisher,
+            LookupAuditLogger lookupAuditLogger) {
         this.validator = validator;
         this.providerResolver = providerResolver;
         this.billLookupRepository = billLookupRepository;
         this.paymentHistoryRepository = paymentHistoryRepository;
         this.billingEventPublisher = billingEventPublisher;
+        this.lookupAuditLogger = lookupAuditLogger;
     }
 
     public LookupResponseDto execute(
@@ -65,6 +69,7 @@ public class LookupFlow {
         lookup.setBillItems(adapterResponse.getBillItems());
         lookup.setRawProviderReference(adapterResponse.getRawProviderReference());
         billLookupRepository.save(lookup);
+        lookupAuditLogger.logLookupExecuted(lookup);
 
         PaymentHistory history = new PaymentHistory();
         history.setPaymentId(UUID.nameUUIDFromBytes(("LOOKUP|" + lookup.getRequestId()).getBytes()));
