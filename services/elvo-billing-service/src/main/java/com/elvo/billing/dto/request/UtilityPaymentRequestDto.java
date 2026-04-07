@@ -55,6 +55,10 @@ public class UtilityPaymentRequestDto {
     }
 
     public void setMetadata(String metadata) {
+        if (metadata == null || metadata.isBlank()) {
+            this.metadata = "{}";
+            return;
+        }
         this.metadata = metadata;
     }
 
