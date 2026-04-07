@@ -1,7 +1,9 @@
 package com.elvo.billing.service.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -130,5 +132,45 @@ class PaymentFlowTest {
         verify(billingEventPublisher).publish(eq("billing.payment.completed"), eq("REQ-1"), eq("{}"), eq("v1"));
         verify(idempotencyEnforcer).markProcessed(eq("IDEMP-1"), eq("PAYMENT_EXECUTE"), eq("LUKU|PAY-001|1200"), eq("{}"));
         verify(billingMetricsRecorder).recordPaymentOutcome(eq(PaymentStatus.SUCCESS), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void shouldCaptureFailureAndRethrowWhenAdapterPaymentFails() {
+        PaymentFlow flow = new PaymentFlow(
+                validator,
+                providerResolver,
+                billPaymentRepository,
+                paymentHistoryRepository,
+                billingEventPublisher,
+                idempotencyEnforcer,
+                paymentAuditLogger,
+                billingMetricsRecorder,
+                sentryErrorCapture,
+                sentryBreadcrumbLogger);
+
+        UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
+        request.setReferenceNumber("PAY-FAIL-001");
+        request.setAmount(BigDecimal.valueOf(200));
+        request.setMetadata("{}");
+
+        RuntimeException adapterFailure = new IllegalStateException("provider unavailable");
+        when(providerResolver.resolve("LUKU")).thenReturn(adapter);
+        when(adapter.pay(request)).thenThrow(adapterFailure);
+
+        assertThatThrownBy(() -> flow.execute(
+                request,
+                BillCategory.ELECTRICITY,
+                "LUKU",
+                "REQ-FAIL-1",
+                "CORR-FAIL-1",
+                "IDEMP-FAIL-1",
+                UUID.randomUUID(),
+                UUID.randomUUID()))
+                .isSameAs(adapterFailure);
+
+        verify(sentryErrorCapture).capturePaymentFailure("ELECTRICITY", "LUKU", "PAY-FAIL-001", adapterFailure);
+        verify(billingMetricsRecorder).recordPaymentOutcome(eq(PaymentStatus.FAILED), org.mockito.ArgumentMatchers.anyLong());
+        verify(billPaymentRepository, never()).save(org.mockito.ArgumentMatchers.any(BillPayment.class));
+        verify(paymentHistoryRepository, never()).save(org.mockito.ArgumentMatchers.any(PaymentHistory.class));
     }
 }

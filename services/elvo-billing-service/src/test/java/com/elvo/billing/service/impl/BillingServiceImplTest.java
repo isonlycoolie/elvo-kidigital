@@ -1,7 +1,9 @@
 package com.elvo.billing.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +16,7 @@ import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
 import com.elvo.billing.dto.response.PaymentResponseDto;
 import com.elvo.billing.entity.BillPayment;
 import com.elvo.billing.entity.enums.PaymentStatus;
+import com.elvo.billing.exception.DuplicatePaymentException;
 import com.elvo.billing.monitoring.BillingMetricsRecorder;
 import com.elvo.billing.monitoring.SentryBreadcrumbLogger;
 import com.elvo.billing.repository.BillPaymentRepository;
@@ -81,5 +84,40 @@ class BillingServiceImplTest {
         verify(paymentAuditLogger).logReverse(payment);
         verify(billingEventPublisher).publish(eq("billing.payment.reversed"), eq("REQ-REV-1"), eq(response.getMetadata()), eq("v1"));
         verify(billingMetricsRecorder).recordPendingPayments(3L);
+    }
+
+    @Test
+    void shouldRejectReverseWhenPaymentIsNotSuccessful() {
+        BillingServiceImpl service = new BillingServiceImpl(
+                paymentFlow,
+                lookupFlow,
+                billPaymentRepository,
+                billingEventPublisher,
+                paymentAuditLogger,
+                billingMetricsRecorder,
+                sentryBreadcrumbLogger);
+
+        UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
+        request.setReferenceNumber("REF-REV-2");
+
+        BillPayment payment = new BillPayment();
+        payment.setPaymentId(UUID.randomUUID());
+        payment.setRequestId("REQ-REV-2");
+        payment.setStatus(PaymentStatus.PENDING);
+        payment.setAmount(BigDecimal.valueOf(900));
+        payment.setCurrency("TZS");
+
+        when(billPaymentRepository.getPaymentByReferenceWithLock("REF-REV-2")).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> service.reversePayment(request))
+                .isInstanceOf(DuplicatePaymentException.class)
+                .hasMessageContaining("not reversible");
+
+        verify(billPaymentRepository, never()).updatePaymentStatus(payment.getPaymentId(), PaymentStatus.REVERSED);
+        verify(billingEventPublisher, never()).publish(
+                eq("billing.payment.reversed"),
+                eq("REQ-REV-2"),
+                org.mockito.ArgumentMatchers.anyString(),
+                eq("v1"));
     }
 }
