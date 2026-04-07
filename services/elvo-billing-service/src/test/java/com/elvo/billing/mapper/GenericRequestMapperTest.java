@@ -31,7 +31,9 @@ class GenericRequestMapperTest {
         assertThat(providerRequest).containsEntry("customerName", "Test User");
         assertThat(providerRequest).containsEntry("lookupRequired", true);
         assertThat(providerRequest.get("metadata")).isInstanceOf(Map.class);
-        assertThat((Map<?, ?>) providerRequest.get("metadata")).containsEntry("source", "unit-test");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> metadata = (Map<String, Object>) providerRequest.get("metadata");
+        assertThat(metadata).containsEntry("source", "unit-test");
     }
 
     @Test
