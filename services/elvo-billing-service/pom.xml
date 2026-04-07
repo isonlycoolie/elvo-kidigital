@@ -19,6 +19,7 @@
     <properties>
         <java.version>17</java.version>
         <elvo.shared.version>1.0.0-SNAPSHOT</elvo.shared.version>
+        <elvo.shared.root>${project.basedir}/../../shared</elvo.shared.root>
     </properties>
 
     <dependencies>
@@ -106,10 +107,16 @@
     <profiles>
         <profile>
             <id>with-shared-libs</id>
+            <!-- Shared libraries are provided from ../../shared via internal coordinates in local/CI builds. -->
             <dependencies>
                 <dependency>
                     <groupId>com.elvo.shared</groupId>
                     <artifactId>common-lib</artifactId>
+                    <version>${elvo.shared.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>com.elvo.shared</groupId>
+                    <artifactId>config-lib</artifactId>
                     <version>${elvo.shared.version}</version>
                 </dependency>
                 <dependency>
@@ -125,6 +132,11 @@
                 <dependency>
                     <groupId>com.elvo.shared</groupId>
                     <artifactId>idempotency-lib</artifactId>
+                    <version>${elvo.shared.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>com.elvo.shared</groupId>
+                    <artifactId>saga-lib</artifactId>
                     <version>${elvo.shared.version}</version>
                 </dependency>
                 <dependency>
