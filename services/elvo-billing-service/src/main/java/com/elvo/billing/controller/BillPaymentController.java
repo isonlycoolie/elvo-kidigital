@@ -3,6 +3,7 @@ package com.elvo.billing.controller;
 import java.util.UUID;
 
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
+import com.elvo.billing.dto.response.LookupResponseDto;
 import com.elvo.billing.dto.response.PaymentResponseDto;
 import com.elvo.billing.service.BillingService;
 import jakarta.validation.Valid;
@@ -48,6 +49,19 @@ public class BillPaymentController {
     @GetMapping("/reference/{reference}")
     public ResponseEntity<PaymentResponseDto> getPaymentByReference(@PathVariable String reference) {
         PaymentResponseDto response = billingService.findPaymentByReference(reference);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/lookup")
+    public ResponseEntity<LookupResponseDto> lookupPayment(
+            @Valid @RequestBody UtilityPaymentRequestDto request,
+            @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
+        
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = UUID.randomUUID().toString();
+        }
+        
+        LookupResponseDto response = billingService.lookupPayment(request);
         return ResponseEntity.ok(response);
     }
 }

@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
+import com.elvo.billing.dto.response.LookupResponseDto;
 import com.elvo.billing.dto.response.PaymentResponseDto;
 import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.service.BillingService;
@@ -32,6 +33,7 @@ public class BillPaymentControllerTest {
 
     private UtilityPaymentRequestDto paymentRequest;
     private PaymentResponseDto paymentResponse;
+    private LookupResponseDto lookupResponse;
 
     @BeforeEach
     void setUp() {
@@ -48,6 +50,11 @@ public class BillPaymentControllerTest {
         paymentResponse.setMessage("payment created");
         paymentResponse.setPaidAmount(new BigDecimal("100.00"));
         paymentResponse.setCurrency("TZS");
+
+        lookupResponse = new LookupResponseDto();
+        lookupResponse.setReferenceNumber("REF_001");
+        lookupResponse.setAmount(new BigDecimal("100.00"));
+        lookupResponse.setCustomerName("John Doe");
     }
 
     @Test
@@ -108,5 +115,33 @@ public class BillPaymentControllerTest {
         assertThat(response.getBody().getStatus()).isEqualTo(PaymentStatus.PENDING);
 
         verify(billingService).findPaymentByReference(referenceNumber);
+    }
+
+    @Test
+    void testLookupPaymentSuccess() {
+        when(billingService.lookupPayment(any(UtilityPaymentRequestDto.class)))
+                .thenReturn(lookupResponse);
+
+        ResponseEntity<LookupResponseDto> response = billPaymentController.lookupPayment(paymentRequest, "test-correlation-id-456");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getReferenceNumber()).isEqualTo("REF_001");
+        assertThat(response.getBody().getAmount()).isEqualTo(new BigDecimal("100.00"));
+
+        verify(billingService).lookupPayment(any(UtilityPaymentRequestDto.class));
+    }
+
+    @Test
+    void testLookupPaymentWithoutCorrelationId() {
+        when(billingService.lookupPayment(any(UtilityPaymentRequestDto.class)))
+                .thenReturn(lookupResponse);
+
+        ResponseEntity<LookupResponseDto> response = billPaymentController.lookupPayment(paymentRequest, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+
+        verify(billingService).lookupPayment(any(UtilityPaymentRequestDto.class));
     }
 }
