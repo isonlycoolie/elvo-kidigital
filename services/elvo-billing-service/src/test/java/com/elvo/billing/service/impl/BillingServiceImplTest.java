@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.elvo.billing.audit.PaymentAuditLogger;
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
 import com.elvo.billing.dto.response.PaymentResponseDto;
 import com.elvo.billing.entity.BillPayment;
@@ -37,9 +38,17 @@ class BillingServiceImplTest {
     @Mock
     private BillingEventPublisher billingEventPublisher;
 
+    @Mock
+    private PaymentAuditLogger paymentAuditLogger;
+
     @Test
     void shouldReversePaymentUsingLockedReferenceAndPublishCompensationEvent() {
-        BillingServiceImpl service = new BillingServiceImpl(paymentFlow, lookupFlow, billPaymentRepository, billingEventPublisher);
+        BillingServiceImpl service = new BillingServiceImpl(
+            paymentFlow,
+            lookupFlow,
+            billPaymentRepository,
+            billingEventPublisher,
+            paymentAuditLogger);
 
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("REF-REV-1");
@@ -58,6 +67,7 @@ class BillingServiceImplTest {
         assertThat(response.getStatus()).isEqualTo(PaymentStatus.REVERSED);
         assertThat(response.getMetadata()).contains("compensationTriggered");
         verify(billPaymentRepository).updatePaymentStatus(payment.getPaymentId(), PaymentStatus.REVERSED);
+        verify(paymentAuditLogger).logReverse(payment);
         verify(billingEventPublisher).publish(eq("billing.payment.reversed"), eq("REQ-REV-1"), eq(response.getMetadata()));
     }
 }

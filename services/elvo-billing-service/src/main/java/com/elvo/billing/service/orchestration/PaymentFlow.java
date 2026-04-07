@@ -2,6 +2,7 @@ package com.elvo.billing.service.orchestration;
 
 import java.util.UUID;
 
+import com.elvo.billing.audit.PaymentAuditLogger;
 import com.elvo.billing.client.BillingAdapter;
 import com.elvo.billing.client.ProviderResolver;
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
@@ -26,6 +27,7 @@ public class PaymentFlow {
     private final PaymentHistoryRepository paymentHistoryRepository;
     private final BillingEventPublisher billingEventPublisher;
     private final IdempotencyEnforcer idempotencyEnforcer;
+    private final PaymentAuditLogger paymentAuditLogger;
 
     public PaymentFlow(
             UtilityPaymentValidator validator,
@@ -33,13 +35,15 @@ public class PaymentFlow {
             BillPaymentRepository billPaymentRepository,
             PaymentHistoryRepository paymentHistoryRepository,
             BillingEventPublisher billingEventPublisher,
-            IdempotencyEnforcer idempotencyEnforcer) {
+            IdempotencyEnforcer idempotencyEnforcer,
+            PaymentAuditLogger paymentAuditLogger) {
         this.validator = validator;
         this.providerResolver = providerResolver;
         this.billPaymentRepository = billPaymentRepository;
         this.paymentHistoryRepository = paymentHistoryRepository;
         this.billingEventPublisher = billingEventPublisher;
         this.idempotencyEnforcer = idempotencyEnforcer;
+        this.paymentAuditLogger = paymentAuditLogger;
     }
 
     public PaymentResponseDto execute(
@@ -95,6 +99,7 @@ public class PaymentFlow {
         history.setResponseMessage(adapterResponse.getMessage());
         history.setMetadata(adapterResponse.getMetadata() == null ? "{}" : adapterResponse.getMetadata());
         paymentHistoryRepository.save(history);
+        paymentAuditLogger.logUpdate(payment, "PAYMENT_EXECUTED", "PENDING", payment.getStatus().name());
 
         billingEventPublisher.publish("billing.payment.completed", payment.getRequestId(), adapterResponse.getMetadata());
         idempotencyEnforcer.markProcessed(

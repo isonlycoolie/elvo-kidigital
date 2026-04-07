@@ -2,6 +2,7 @@ package com.elvo.billing.service.impl;
 
 import java.util.UUID;
 
+import com.elvo.billing.audit.PaymentAuditLogger;
 import com.elvo.billing.dto.request.ProviderCallbackDto;
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
 import com.elvo.billing.dto.response.LookupResponseDto;
@@ -27,16 +28,19 @@ public class BillingServiceImpl implements BillingService {
     private final LookupFlow lookupFlow;
     private final BillPaymentRepository billPaymentRepository;
     private final BillingEventPublisher billingEventPublisher;
+    private final PaymentAuditLogger paymentAuditLogger;
 
     public BillingServiceImpl(
             PaymentFlow paymentFlow,
             LookupFlow lookupFlow,
             BillPaymentRepository billPaymentRepository,
-            BillingEventPublisher billingEventPublisher) {
+            BillingEventPublisher billingEventPublisher,
+            PaymentAuditLogger paymentAuditLogger) {
         this.paymentFlow = paymentFlow;
         this.lookupFlow = lookupFlow;
         this.billPaymentRepository = billPaymentRepository;
         this.billingEventPublisher = billingEventPublisher;
+        this.paymentAuditLogger = paymentAuditLogger;
     }
 
     @Override
@@ -71,6 +75,7 @@ public class BillingServiceImpl implements BillingService {
         response.setCurrency(persisted.getCurrency());
         response.setMetadata(persisted.getMetadata());
         response.setMessage("payment created");
+        paymentAuditLogger.logCreate(persisted);
         return response;
     }
 
@@ -119,6 +124,7 @@ public class BillingServiceImpl implements BillingService {
         response.setMetadata("{\"compensationTriggered\":true,\"paymentId\":\"" + payment.getPaymentId() + "\"}");
         response.setMessage("payment reversed");
 
+        paymentAuditLogger.logReverse(payment);
         billingEventPublisher.publish("billing.payment.reversed", payment.getRequestId(), response.getMetadata());
         return response;
     }
@@ -214,7 +220,8 @@ public class BillingServiceImpl implements BillingService {
         response.setPaidAmount(payment.getAmount());
         response.setCurrency(payment.getCurrency());
         response.setMetadata(callback.getMetadata());
-        
+
+        paymentAuditLogger.logCallback(payment, callback);
         billingEventPublisher.publish("billing.payment.callback.received", payment.getRequestId(), response.getMetadata());
         return response;
     }
