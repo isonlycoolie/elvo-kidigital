@@ -15,4 +15,6 @@ public interface BillPaymentRepositoryCustom {
     Optional<BillPayment> getPaymentById(UUID paymentId);
 
     Optional<BillPayment> getPaymentByReference(String referenceNumber);
+
+    Optional<BillPayment> getPaymentByReferenceWithLock(String referenceNumber);
 }

@@ -116,4 +116,18 @@ public class BillPaymentRepositoryCustomImpl implements BillPaymentRepositoryCus
                 .getResultStream()
                 .findFirst();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<BillPayment> getPaymentByReferenceWithLock(String referenceNumber) {
+        Objects.requireNonNull(referenceNumber, "referenceNumber must not be null");
+
+        return entityManager.createQuery(
+                        "select payment from BillPayment payment where payment.referenceNumber = :referenceNumber",
+                        BillPayment.class)
+                .setParameter("referenceNumber", referenceNumber)
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultStream()
+                .findFirst();
+    }
 }
