@@ -13,6 +13,7 @@ import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
 import com.elvo.billing.service.event.BillingEventPublisher;
+import com.elvo.billing.service.impl.IdempotencyEnforcer;
 import com.elvo.billing.validator.UtilityPaymentValidator;
 import org.springframework.stereotype.Component;
 
@@ -24,18 +25,21 @@ public class PaymentFlow {
     private final BillPaymentRepository billPaymentRepository;
     private final PaymentHistoryRepository paymentHistoryRepository;
     private final BillingEventPublisher billingEventPublisher;
+    private final IdempotencyEnforcer idempotencyEnforcer;
 
     public PaymentFlow(
             UtilityPaymentValidator validator,
             ProviderResolver providerResolver,
             BillPaymentRepository billPaymentRepository,
             PaymentHistoryRepository paymentHistoryRepository,
-            BillingEventPublisher billingEventPublisher) {
+            BillingEventPublisher billingEventPublisher,
+            IdempotencyEnforcer idempotencyEnforcer) {
         this.validator = validator;
         this.providerResolver = providerResolver;
         this.billPaymentRepository = billPaymentRepository;
         this.paymentHistoryRepository = paymentHistoryRepository;
         this.billingEventPublisher = billingEventPublisher;
+        this.idempotencyEnforcer = idempotencyEnforcer;
     }
 
     public PaymentResponseDto execute(
@@ -49,6 +53,10 @@ public class PaymentFlow {
             UUID walletId) {
         validator.validateForPayment(paymentRequest, billCategory);
 
+        String normalizedIdempotencyKey = normalizeRequestValue(idempotencyKey);
+        String requestHash = serviceCode + "|" + paymentRequest.getReferenceNumber() + "|" + paymentRequest.getAmount();
+        idempotencyEnforcer.assertNotProcessed(normalizedIdempotencyKey, "PAYMENT_EXECUTE", requestHash);
+
         BillingAdapter adapter = providerResolver.resolve(serviceCode);
         PaymentResponseDto adapterResponse = adapter.pay(paymentRequest);
 
@@ -56,7 +64,7 @@ public class PaymentFlow {
         payment.setPaymentId(adapterResponse.getPaymentId() != null ? adapterResponse.getPaymentId() : UUID.randomUUID());
         payment.setRequestId(normalizeRequestValue(requestId));
         payment.setCorrelationId(normalizeRequestValue(correlationId));
-        payment.setIdempotencyKey(normalizeRequestValue(idempotencyKey));
+        payment.setIdempotencyKey(normalizedIdempotencyKey);
         payment.setUserId(userId);
         payment.setWalletId(walletId);
         payment.setBillCategory(billCategory);
@@ -89,6 +97,11 @@ public class PaymentFlow {
         paymentHistoryRepository.save(history);
 
         billingEventPublisher.publish("billing.payment.completed", payment.getRequestId(), adapterResponse.getMetadata());
+        idempotencyEnforcer.markProcessed(
+                normalizedIdempotencyKey,
+                "PAYMENT_EXECUTE",
+                requestHash,
+                adapterResponse.getMetadata() == null ? "{}" : adapterResponse.getMetadata());
 
         if (adapterResponse.getPaymentId() == null) {
             adapterResponse.setPaymentId(payment.getPaymentId());

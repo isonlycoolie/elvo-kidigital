@@ -1,7 +1,6 @@
 package com.elvo.billing.service.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,6 +20,7 @@ import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.repository.PaymentHistoryRepository;
 import com.elvo.billing.service.event.BillingEventPublisher;
+import com.elvo.billing.service.impl.IdempotencyEnforcer;
 import com.elvo.billing.validator.UtilityPaymentValidator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,14 +49,18 @@ class PaymentFlowTest {
     @Mock
     private BillingEventPublisher billingEventPublisher;
 
+    @Mock
+    private IdempotencyEnforcer idempotencyEnforcer;
+
     @Test
     void shouldExecutePaymentAndPersistPaymentHistory() {
         PaymentFlow flow = new PaymentFlow(
-            validator,
-            providerResolver,
-            billPaymentRepository,
-            paymentHistoryRepository,
-            billingEventPublisher);
+                validator,
+                providerResolver,
+                billPaymentRepository,
+                paymentHistoryRepository,
+                billingEventPublisher,
+                idempotencyEnforcer);
 
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("PAY-001");
@@ -89,6 +93,7 @@ class PaymentFlowTest {
 
         assertThat(result.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
         verify(validator).validateForPayment(eq(request), eq(BillCategory.ELECTRICITY));
+        verify(idempotencyEnforcer).assertNotProcessed(eq("IDEMP-1"), eq("PAYMENT_EXECUTE"), eq("LUKU|PAY-001|1200"));
         verify(providerResolver).resolve("LUKU");
         verify(adapter).pay(request);
 
@@ -102,5 +107,6 @@ class PaymentFlowTest {
         assertThat(historyCaptor.getValue().getEventType()).isEqualTo("PAYMENT_EXECUTED");
         assertThat(historyCaptor.getValue().getToStatus()).isEqualTo("SUCCESS");
         verify(billingEventPublisher).publish(eq("billing.payment.completed"), eq("REQ-1"), eq("{}"));
+        verify(idempotencyEnforcer).markProcessed(eq("IDEMP-1"), eq("PAYMENT_EXECUTE"), eq("LUKU|PAY-001|1200"), eq("{}"));
     }
 }
