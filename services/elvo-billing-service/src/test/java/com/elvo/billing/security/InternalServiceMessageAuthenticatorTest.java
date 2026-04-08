@@ -1,0 +1,46 @@
+package com.elvo.billing.security;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+
+class InternalServiceMessageAuthenticatorTest {
+
+    @Test
+    void shouldTrustSignedEvent() {
+        Map<String, Object> signed = InternalServiceMessageAuthenticator.signEvent(
+                "elvo-billing-service",
+                Map.of(
+                        "eventType", "billing.transaction.completed",
+                        "eventVersion", "v1",
+                        "requestId", "req-1",
+                        "correlationId", "corr-1",
+                        "payload", Map.of("transactionId", "tx-1", "status", "SUCCESS")));
+
+        assertThat(InternalServiceMessageAuthenticator.isTrusted(signed, "elvo-billing-service")).isTrue();
+    }
+
+    @Test
+    void shouldRejectTamperedSignedEvent() {
+        Map<String, Object> signed = InternalServiceMessageAuthenticator.signEvent(
+                "elvo-billing-service",
+                Map.of(
+                        "eventType", "billing.transaction.completed",
+                        "eventVersion", "v1",
+                        "requestId", "req-2",
+                        "correlationId", "corr-2",
+                        "payload", Map.of("transactionId", "tx-2", "status", "SUCCESS")));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = new HashMap<>((Map<String, Object>) signed.get("payload"));
+        payload.put("status", "FAILED");
+
+        Map<String, Object> tampered = new HashMap<>(signed);
+        tampered.put("payload", payload);
+
+        assertThat(InternalServiceMessageAuthenticator.isTrusted(tampered, "elvo-billing-service")).isFalse();
+    }
+}
