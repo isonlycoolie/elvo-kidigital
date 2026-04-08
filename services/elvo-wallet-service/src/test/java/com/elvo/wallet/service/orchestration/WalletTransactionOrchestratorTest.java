@@ -55,7 +55,7 @@ class WalletTransactionOrchestratorTest {
         when(walletTransactionService.commitFunds(eq(reservationId), eq("idem-1"))).thenReturn(
                 WalletFlowResult.success("committed", reservationId, reservationId, "wallet.transaction.committed"));
         when(internalEventIdempotencyService.markIfFirstProcessed(any(), any(), any(), any())).thenReturn(true);
-        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(createdReservation()));
+        when(reservationRepository.findByIdForUpdate(reservationId)).thenReturn(Optional.of(createdReservation()));
 
         orchestrator.onBillingCompleted(signedEvent("billing.transaction.completed", reservationId, "idem-1"));
 
@@ -75,7 +75,7 @@ class WalletTransactionOrchestratorTest {
         when(walletTransactionService.rollbackFunds(eq(reservationId), eq("idem-2"))).thenReturn(
                 WalletFlowResult.success("rolled-back", reservationId, reservationId, "wallet.transaction.reversed"));
         when(internalEventIdempotencyService.markIfFirstProcessed(any(), any(), any(), any())).thenReturn(true);
-        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(createdReservation()));
+        when(reservationRepository.findByIdForUpdate(reservationId)).thenReturn(Optional.of(createdReservation()));
 
         orchestrator.onBillingReversed(signedEvent("billing.transaction.reversed", reservationId, "idem-2"));
 
@@ -113,7 +113,7 @@ class WalletTransactionOrchestratorTest {
         when(internalEventIdempotencyService.markIfFirstProcessed(any(), any(), any(), any()))
                 .thenReturn(true)
                 .thenReturn(false);
-        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(createdReservation()));
+        when(reservationRepository.findByIdForUpdate(reservationId)).thenReturn(Optional.of(createdReservation()));
 
         Map<String, Object> event = signedEvent("billing.transaction.completed", reservationId, "idem-dup");
         orchestrator.onBillingCompleted(event);
@@ -166,7 +166,7 @@ class WalletTransactionOrchestratorTest {
         UUID reservationId = UUID.randomUUID();
 
         when(internalEventIdempotencyService.markIfFirstProcessed(any(), any(), any(), any())).thenReturn(true);
-        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(releasedReservation()));
+        when(reservationRepository.findByIdForUpdate(reservationId)).thenReturn(Optional.of(releasedReservation()));
 
         orchestrator.onBillingCompleted(signedEvent("billing.transaction.completed", reservationId, "idem-state"));
 

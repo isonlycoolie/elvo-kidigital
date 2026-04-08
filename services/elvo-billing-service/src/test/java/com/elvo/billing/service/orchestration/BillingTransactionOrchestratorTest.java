@@ -58,7 +58,7 @@ class BillingTransactionOrchestratorTest {
         payment.setPaymentId(paymentId);
         payment.setStatus(PaymentStatus.PROCESSING);
 
-        when(billPaymentRepository.getPaymentById(paymentId)).thenReturn(Optional.of(payment));
+        when(billPaymentRepository.getPaymentByIdWithLock(paymentId)).thenReturn(Optional.of(payment));
         when(internalEventIdempotencyService.markIfFirstProcessed(any(), any(), any(), any())).thenReturn(true);
 
         orchestrator.onWalletCompleted(signedEvent("wallet.transaction.completed", paymentId));
@@ -82,7 +82,7 @@ class BillingTransactionOrchestratorTest {
         payment.setPaymentId(paymentId);
         payment.setStatus(PaymentStatus.PROCESSING);
 
-        when(billPaymentRepository.getPaymentById(paymentId)).thenReturn(Optional.of(payment));
+        when(billPaymentRepository.getPaymentByIdWithLock(paymentId)).thenReturn(Optional.of(payment));
         when(internalEventIdempotencyService.markIfFirstProcessed(any(), any(), any(), any())).thenReturn(true);
 
         orchestrator.onWalletFailed(signedEvent("wallet.transaction.failed", paymentId, "wallet rejection"));
@@ -140,7 +140,7 @@ class BillingTransactionOrchestratorTest {
         payment.setPaymentId(paymentId);
         payment.setStatus(PaymentStatus.PROCESSING);
 
-        when(billPaymentRepository.getPaymentById(paymentId)).thenReturn(Optional.of(payment));
+        when(billPaymentRepository.getPaymentByIdWithLock(paymentId)).thenReturn(Optional.of(payment));
         when(internalEventIdempotencyService.markIfFirstProcessed(any(), any(), any(), any()))
                 .thenReturn(true)
                 .thenReturn(false);

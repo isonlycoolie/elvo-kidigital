@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.entity.Reservation;
 import com.elvo.wallet.repository.ReservationRepository;
@@ -42,6 +43,7 @@ public class WalletTransactionOrchestrator {
     }
 
     @RabbitListener(queues = "${elvo.messaging.billing.completed-queue:billing.transaction.completed.queue}")
+    @Transactional
     public void onBillingCompleted(Map<String, Object> event) {
         if (!InternalServiceMessageAuthenticator.isTrusted(event, EXPECTED_SOURCE_SERVICE)) {
             LOG.warn("wallet_orchestrator_skip_commit reason=invalid_service_token");
@@ -81,7 +83,7 @@ public class WalletTransactionOrchestrator {
         }
 
         UUID reservationUuid = UUID.fromString(reservationId);
-        Reservation reservation = reservationRepository.findById(reservationUuid).orElse(null);
+        Reservation reservation = reservationRepository.findByIdForUpdate(reservationUuid).orElse(null);
         if (reservation == null) {
             LOG.warn("wallet_orchestrator_skip_commit reason=reservation_not_found reservationId={}", reservationId);
             return;
@@ -98,6 +100,7 @@ public class WalletTransactionOrchestrator {
     }
 
     @RabbitListener(queues = "${elvo.messaging.billing.reversed-queue:billing.transaction.reversed.queue}")
+    @Transactional
     public void onBillingReversed(Map<String, Object> event) {
         if (!InternalServiceMessageAuthenticator.isTrusted(event, EXPECTED_SOURCE_SERVICE)) {
             LOG.warn("wallet_orchestrator_skip_rollback reason=invalid_service_token");
@@ -137,7 +140,7 @@ public class WalletTransactionOrchestrator {
         }
 
         UUID reservationUuid = UUID.fromString(reservationId);
-        Reservation reservation = reservationRepository.findById(reservationUuid).orElse(null);
+        Reservation reservation = reservationRepository.findByIdForUpdate(reservationUuid).orElse(null);
         if (reservation == null) {
             LOG.warn("wallet_orchestrator_skip_rollback reason=reservation_not_found reservationId={}", reservationId);
             return;

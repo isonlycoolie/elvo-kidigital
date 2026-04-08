@@ -106,6 +106,13 @@ public class BillPaymentRepositoryCustomImpl implements BillPaymentRepositoryCus
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<BillPayment> getPaymentByIdWithLock(UUID paymentId) {
+        Objects.requireNonNull(paymentId, "paymentId must not be null");
+        return Optional.ofNullable(entityManager.find(BillPayment.class, paymentId, LockModeType.PESSIMISTIC_WRITE));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<BillPayment> getPaymentByReference(String referenceNumber) {
         Objects.requireNonNull(referenceNumber, "referenceNumber must not be null");
 

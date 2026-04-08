@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 import java.util.Optional;
@@ -49,6 +50,7 @@ public class BillingTransactionOrchestrator {
     }
 
     @RabbitListener(queues = "${elvo.messaging.wallet.completed-queue:wallet.transaction.completed.queue}")
+    @Transactional
     public void onWalletCompleted(Map<String, Object> event) {
         if (!authorizationMatrix.isAllowed("wallet-service", "CONSUME", COMPLETED_QUEUE)) {
             LOG.warn("billing_orchestrator_skip_complete reason=queue_not_authorized");
@@ -88,25 +90,26 @@ public class BillingTransactionOrchestrator {
             return;
         }
 
-        Optional<BillPayment> paymentOptional = billPaymentRepository.getPaymentById(paymentId);
+        Optional<BillPayment> paymentOptional = billPaymentRepository.getPaymentByIdWithLock(paymentId);
         if (paymentOptional.isEmpty()) {
             LOG.warn("billing_orchestrator_skip_complete reason=payment_not_found paymentId={}", paymentId);
             return;
         }
 
         BillPayment payment = paymentOptional.get();
-    if (!stateTransitionValidator.canTransition(payment.getStatus(), PaymentStatus.SUCCESS)) {
-        LOG.warn("billing_orchestrator_skip_complete reason=invalid_state_transition paymentId={} status={}",
-            paymentId,
-            payment.getStatus());
-        return;
-    }
+        if (!stateTransitionValidator.canTransition(payment.getStatus(), PaymentStatus.SUCCESS)) {
+            LOG.warn("billing_orchestrator_skip_complete reason=invalid_state_transition paymentId={} status={}",
+                    paymentId,
+                    payment.getStatus());
+            return;
+        }
         billingTransactionService.completeTransaction(payment);
         billPaymentRepository.updatePaymentStatus(paymentId, PaymentStatus.SUCCESS);
         LOG.info("billing_orchestrator_complete paymentId={}", paymentId);
     }
 
     @RabbitListener(queues = "${elvo.messaging.wallet.failed-queue:wallet.transaction.failed.queue}")
+    @Transactional
     public void onWalletFailed(Map<String, Object> event) {
         if (!authorizationMatrix.isAllowed("wallet-service", "CONSUME", FAILED_QUEUE)) {
             LOG.warn("billing_orchestrator_skip_reverse reason=queue_not_authorized");
@@ -146,19 +149,19 @@ public class BillingTransactionOrchestrator {
             return;
         }
 
-        Optional<BillPayment> paymentOptional = billPaymentRepository.getPaymentById(paymentId);
+        Optional<BillPayment> paymentOptional = billPaymentRepository.getPaymentByIdWithLock(paymentId);
         if (paymentOptional.isEmpty()) {
             LOG.warn("billing_orchestrator_skip_reverse reason=payment_not_found paymentId={}", paymentId);
             return;
         }
 
         BillPayment payment = paymentOptional.get();
-    if (!stateTransitionValidator.canTransition(payment.getStatus(), PaymentStatus.REVERSED)) {
-        LOG.warn("billing_orchestrator_skip_reverse reason=invalid_state_transition paymentId={} status={}",
-            paymentId,
-            payment.getStatus());
-        return;
-    }
+        if (!stateTransitionValidator.canTransition(payment.getStatus(), PaymentStatus.REVERSED)) {
+            LOG.warn("billing_orchestrator_skip_reverse reason=invalid_state_transition paymentId={} status={}",
+                    paymentId,
+                    payment.getStatus());
+            return;
+        }
         String reason = payloadValue(event, "reason");
         billingTransactionService.reverseTransaction(payment, reason == null ? "wallet failure event" : reason);
         LOG.info("billing_orchestrator_reverse paymentId={}", paymentId);
