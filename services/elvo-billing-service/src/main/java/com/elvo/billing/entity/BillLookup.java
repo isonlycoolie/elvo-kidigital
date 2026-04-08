@@ -2,13 +2,12 @@ package com.elvo.billing.entity;
 
 import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.LookupStatus;
+import com.elvo.billing.security.BillingFieldEncryptionService;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
@@ -36,17 +35,17 @@ public class BillLookup {
     @Column(name = "reference_number", nullable = false, length = 128)
     private String referenceNumber;
 
-    @Column(name = "customer_phone", length = 32)
+    @Column(name = "customer_phone", columnDefinition = "text")
     private String customerPhone;
 
-    @Column(name = "metadata", nullable = false, columnDefinition = "jsonb")
+    @Column(name = "metadata", nullable = false, columnDefinition = "text")
     private String metadata = "{}";
 
     @Enumerated(EnumType.STRING)
     @Column(name = "lookup_status", nullable = false, length = 32)
     private LookupStatus lookupStatus;
 
-    @Column(name = "customer_name", length = 255)
+    @Column(name = "customer_name", columnDefinition = "text")
     private String customerName;
 
     @Column(name = "amount", precision = 19, scale = 2)
@@ -58,17 +57,17 @@ public class BillLookup {
     @Column(name = "description")
     private String description;
 
-    @Column(name = "bill_items", columnDefinition = "jsonb")
+    @Column(name = "bill_items", columnDefinition = "text")
     private String billItems;
 
     @Column(name = "raw_provider_reference", length = 255)
     private String rawProviderReference;
 
     @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
+    private Instant createdAt = Instant.now();
 
     @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
+    private Instant updatedAt = Instant.now();
 
     public UUID getLookupId() {
         return lookupId;
@@ -111,19 +110,19 @@ public class BillLookup {
     }
 
     public String getCustomerPhone() {
-        return customerPhone;
+        return BillingFieldEncryptionService.decrypt(customerPhone);
     }
 
     public void setCustomerPhone(String customerPhone) {
-        this.customerPhone = customerPhone;
+        this.customerPhone = BillingFieldEncryptionService.encrypt(customerPhone);
     }
 
     public String getMetadata() {
-        return metadata;
+        return BillingFieldEncryptionService.decrypt(metadata);
     }
 
     public void setMetadata(String metadata) {
-        this.metadata = metadata;
+        this.metadata = BillingFieldEncryptionService.encrypt(metadata);
     }
 
     public LookupStatus getLookupStatus() {
@@ -135,11 +134,11 @@ public class BillLookup {
     }
 
     public String getCustomerName() {
-        return customerName;
+        return BillingFieldEncryptionService.decrypt(customerName);
     }
 
     public void setCustomerName(String customerName) {
-        this.customerName = customerName;
+        this.customerName = BillingFieldEncryptionService.encrypt(customerName);
     }
 
     public BigDecimal getAmount() {
@@ -167,11 +166,11 @@ public class BillLookup {
     }
 
     public String getBillItems() {
-        return billItems;
+        return BillingFieldEncryptionService.decrypt(billItems);
     }
 
     public void setBillItems(String billItems) {
-        this.billItems = billItems;
+        this.billItems = BillingFieldEncryptionService.encrypt(billItems);
     }
 
     public String getRawProviderReference() {
@@ -198,17 +197,4 @@ public class BillLookup {
         this.updatedAt = updatedAt;
     }
 
-    @PrePersist
-    void prePersist() {
-        Instant now = Instant.now();
-        if (createdAt == null) {
-            createdAt = now;
-        }
-        updatedAt = now;
-    }
-
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = Instant.now();
-    }
 }

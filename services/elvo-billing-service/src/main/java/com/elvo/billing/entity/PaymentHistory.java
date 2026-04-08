@@ -1,12 +1,13 @@
 package com.elvo.billing.entity;
 
+import com.elvo.billing.security.BillingFieldEncryptionService;
+
 import java.time.Instant;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 @Entity
@@ -47,11 +48,11 @@ public class PaymentHistory {
     @Column(name = "response_message", length = 512)
     private String responseMessage;
 
-    @Column(name = "metadata", nullable = false, columnDefinition = "jsonb")
+    @Column(name = "metadata", nullable = false, columnDefinition = "text")
     private String metadata = "{}";
 
     @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
+    private Instant createdAt = Instant.now();
 
     public UUID getHistoryId() {
         return historyId;
@@ -142,11 +143,11 @@ public class PaymentHistory {
     }
 
     public String getMetadata() {
-        return metadata;
+        return BillingFieldEncryptionService.decrypt(metadata);
     }
 
     public void setMetadata(String metadata) {
-        this.metadata = metadata;
+        this.metadata = BillingFieldEncryptionService.encrypt(metadata);
     }
 
     public Instant getCreatedAt() {
@@ -157,16 +158,4 @@ public class PaymentHistory {
         this.createdAt = createdAt;
     }
 
-    @PrePersist
-    void prePersist() {
-        if (historyId == null) {
-            historyId = UUID.randomUUID();
-        }
-        if (metadata == null) {
-            metadata = "{}";
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-    }
 }

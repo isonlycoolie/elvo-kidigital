@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.elvo.billing.entity.BillPayment;
@@ -24,6 +25,9 @@ class PaymentHistoryRepositoryTest {
 
     @Autowired
     private PaymentHistoryRepository paymentHistoryRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void logPaymentEventShouldPersistHistoryRecord() {
@@ -60,6 +64,11 @@ class PaymentHistoryRepositoryTest {
         assertThat(persisted.getHistoryId()).isNotNull();
         assertThat(persisted.getCreatedAt()).isNotNull();
         assertThat(persisted.getMetadata()).isEqualTo("{\"provider\":\"selcom\",\"retry\":1}");
+        assertThat(jdbcTemplate.queryForObject(
+            "select metadata from payment_history where history_id = ?",
+            String.class,
+            persisted.getHistoryId()))
+            .startsWith("enc:v1:");
 
         assertThat(paymentHistoryRepository.findById(persisted.getHistoryId()))
                 .isPresent()

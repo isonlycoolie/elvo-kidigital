@@ -1,11 +1,12 @@
 package com.elvo.billing.entity;
 
+import com.elvo.billing.security.BillingFieldEncryptionService;
+
 import java.time.Instant;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 @Entity
@@ -22,11 +23,11 @@ public class IdempotencyKey {
     @Column(name = "request_hash", nullable = false, length = 128)
     private String requestHash;
 
-    @Column(name = "response_payload", nullable = false, columnDefinition = "jsonb")
+    @Column(name = "response_payload", nullable = false, columnDefinition = "text")
     private String responsePayload = "{}";
 
     @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
+    private Instant createdAt = Instant.now();
 
     public String getIdempotencyKey() {
         return idempotencyKey;
@@ -53,11 +54,11 @@ public class IdempotencyKey {
     }
 
     public String getResponsePayload() {
-        return responsePayload;
+        return BillingFieldEncryptionService.decrypt(responsePayload);
     }
 
     public void setResponsePayload(String responsePayload) {
-        this.responsePayload = responsePayload;
+        this.responsePayload = BillingFieldEncryptionService.encrypt(responsePayload);
     }
 
     public Instant getCreatedAt() {
@@ -68,13 +69,4 @@ public class IdempotencyKey {
         this.createdAt = createdAt;
     }
 
-    @PrePersist
-    void prePersist() {
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (responsePayload == null || responsePayload.isBlank()) {
-            responsePayload = "{}";
-        }
-    }
 }

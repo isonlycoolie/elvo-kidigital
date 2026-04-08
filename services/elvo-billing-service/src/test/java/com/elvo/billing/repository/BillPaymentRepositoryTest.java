@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.elvo.billing.entity.BillPayment;
@@ -21,6 +22,9 @@ class BillPaymentRepositoryTest {
 
     @Autowired
     private BillPaymentRepository billPaymentRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void createAndLookupPaymentShouldPersistAndReturnRecord() {
@@ -44,6 +48,21 @@ class BillPaymentRepositoryTest {
         assertThat(created.getPaymentId()).isNotNull();
         assertThat(created.getStatus()).isEqualTo(PaymentStatus.INITIATED);
         assertThat(created.getMetadata()).isEqualTo("{\"category\":\"bill\",\"attempt\":1}");
+        assertThat(jdbcTemplate.queryForObject(
+            "select metadata from bill_payments where payment_id = ?",
+            String.class,
+            created.getPaymentId()))
+            .startsWith("enc:v1:");
+        assertThat(jdbcTemplate.queryForObject(
+            "select customer_phone from bill_payments where payment_id = ?",
+            String.class,
+            created.getPaymentId()))
+            .startsWith("enc:v1:");
+        assertThat(jdbcTemplate.queryForObject(
+            "select customer_name from bill_payments where payment_id = ?",
+            String.class,
+            created.getPaymentId()))
+            .startsWith("enc:v1:");
 
         assertThat(billPaymentRepository.getPaymentById(created.getPaymentId()))
                 .isPresent()

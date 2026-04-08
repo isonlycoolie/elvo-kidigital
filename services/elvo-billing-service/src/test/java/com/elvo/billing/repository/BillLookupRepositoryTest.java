@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.elvo.billing.entity.BillLookup;
@@ -20,6 +21,9 @@ class BillLookupRepositoryTest {
 
     @Autowired
     private BillLookupRepository billLookupRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void createAndLookupBillShouldPersistAndReturnRecord() {
@@ -43,6 +47,21 @@ class BillLookupRepositoryTest {
         assertThat(created.getLookupId()).isNotNull();
         assertThat(created.getLookupStatus()).isEqualTo(LookupStatus.SUCCESS);
         assertThat(created.getMetadata()).isEqualTo("{\"provider\":\"waterco\",\"attempt\":1}");
+        assertThat(jdbcTemplate.queryForObject(
+            "select metadata from bill_lookups where lookup_id = ?",
+            String.class,
+            created.getLookupId()))
+            .startsWith("enc:v1:");
+        assertThat(jdbcTemplate.queryForObject(
+            "select bill_items from bill_lookups where lookup_id = ?",
+            String.class,
+            created.getLookupId()))
+            .startsWith("enc:v1:");
+        assertThat(jdbcTemplate.queryForObject(
+            "select customer_phone from bill_lookups where lookup_id = ?",
+            String.class,
+            created.getLookupId()))
+            .startsWith("enc:v1:");
 
         assertThat(billLookupRepository.getLookupById(created.getLookupId()))
                 .isPresent()

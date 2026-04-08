@@ -2,13 +2,12 @@ package com.elvo.billing.entity;
 
 import com.elvo.billing.entity.enums.BillCategory;
 import com.elvo.billing.entity.enums.PaymentStatus;
+import com.elvo.billing.security.BillingFieldEncryptionService;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
@@ -54,13 +53,13 @@ public class BillPayment {
     @Column(name = "currency", nullable = false, length = 3)
     private String currency;
 
-    @Column(name = "customer_phone", length = 32)
+    @Column(name = "customer_phone", columnDefinition = "text")
     private String customerPhone;
 
-    @Column(name = "customer_name", length = 255)
+    @Column(name = "customer_name", columnDefinition = "text")
     private String customerName;
 
-    @Column(name = "metadata", nullable = false, columnDefinition = "jsonb")
+    @Column(name = "metadata", nullable = false, columnDefinition = "text")
     private String metadata = "{}";
 
     @Enumerated(EnumType.STRING)
@@ -80,10 +79,10 @@ public class BillPayment {
     private Instant completedAt;
 
     @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
+    private Instant createdAt = Instant.now();
 
     @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
+    private Instant updatedAt = Instant.now();
 
     public UUID getPaymentId() {
         return paymentId;
@@ -174,27 +173,27 @@ public class BillPayment {
     }
 
     public String getCustomerPhone() {
-        return customerPhone;
+        return BillingFieldEncryptionService.decrypt(customerPhone);
     }
 
     public void setCustomerPhone(String customerPhone) {
-        this.customerPhone = customerPhone;
+        this.customerPhone = BillingFieldEncryptionService.encrypt(customerPhone);
     }
 
     public String getCustomerName() {
-        return customerName;
+        return BillingFieldEncryptionService.decrypt(customerName);
     }
 
     public void setCustomerName(String customerName) {
-        this.customerName = customerName;
+        this.customerName = BillingFieldEncryptionService.encrypt(customerName);
     }
 
     public String getMetadata() {
-        return metadata;
+        return BillingFieldEncryptionService.decrypt(metadata);
     }
 
     public void setMetadata(String metadata) {
-        this.metadata = metadata;
+        this.metadata = BillingFieldEncryptionService.encrypt(metadata);
     }
 
     public PaymentStatus getStatus() {
@@ -253,17 +252,4 @@ public class BillPayment {
         this.updatedAt = updatedAt;
     }
 
-    @PrePersist
-    void prePersist() {
-        Instant now = Instant.now();
-        if (createdAt == null) {
-            createdAt = now;
-        }
-        updatedAt = now;
-    }
-
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = Instant.now();
-    }
 }
