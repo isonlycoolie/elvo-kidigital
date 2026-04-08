@@ -1,0 +1,94 @@
+services:
+  elvo-identity-service:
+    build:
+      context: ../../services/elvo-identity-service
+      dockerfile: Dockerfile
+    container_name: elvo-identity-service
+    env_file:
+      - ../../.env.shared
+      - ../../services/elvo-identity-service/.env
+    environment:
+      ELVO_DB_HOST: identity-db
+      ELVO_DB_PORT: 5432
+      ELVO_DB_NAME: identity_db
+      ELVO_DB_USER: identity_user
+      ELVO_RABBITMQ_HOST: rabbitmq
+      ELVO_RABBITMQ_PORT: 5672
+      ELVO_REDIS_HOST: redis
+      ELVO_REDIS_PORT: 6379
+      SERVER_PORT: 8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      identity-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend-network
+
+  elvo-wallet-service:
+    build:
+      context: ../../services/elvo-wallet-service
+      dockerfile: Dockerfile
+    container_name: elvo-wallet-service
+    env_file:
+      - ../../.env.shared
+      - ../../services/elvo-wallet-service/.env
+    environment:
+      ELVO_DB_HOST: wallet-db
+      ELVO_DB_PORT: 5432
+      ELVO_DB_NAME: wallet_db
+      ELVO_DB_USER: wallet_user
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
+      REDIS_URL: redis://redis:6379
+      DB_URL: jdbc:postgresql://wallet-db:5432/wallet_db
+      DB_USER: wallet_user
+      SERVER_PORT: 8082
+    ports:
+      - "8082:8082"
+    depends_on:
+      wallet-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      elvo-identity-service:
+        condition: service_started
+    networks:
+      - backend-network
+
+  elvo-billing-service:
+    build:
+      context: ../../services/elvo-billing-service
+      dockerfile: Dockerfile
+    container_name: elvo-billing-service
+    env_file:
+      - ../../.env.shared
+      - ../../services/elvo-billing-service/.env
+    environment:
+      ELVO_DB_HOST: billing-db
+      ELVO_DB_PORT: 5432
+      ELVO_DB_NAME: billing_db
+      ELVO_DB_USER: billing_user
+      ELVO_RABBITMQ_HOST: rabbitmq
+      ELVO_RABBITMQ_PORT: 5672
+      ELVO_REDIS_HOST: redis
+      ELVO_REDIS_PORT: 6379
+      SERVER_PORT: 8083
+    ports:
+      - "8083:8083"
+    depends_on:
+      billing-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      elvo-wallet-service:
+        condition: service_started
+    networks:
+      - backend-network

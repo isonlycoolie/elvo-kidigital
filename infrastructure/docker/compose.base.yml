@@ -1,0 +1,14 @@
+name: elvo-local-runtime
+
+networks:
+  frontend-network:
+    driver: bridge
+  backend-network:
+    driver: bridge
+
+volumes:
+  identity-db-data:
+  wallet-db-data:
+  billing-db-data:
+  redis-data:
+  rabbitmq-data:

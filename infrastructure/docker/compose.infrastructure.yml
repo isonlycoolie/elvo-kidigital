@@ -1,0 +1,97 @@
+services:
+  identity-db:
+    image: postgres:16-alpine
+    container_name: identity-db
+    environment:
+      POSTGRES_DB: ${IDENTITY_DB_NAME:-identity_db}
+      POSTGRES_USER: ${IDENTITY_DB_USER:-identity_user}
+      POSTGRES_PASSWORD: ${IDENTITY_DB_PASSWORD:-identity_password}
+    expose:
+      - "5432"
+    volumes:
+      - identity-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${IDENTITY_DB_USER:-identity_user} -d ${IDENTITY_DB_NAME:-identity_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - backend-network
+
+  wallet-db:
+    image: postgres:16-alpine
+    container_name: wallet-db
+    environment:
+      POSTGRES_DB: ${WALLET_DB_NAME:-wallet_db}
+      POSTGRES_USER: ${WALLET_DB_USER:-wallet_user}
+      POSTGRES_PASSWORD: ${WALLET_DB_PASSWORD:-wallet_password}
+    expose:
+      - "5432"
+    volumes:
+      - wallet-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${WALLET_DB_USER:-wallet_user} -d ${WALLET_DB_NAME:-wallet_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - backend-network
+
+  billing-db:
+    image: postgres:16-alpine
+    container_name: billing-db
+    environment:
+      POSTGRES_DB: ${BILLING_DB_NAME:-billing_db}
+      POSTGRES_USER: ${BILLING_DB_USER:-billing_user}
+      POSTGRES_PASSWORD: ${BILLING_DB_PASSWORD:-billing_password}
+    expose:
+      - "5432"
+    volumes:
+      - billing-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BILLING_DB_USER:-billing_user} -d ${BILLING_DB_NAME:-billing_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - backend-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: ["redis-server", "--appendonly", "yes"]
+    expose:
+      - "6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - backend-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - backend-network
