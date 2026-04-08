@@ -95,4 +95,40 @@ CREATE INDEX IF NOT EXISTS idx_payment_history_request_id_created_at
 CREATE INDEX IF NOT EXISTS idx_payment_history_event_type_created_at
     ON payment_history (event_type, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS billing_audit_events (
+    id UUID PRIMARY KEY,
+    event_type VARCHAR(128) NOT NULL,
+    request_id VARCHAR(128) NOT NULL,
+    correlation_id VARCHAR(128) NOT NULL,
+    occurred_at TIMESTAMPTZ NOT NULL,
+    payload VARCHAR(4000) NOT NULL,
+    previous_hash VARCHAR(64) NOT NULL,
+    record_hash VARCHAR(64) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_billing_audit_events_created_at
+    ON billing_audit_events (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_billing_audit_events_request_id
+    ON billing_audit_events (request_id);
+
+CREATE OR REPLACE FUNCTION prevent_billing_audit_event_mutation()
+RETURNS TRIGGER AS
+$$
+BEGIN
+    RAISE EXCEPTION 'billing_audit_events is append-only';
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prevent_billing_audit_event_update ON billing_audit_events;
+CREATE TRIGGER trg_prevent_billing_audit_event_update
+    BEFORE UPDATE ON billing_audit_events
+    FOR EACH ROW EXECUTE FUNCTION prevent_billing_audit_event_mutation();
+
+DROP TRIGGER IF EXISTS trg_prevent_billing_audit_event_delete ON billing_audit_events;
+CREATE TRIGGER trg_prevent_billing_audit_event_delete
+    BEFORE DELETE ON billing_audit_events
+    FOR EACH ROW EXECUTE FUNCTION prevent_billing_audit_event_mutation();
+
 COMMIT;
