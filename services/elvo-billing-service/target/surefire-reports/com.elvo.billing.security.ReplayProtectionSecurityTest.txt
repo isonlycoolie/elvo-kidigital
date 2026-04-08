@@ -1,0 +1,28 @@
+-------------------------------------------------------------------------------
+Test set: com.elvo.billing.security.ReplayProtectionSecurityTest
+-------------------------------------------------------------------------------
+Tests run: 6, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 0.044 s <<< FAILURE! -- in com.elvo.billing.security.ReplayProtectionSecurityTest
+com.elvo.billing.security.ReplayProtectionSecurityTest.testAcceptValidMessage -- Time elapsed: 0.002 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: Should accept message within valid window ==> expected: <true> but was: <false>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+	at com.elvo.billing.security.ReplayProtectionSecurityTest.testAcceptValidMessage(ReplayProtectionSecurityTest.java:71)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+com.elvo.billing.security.ReplayProtectionSecurityTest.testRejectDuplicateMessageId -- Time elapsed: 0.013 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: First message should be safe ==> expected: <true> but was: <false>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+	at com.elvo.billing.security.ReplayProtectionSecurityTest.testRejectDuplicateMessageId(ReplayProtectionSecurityTest.java:45)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
