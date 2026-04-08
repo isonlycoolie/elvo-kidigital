@@ -9,6 +9,7 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
 import com.elvo.wallet.security.InternalServiceMessageAuthenticator;
+import com.elvo.wallet.service.impl.InternalEventIdempotencyService;
 import com.elvo.wallet.service.WalletTransactionService;
 import com.elvo.wallet.service.model.WalletFlowResult;
 
@@ -19,9 +20,12 @@ public class WalletTransactionOrchestrator {
     private static final String EXPECTED_SOURCE_SERVICE = "elvo-billing-service";
 
     private final WalletTransactionService walletTransactionService;
+    private final InternalEventIdempotencyService internalEventIdempotencyService;
 
-    public WalletTransactionOrchestrator(WalletTransactionService walletTransactionService) {
+    public WalletTransactionOrchestrator(WalletTransactionService walletTransactionService,
+                                         InternalEventIdempotencyService internalEventIdempotencyService) {
         this.walletTransactionService = walletTransactionService;
+        this.internalEventIdempotencyService = internalEventIdempotencyService;
     }
 
     @RabbitListener(queues = "${elvo.messaging.billing.completed-queue:billing.transaction.completed.queue}")
@@ -45,6 +49,17 @@ public class WalletTransactionOrchestrator {
         }
         if (reservationId == null || idempotencyKey == null) {
             LOG.warn("wallet_orchestrator_skip_commit reason=missing_reservation_or_idempotency");
+            return;
+        }
+
+        String eventId = rootValue(event, InternalServiceMessageAuthenticator.MESSAGE_ID_FIELD);
+        String eventType = rootValue(event, "eventType");
+        if (!internalEventIdempotencyService.markIfFirstProcessed(
+                eventId,
+                idempotencyKey,
+                eventType == null ? "billing.transaction.completed" : eventType,
+                EXPECTED_SOURCE_SERVICE)) {
+            LOG.warn("wallet_orchestrator_skip_commit reason=duplicate_event eventId={}", eventId);
             return;
         }
 
@@ -76,6 +91,17 @@ public class WalletTransactionOrchestrator {
             return;
         }
 
+        String eventId = rootValue(event, InternalServiceMessageAuthenticator.MESSAGE_ID_FIELD);
+        String eventType = rootValue(event, "eventType");
+        if (!internalEventIdempotencyService.markIfFirstProcessed(
+                eventId,
+                idempotencyKey,
+                eventType == null ? "billing.transaction.reversed" : eventType,
+                EXPECTED_SOURCE_SERVICE)) {
+            LOG.warn("wallet_orchestrator_skip_rollback reason=duplicate_event eventId={}", eventId);
+            return;
+        }
+
         WalletFlowResult result = walletTransactionService.rollbackFunds(UUID.fromString(reservationId), idempotencyKey);
         LOG.info("wallet_orchestrator_rollback reservationId={} success={} message={}", reservationId, result.success(), result.message());
     }
@@ -90,6 +116,18 @@ public class WalletTransactionOrchestrator {
             return null;
         }
         Object value = ((Map<String, Object>) mapPayload).get(key);
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private String rootValue(Map<String, Object> event, String key) {
+        if (event == null || key == null || key.isBlank()) {
+            return null;
+        }
+        Object value = event.get(key);
         if (value == null) {
             return null;
         }
