@@ -3,10 +3,10 @@ package com.elvo.billing.controller;
 import com.elvo.billing.dto.request.ProviderCallbackDto;
 import com.elvo.billing.dto.response.PaymentResponseDto;
 import com.elvo.billing.exception.RateLimitExceededException;
+import com.elvo.billing.exception.CallbackVerificationFailedException;
 import com.elvo.billing.security.BillingOperationRateLimitService;
 import com.elvo.billing.security.CallbackVerificationService;
 import com.elvo.billing.service.BillingService;
-import com.elvo.billing.exception.CallbackVerificationFailedException;
 import io.sentry.ITransaction;
 import io.sentry.Sentry;
 import io.sentry.SpanStatus;
@@ -51,6 +51,15 @@ public class ProviderCallbackController {
     @Autowired(required = false)
     void setOperationRateLimitService(@Nullable BillingOperationRateLimitService operationRateLimitService) {
         this.operationRateLimitService = operationRateLimitService;
+    }
+
+    @Autowired(required = false)
+    void setCallbackVerificationService(@Nullable CallbackVerificationService callbackVerificationService) {
+        this.callbackVerificationService = callbackVerificationService;
+    }
+
+    public ResponseEntity<PaymentResponseDto> handleProviderCallback(@Valid @RequestBody ProviderCallbackDto callback) {
+        return handleProviderCallback(callback, null, null, null, "default", null);
     }
 
     @PostMapping("/provider-callback")
