@@ -1,11 +1,14 @@
 package com.elvo.billing.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -48,5 +51,35 @@ class BillingRoleBasedAccessControlTest {
                 List.of(new SimpleGrantedAuthority("ROLE_AUDIT_ADMIN"))));
 
         assertThat(rbac.isAllowed(BillingSensitivePermission.AUDIT_READ)).isTrue();
+    }
+
+    @Test
+    void shouldRequireMfaForPaymentReverse() {
+        BillingRoleBasedAccessControl rbac = new BillingRoleBasedAccessControl();
+        rbac.setBillingMfaService(new BillingMfaService());
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "ops-admin",
+                "N/A",
+                List.of(new SimpleGrantedAuthority("ROLE_OPERATIONS_ADMIN"))));
+
+        assertThatThrownBy(() -> rbac.authorize(BillingSensitivePermission.PAYMENT_REVERSE))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("MFA required");
+    }
+
+    @Test
+    void shouldAllowPaymentReverseWhenMfaAuthorityIsPresent() {
+        BillingRoleBasedAccessControl rbac = new BillingRoleBasedAccessControl();
+        rbac.setBillingMfaService(new BillingMfaService());
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "ops-admin",
+                "N/A",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_OPERATIONS_ADMIN"),
+                        new SimpleGrantedAuthority("MFA_OTP"))));
+
+        rbac.authorize(BillingSensitivePermission.PAYMENT_REVERSE);
+
+        assertThat(rbac.isAllowed(BillingSensitivePermission.PAYMENT_REVERSE)).isTrue();
     }
 }

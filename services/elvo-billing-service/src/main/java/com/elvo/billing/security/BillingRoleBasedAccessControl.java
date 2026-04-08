@@ -20,6 +20,7 @@ public class BillingRoleBasedAccessControl {
 
     private final Map<BillingSensitivePermission, Set<String>> roleMatrix = new EnumMap<>(BillingSensitivePermission.class);
     private SecurityMonitoringService securityMonitoringService;
+    private BillingMfaService billingMfaService;
 
     public BillingRoleBasedAccessControl() {
         roleMatrix.put(BillingSensitivePermission.PAYMENT_REVERSE, Set.of("ROLE_OPERATIONS_ADMIN", "ROLE_BILLING_ADMIN"));
@@ -37,11 +38,30 @@ public class BillingRoleBasedAccessControl {
             }
             throw new AccessDeniedException("RBAC denied for permission " + permission);
         }
+
+        if (billingMfaService != null) {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (!billingMfaService.isMfaSatisfied(authentication, permission)) {
+                String principal = authentication == null ? "anonymous" : authentication.getName();
+                if (securityMonitoringService != null) {
+                    securityMonitoringService.recordSuspiciousEvent(
+                            "billing.security.mfa_required",
+                            "mfa_required_for_sensitive_permission",
+                            Map.of("principal", principal, "permission", permission.name()));
+                }
+                throw new AccessDeniedException("MFA required for permission " + permission);
+            }
+        }
     }
 
     @Autowired(required = false)
     void setSecurityMonitoringService(@Nullable SecurityMonitoringService securityMonitoringService) {
         this.securityMonitoringService = securityMonitoringService;
+    }
+
+    @Autowired(required = false)
+    void setBillingMfaService(@Nullable BillingMfaService billingMfaService) {
+        this.billingMfaService = billingMfaService;
     }
 
     public boolean isAllowed(BillingSensitivePermission permission) {
