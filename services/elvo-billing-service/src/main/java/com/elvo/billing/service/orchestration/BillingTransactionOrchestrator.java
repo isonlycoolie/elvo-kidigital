@@ -47,6 +47,10 @@ public class BillingTransactionOrchestrator {
             LOG.warn("billing_orchestrator_skip_complete reason=invalid_service_token");
             return;
         }
+        if (!InternalServiceMessageAuthenticator.isReplaySafe(event)) {
+            LOG.warn("billing_orchestrator_skip_complete reason=replay_validation_failed");
+            return;
+        }
 
         UUID paymentId = resolvePaymentId(event);
         if (paymentId == null) {
@@ -75,6 +79,10 @@ public class BillingTransactionOrchestrator {
 
         if (!InternalServiceMessageAuthenticator.isTrusted(event, EXPECTED_SOURCE_SERVICE)) {
             LOG.warn("billing_orchestrator_skip_reverse reason=invalid_service_token");
+            return;
+        }
+        if (!InternalServiceMessageAuthenticator.isReplaySafe(event)) {
+            LOG.warn("billing_orchestrator_skip_reverse reason=replay_validation_failed");
             return;
         }
 

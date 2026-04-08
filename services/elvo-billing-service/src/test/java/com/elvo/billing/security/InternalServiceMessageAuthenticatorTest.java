@@ -4,10 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import org.junit.jupiter.api.Test;
 
 class InternalServiceMessageAuthenticatorTest {
+
+    @org.junit.jupiter.api.BeforeEach
+    void resetReplayState() {
+        InternalServiceMessageAuthenticator.resetReplayCachesForTests();
+    }
 
     @Test
     void shouldTrustSignedEvent() {
@@ -42,5 +49,25 @@ class InternalServiceMessageAuthenticatorTest {
         tampered.put("payload", payload);
 
         assertThat(InternalServiceMessageAuthenticator.isTrusted(tampered, "elvo-billing-service")).isFalse();
+    }
+
+    @Test
+    void shouldRejectReplayOfSameMessageAndNonce() {
+        Map<String, Object> unsigned = new HashMap<>();
+        unsigned.put("eventType", "billing.transaction.completed");
+        unsigned.put("eventVersion", "v1");
+        unsigned.put("requestId", "req-3");
+        unsigned.put("correlationId", "corr-3");
+        Instant occurredAt = Instant.now();
+        unsigned.put("occurredAt", occurredAt.toString());
+        unsigned.put("messageId", "msg-3");
+        unsigned.put("nonce", "nonce-3");
+        unsigned.put("expiresAt", occurredAt.plus(5, ChronoUnit.MINUTES).toString());
+        unsigned.put("payload", Map.of("transactionId", "tx-3"));
+
+        Map<String, Object> signed = InternalServiceMessageAuthenticator.signEvent("elvo-billing-service", unsigned);
+
+        assertThat(InternalServiceMessageAuthenticator.isReplaySafe(signed)).isTrue();
+        assertThat(InternalServiceMessageAuthenticator.isReplaySafe(signed)).isFalse();
     }
 }

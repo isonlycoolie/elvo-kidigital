@@ -15,6 +15,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -102,6 +104,7 @@ class BillingTransactionOrchestratorTest {
     }
 
     private Map<String, Object> signedEvent(String eventType, UUID paymentId, String reason) {
+        Instant occurredAt = Instant.now();
         Map<String, Object> payload = reason == null
                 ? Map.of("paymentId", paymentId.toString())
                 : Map.of("paymentId", paymentId.toString(), "reason", reason);
@@ -111,6 +114,10 @@ class BillingTransactionOrchestratorTest {
                         "eventType", eventType,
                         "eventVersion", "v1",
                         "requestId", "req-1",
+                "messageId", UUID.randomUUID().toString(),
+                "nonce", UUID.randomUUID().toString(),
+                "occurredAt", occurredAt.toString(),
+                "expiresAt", occurredAt.plus(5, ChronoUnit.MINUTES).toString(),
                         "payload", payload));
     }
 }

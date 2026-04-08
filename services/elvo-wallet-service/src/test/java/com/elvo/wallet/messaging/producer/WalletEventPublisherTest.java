@@ -2,9 +2,9 @@ package com.elvo.wallet.messaging.producer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +18,7 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import com.elvo.wallet.messaging.outbox.WalletOutboxDispatcher;
 import com.elvo.wallet.messaging.outbox.WalletOutboxService;
+import com.elvo.wallet.security.InternalServiceMessageAuthenticator;
 
 import static org.mockito.Mockito.mock;
 
@@ -46,6 +47,8 @@ class WalletEventPublisherTest {
         assertThat(event.get("requestId")).isEqualTo("req-123");
         assertThat(event.get("correlationId")).isEqualTo("corr-456");
         assertThat(event.get("payload")).isInstanceOf(Map.class);
+        assertThat(event.get("sourceService")).isEqualTo("elvo-wallet-service");
+        assertThat(InternalServiceMessageAuthenticator.isTrusted(event, "elvo-wallet-service")).isTrue();
     }
 
     @Test
@@ -74,7 +77,11 @@ class WalletEventPublisherTest {
             MDC.clear();
         }
 
-        verify(outboxService).enqueue(eq("wallet.transfer.completed"), eq("wallet.transfer.completed"), anyMap(), eq("req-1"), eq("corr-1"), any());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> eventCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(outboxService).enqueue(eq("wallet.transfer.completed"), eq("wallet.transfer.completed"), eventCaptor.capture(), eq("req-1"), eq("corr-1"), any());
+        assertThat(eventCaptor.getValue().get("sourceService")).isEqualTo("elvo-wallet-service");
+        assertThat(InternalServiceMessageAuthenticator.isTrusted(eventCaptor.getValue(), "elvo-wallet-service")).isTrue();
         verify(dispatcher).dispatchById(java.util.UUID.fromString("00000000-0000-0000-0000-000000000001"));
         verify(rabbitTemplate, never()).convertAndSend(anyString(), anyString(), anyMap());
     }

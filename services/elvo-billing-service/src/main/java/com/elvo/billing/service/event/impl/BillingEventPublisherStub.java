@@ -1,18 +1,21 @@
 package com.elvo.billing.service.event.impl;
 
-import com.elvo.billing.service.event.BillingEventPublisher;
-import com.elvo.billing.security.BillingServiceAuthorizationMatrix;
-import com.elvo.billing.security.InternalServiceMessageAuthenticator;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
+import com.elvo.billing.security.BillingServiceAuthorizationMatrix;
+import com.elvo.billing.security.InternalServiceMessageAuthenticator;
+import com.elvo.billing.service.event.BillingEventPublisher;
 
 @Component
 public class BillingEventPublisherStub implements BillingEventPublisher {
@@ -43,7 +46,11 @@ public class BillingEventPublisherStub implements BillingEventPublisher {
         event.put("eventVersion", eventVersion);
         event.put("requestId", requestId);
         event.put("correlationId", resolveContextValue("correlationId"));
-        event.put("occurredAt", Instant.now().toString());
+        Instant occurredAt = Instant.now();
+        event.put("occurredAt", occurredAt.toString());
+        event.put("messageId", UUID.randomUUID().toString());
+        event.put("nonce", UUID.randomUUID().toString());
+        event.put("expiresAt", occurredAt.plus(5, ChronoUnit.MINUTES).toString());
         event.put("payload", payload == null ? "{}" : payload);
 
         Map<String, Object> signedEvent = InternalServiceMessageAuthenticator.signEvent(SOURCE_SERVICE, event);

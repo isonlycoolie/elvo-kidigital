@@ -1,6 +1,7 @@
 package com.elvo.wallet.messaging.producer;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -19,9 +20,12 @@ import com.elvo.wallet.messaging.outbox.WalletOutboxDispatcher;
 import com.elvo.wallet.messaging.outbox.WalletOutboxService;
 import com.elvo.wallet.monitoring.SentryExceptionReporter;
 import com.elvo.wallet.monitoring.WalletMetricsRecorder;
+import com.elvo.wallet.security.InternalServiceMessageAuthenticator;
 
 @Component
 public class WalletEventPublisher {
+
+    private static final String SOURCE_SERVICE = "elvo-wallet-service";
 
     private final RabbitTemplate rabbitTemplate;
     private final String exchange;
@@ -63,17 +67,22 @@ public class WalletEventPublisher {
         event.put("version", version);
         event.put("requestId", resolveRequestId());
         event.put("correlationId", resolveCorrelationId());
-        event.put("occurredAt", Instant.now().toString());
+        Instant occurredAt = Instant.now();
+        event.put("occurredAt", occurredAt.toString());
+        event.put("messageId", UUID.randomUUID().toString());
+        event.put("nonce", UUID.randomUUID().toString());
+        event.put("expiresAt", occurredAt.plus(5, ChronoUnit.MINUTES).toString());
         event.put("payload", payload == null ? Map.of() : payload);
+        Map<String, Object> signedEvent = InternalServiceMessageAuthenticator.signEvent(SOURCE_SERVICE, event);
 
         if (immutableAuditStorageService != null) {
             try {
                 immutableAuditStorageService.append(
-                        String.valueOf(event.get("eventType")),
-                        String.valueOf(event.get("requestId")),
-                        String.valueOf(event.get("correlationId")),
-                        Instant.parse(String.valueOf(event.get("occurredAt"))),
-                        String.valueOf(event.get("payload"))
+                        String.valueOf(signedEvent.get("eventType")),
+                        String.valueOf(signedEvent.get("requestId")),
+                        String.valueOf(signedEvent.get("correlationId")),
+                        Instant.parse(String.valueOf(signedEvent.get("occurredAt"))),
+                        String.valueOf(signedEvent.get("payload"))
                 );
             } catch (RuntimeException ex) {
                 // Preserve core transaction flow even if audit persistence is temporarily unavailable.
@@ -84,16 +93,16 @@ public class WalletEventPublisher {
             UUID outboxId = outboxService.enqueue(
                     eventType,
                     eventType,
-                    event,
-                    String.valueOf(event.get("requestId")),
-                    String.valueOf(event.get("correlationId")),
-                    Instant.parse(String.valueOf(event.get("occurredAt"))));
+                    signedEvent,
+                    String.valueOf(signedEvent.get("requestId")),
+                    String.valueOf(signedEvent.get("correlationId")),
+                    Instant.parse(String.valueOf(signedEvent.get("occurredAt"))));
             dispatchAfterCommit(outboxId);
             return;
         }
 
         try {
-            rabbitTemplate.convertAndSend(exchange, eventType, event);
+            rabbitTemplate.convertAndSend(exchange, eventType, signedEvent);
             if (metricsRecorder != null) {
                 metricsRecorder.recordEventPublish(eventType, true);
             }
