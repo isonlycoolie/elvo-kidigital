@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.elvo.wallet.controller.WalletController;
 import com.elvo.wallet.monitoring.SentryExceptionReporter;
+import com.elvo.wallet.security.SensitiveDataMasker;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -30,23 +31,25 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(WalletController.WalletNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleWalletNotFound(WalletController.WalletNotFoundException ex) {
-        AUDIT_LOG.warn("wallet_not_found exception={}", ex.getMessage());
+        String masked = SensitiveDataMasker.maskText(ex.getMessage());
+        AUDIT_LOG.warn("wallet_not_found exception={}", masked);
         return ResponseEntity
             .status(HttpStatus.NOT_FOUND)
-            .body(ApiResponse.error("WALLET_NOT_FOUND", ex.getMessage()));
+            .body(ApiResponse.error("WALLET_NOT_FOUND", masked));
     }
 
     @ExceptionHandler(WalletController.UnauthorizedException.class)
     public ResponseEntity<ApiResponse<Void>> handleUnauthorized(WalletController.UnauthorizedException ex) {
-        AUDIT_LOG.warn("unauthorized_access exception={}", ex.getMessage());
+        String masked = SensitiveDataMasker.maskText(ex.getMessage());
+        AUDIT_LOG.warn("unauthorized_access exception={}", masked);
         return ResponseEntity
             .status(HttpStatus.UNAUTHORIZED)
-            .body(ApiResponse.error("UNAUTHORIZED", ex.getMessage()));
+            .body(ApiResponse.error("UNAUTHORIZED", masked));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
-        AUDIT_LOG.warn("access_denied exception={}", ex.getMessage());
+        AUDIT_LOG.warn("access_denied exception={}", SensitiveDataMasker.maskText(ex.getMessage()));
         return ResponseEntity
             .status(HttpStatus.FORBIDDEN)
             .body(ApiResponse.error("ACCESS_DENIED", "You do not have permission to perform this action"));
@@ -55,7 +58,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
         public ResponseEntity<ValidationErrorResponseDto> handleValidation(MethodArgumentNotValidException ex,
                                                                            HttpServletRequest request) {
-        AUDIT_LOG.warn("validation_error exception={}", ex.getMessage());
+        AUDIT_LOG.warn("validation_error exception={}", SensitiveDataMasker.maskText(ex.getMessage()));
             captureIfPresent(ex, request, java.util.Map.of("category", "validation"));
 
         ValidationErrorResponseDto errorResponse = new ValidationErrorResponseDto();
@@ -73,16 +76,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleConstraint(ConstraintViolationException ex,
                                                               HttpServletRequest request) {
-        AUDIT_LOG.warn("constraint_violation exception={}", ex.getMessage());
+        String masked = SensitiveDataMasker.maskText(ex.getMessage());
+        AUDIT_LOG.warn("constraint_violation exception={}", masked);
         captureIfPresent(ex, request, java.util.Map.of("category", "constraint"));
         return ResponseEntity.badRequest()
-            .body(ApiResponse.error("CONSTRAINT_VIOLATION", ex.getMessage()));
+            .body(ApiResponse.error("CONSTRAINT_VIOLATION", masked));
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public ResponseEntity<ApiResponse<Void>> handleOptimisticLockFailure(ObjectOptimisticLockingFailureException ex,
                                                                          HttpServletRequest request) {
-        AUDIT_LOG.warn("optimistic_lock_conflict exception={}", ex.getMessage());
+        AUDIT_LOG.warn("optimistic_lock_conflict exception={}", SensitiveDataMasker.maskText(ex.getMessage()));
         captureIfPresent(ex, request, java.util.Map.of("category", "optimistic-lock"));
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error("CONCURRENCY_CONFLICT", "Wallet update conflict detected, please retry"));
@@ -91,7 +95,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex, HttpServletRequest request) {
         LOGGER.error("Unexpected error occurred", ex);
-        AUDIT_LOG.error("unexpected_error message={}", ex.getMessage());
+        AUDIT_LOG.error("unexpected_error message={}", SensitiveDataMasker.maskText(ex.getMessage()));
         captureIfPresent(ex, request, java.util.Map.of("category", "unhandled"));
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("INTERNAL_ERROR", "Unexpected server error"));

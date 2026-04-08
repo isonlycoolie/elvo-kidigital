@@ -1,12 +1,15 @@
 package com.elvo.billing.exception;
 
-import com.elvo.billing.monitoring.SentryExceptionMapper;
-import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import com.elvo.billing.monitoring.SentryExceptionMapper;
+import com.elvo.billing.security.SensitiveDataMasker;
+
+import jakarta.validation.ConstraintViolationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -35,14 +38,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handlePaymentValidation(PaymentValidationException ex) {
         sentryExceptionMapper.capture(ex, "PAYMENT_VALIDATION_ERROR");
         return ResponseEntity.badRequest()
-                .body(ApiResponse.error("PAYMENT_VALIDATION_ERROR", ex.getMessage()));
+                .body(ApiResponse.error("PAYMENT_VALIDATION_ERROR", SensitiveDataMasker.maskText(ex.getMessage())));
     }
 
     @ExceptionHandler(DuplicatePaymentException.class)
     public ResponseEntity<ApiResponse<Void>> handleDuplicatePayment(DuplicatePaymentException ex) {
         sentryExceptionMapper.capture(ex, "DUPLICATE_PAYMENT");
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiResponse.error("DUPLICATE_PAYMENT", ex.getMessage()));
+                .body(ApiResponse.error("DUPLICATE_PAYMENT", SensitiveDataMasker.maskText(ex.getMessage())));
     }
 
     @ExceptionHandler(Exception.class)

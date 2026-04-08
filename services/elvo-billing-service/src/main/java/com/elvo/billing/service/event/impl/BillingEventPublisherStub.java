@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 
 import com.elvo.billing.security.BillingServiceAuthorizationMatrix;
 import com.elvo.billing.security.InternalServiceMessageAuthenticator;
+import com.elvo.billing.security.SensitiveDataMasker;
 import com.elvo.billing.service.event.BillingEventPublisher;
 
 @Component
@@ -61,7 +62,7 @@ public class BillingEventPublisherStub implements BillingEventPublisher {
                 exchange,
                 eventType,
                 eventVersion,
-                requestId,
+            SensitiveDataMasker.maskIdentifier(requestId),
                 SOURCE_SERVICE);
     }
 

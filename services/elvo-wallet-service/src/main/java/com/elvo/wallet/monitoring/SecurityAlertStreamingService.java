@@ -6,11 +6,12 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import com.elvo.wallet.security.SensitiveDataMasker;
 
 @Service
 public class SecurityAlertStreamingService {
@@ -48,8 +49,8 @@ public class SecurityAlertStreamingService {
         ALERT_LOG.warn("security_alert_stream eventType={} severity={} userId={} context={}",
                 payload.get("eventType"),
                 payload.get("severity"),
-                payload.get("userId"),
-                payload.get("context"));
+            SensitiveDataMasker.maskIdentifier(String.valueOf(payload.get("userId"))),
+            SensitiveDataMasker.maskText(String.valueOf(payload.get("context"))));
 
         if (rabbitTemplate != null) {
             try {
