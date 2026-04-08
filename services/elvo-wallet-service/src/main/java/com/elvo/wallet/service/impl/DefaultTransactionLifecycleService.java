@@ -8,6 +8,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,16 +33,15 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
     private final TransactionRepository transactionRepository;
     private final TransactionStatusHistoryRepository transactionStatusHistoryRepository;
     private final WalletFieldEncryptionService fieldEncryptionService;
-    private final Duration expirationWindow;
+    @Value("${elvo.security.transaction-lifecycle.expiry-minutes:30}")
+    private long expiryMinutes;
 
     public DefaultTransactionLifecycleService(TransactionRepository transactionRepository,
                                               TransactionStatusHistoryRepository transactionStatusHistoryRepository,
-                                              WalletFieldEncryptionService fieldEncryptionService,
-                                              long expiryMinutes) {
+                                              WalletFieldEncryptionService fieldEncryptionService) {
         this.transactionRepository = transactionRepository;
         this.transactionStatusHistoryRepository = transactionStatusHistoryRepository;
         this.fieldEncryptionService = fieldEncryptionService;
-        this.expirationWindow = Duration.ofMinutes(expiryMinutes);
     }
 
     @Override
@@ -62,7 +62,7 @@ public class DefaultTransactionLifecycleService implements TransactionLifecycleS
             transaction.setRetryCount(0);
         }
         if (transaction.getExpiresAt() == null) {
-            transaction.setExpiresAt(now.plus(expirationWindow));
+            transaction.setExpiresAt(now.plus(Duration.ofMinutes(expiryMinutes)));
         }
 
         Transaction persisted = transactionRepository.save(transaction);

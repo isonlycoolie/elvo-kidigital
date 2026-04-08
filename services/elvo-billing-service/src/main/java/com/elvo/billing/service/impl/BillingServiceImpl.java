@@ -23,6 +23,7 @@ import com.elvo.billing.service.BillingService;
 import com.elvo.billing.service.event.BillingEventPublisher;
 import com.elvo.billing.service.orchestration.LookupFlow;
 import com.elvo.billing.service.orchestration.PaymentFlow;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +43,7 @@ public class BillingServiceImpl implements BillingService {
     private final SecurityMonitoringService securityMonitoringService;
     private final BillingFraudDetectionService billingFraudDetectionService;
 
+    @Autowired
     public BillingServiceImpl(
             PaymentFlow paymentFlow,
             LookupFlow lookupFlow,
@@ -51,17 +53,8 @@ public class BillingServiceImpl implements BillingService {
             BillingMetricsRecorder billingMetricsRecorder,
             SentryBreadcrumbLogger sentryBreadcrumbLogger,
             BillingRoleBasedAccessControl roleBasedAccessControl) {
-        this(
-                paymentFlow,
-                lookupFlow,
-                billPaymentRepository,
-                billingEventPublisher,
-                paymentAuditLogger,
-                billingMetricsRecorder,
-                sentryBreadcrumbLogger,
-                roleBasedAccessControl,
-                null,
-                null);
+        this(paymentFlow, lookupFlow, billPaymentRepository, billingEventPublisher, paymentAuditLogger,
+            billingMetricsRecorder, sentryBreadcrumbLogger, roleBasedAccessControl, null, null);
     }
 
     public BillingServiceImpl(
@@ -75,16 +68,9 @@ public class BillingServiceImpl implements BillingService {
             BillingRoleBasedAccessControl roleBasedAccessControl,
             @Nullable SecurityMonitoringService securityMonitoringService) {
         this(
-                paymentFlow,
-                lookupFlow,
-                billPaymentRepository,
-                billingEventPublisher,
-                paymentAuditLogger,
-                billingMetricsRecorder,
-                sentryBreadcrumbLogger,
-                roleBasedAccessControl,
-                securityMonitoringService,
-                null);
+            paymentFlow, lookupFlow, billPaymentRepository, billingEventPublisher, paymentAuditLogger,
+            billingMetricsRecorder, sentryBreadcrumbLogger, roleBasedAccessControl, securityMonitoringService,
+            null);
     }
 
     public BillingServiceImpl(

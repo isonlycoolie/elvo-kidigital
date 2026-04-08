@@ -31,6 +31,8 @@ com\elvo\billing\statemachine\BillingStateTransitionHandlersTest.class
 com\elvo\billing\validation\UtilityPaymentValidationBuilderTest.class
 com\elvo\billing\dto\request\AirtimePaymentTest.class
 com\elvo\billing\client\ProviderResolverTest.class
+com\elvo\billing\security\SensitiveDataMaskingSecurityTest.class
+com\elvo\billing\security\AuthorizationSecurityTest.class
 com\elvo\billing\dto\request\InternetPaymentTest.class
 com\elvo\billing\security\SessionSecurityServiceTest.class
 com\elvo\billing\statemachine\BillingTransactionStateMachineTest.class
@@ -44,6 +46,7 @@ com\elvo\billing\dto\request\HospitalPaymentTest.class
 com\elvo\billing\audit\ImmutableAuditStorageServiceUnitTest.class
 com\elvo\billing\client\CircuitBreakerBillingAdapterTest$1.class
 com\elvo\billing\entity\enums\PaymentStatusTest.class
+com\elvo\billing\security\InputValidationSecurityTest.class
 com\elvo\billing\service\orchestration\BillingTransactionOrchestratorTest.class
 com\elvo\billing\mapper\GenericResponseMapperTest.class
 com\elvo\billing\ApplicationContextTest.class
@@ -54,6 +57,8 @@ com\elvo\billing\exception\DomainExceptionsTest.class
 com\elvo\billing\security\CallbackVerificationServiceTest.class
 com\elvo\billing\repository\IdempotencyKeyRepositoryTest.class
 com\elvo\billing\client\BillingAdapterTest$1.class
+com\elvo\billing\security\ReplayProtectionSecurityTest.class
+com\elvo\billing\security\ConcurrencySecurityTest.class
 com\elvo\billing\adapter\BillingAdapterFrameworkTest.class
 com\elvo\billing\dto\request\TvSubscriptionPaymentTest.class
 com\elvo\billing\monitoring\SentrySensitiveDataMaskerTest.class

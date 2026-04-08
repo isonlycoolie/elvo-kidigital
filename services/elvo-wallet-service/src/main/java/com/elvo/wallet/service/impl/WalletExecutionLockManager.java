@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -24,6 +25,7 @@ public class WalletExecutionLockManager {
     private final Duration acquireRetryDelay;
     private final DefaultRedisScript<Long> releaseScript;
 
+    @Autowired
     public WalletExecutionLockManager(
             ObjectProvider<StringRedisTemplate> redisTemplateProvider,
             @Value("${elvo.security.locking.distributed.enabled:true}") boolean distributedLockingEnabled,

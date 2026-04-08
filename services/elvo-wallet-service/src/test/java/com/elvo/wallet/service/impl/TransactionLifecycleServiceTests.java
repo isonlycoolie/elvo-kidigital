@@ -43,7 +43,7 @@ class TransactionLifecycleServiceTests {
     @BeforeEach
     void setUp() {
         lenient().when(fieldEncryptionService.encrypt(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        service = new DefaultTransactionLifecycleService(transactionRepository, historyRepository, fieldEncryptionService, 30);
+        service = new DefaultTransactionLifecycleService(transactionRepository, historyRepository, fieldEncryptionService);
     }
 
     @Test

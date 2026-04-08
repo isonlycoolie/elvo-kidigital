@@ -11,6 +11,9 @@ FROM eclipse-temurin:17-jre
 WORKDIR /app
 
 # Run as non-root for better container security posture
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends curl \
+	&& rm -rf /var/lib/apt/lists/*
 RUN addgroup --system elvo && adduser --system --ingroup elvo elvo
 
 COPY --from=build /workspace/app.jar /app/app.jar

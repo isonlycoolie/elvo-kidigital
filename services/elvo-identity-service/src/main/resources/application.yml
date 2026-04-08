@@ -173,6 +173,19 @@ spring:
 spring:
   config:
     activate:
+      on-profile: local
+  jpa:
+    show-sql: false
+
+management:
+  health:
+    mail:
+      enabled: false
+
+---
+spring:
+  config:
+    activate:
       on-profile: prod
   jpa:
     show-sql: false
