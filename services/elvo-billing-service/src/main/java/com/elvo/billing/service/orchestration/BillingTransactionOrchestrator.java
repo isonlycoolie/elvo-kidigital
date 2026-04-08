@@ -5,6 +5,7 @@ import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.service.BillingTransactionService;
 import com.elvo.billing.service.impl.InternalEventIdempotencyService;
+import com.elvo.billing.security.BillingInternalEventInputValidator;
 import com.elvo.billing.security.BillingServiceAuthorizationMatrix;
 import com.elvo.billing.security.InternalServiceMessageAuthenticator;
 import org.slf4j.Logger;
@@ -28,16 +29,19 @@ public class BillingTransactionOrchestrator {
     private final BillingTransactionService billingTransactionService;
     private final BillingServiceAuthorizationMatrix authorizationMatrix;
     private final InternalEventIdempotencyService internalEventIdempotencyService;
+    private final BillingInternalEventInputValidator inputValidator;
 
     public BillingTransactionOrchestrator(
             BillPaymentRepository billPaymentRepository,
             BillingTransactionService billingTransactionService,
             BillingServiceAuthorizationMatrix authorizationMatrix,
-            InternalEventIdempotencyService internalEventIdempotencyService) {
+            InternalEventIdempotencyService internalEventIdempotencyService,
+            BillingInternalEventInputValidator inputValidator) {
         this.billPaymentRepository = billPaymentRepository;
         this.billingTransactionService = billingTransactionService;
         this.authorizationMatrix = authorizationMatrix;
         this.internalEventIdempotencyService = internalEventIdempotencyService;
+        this.inputValidator = inputValidator;
     }
 
     @RabbitListener(queues = "${elvo.messaging.wallet.completed-queue:wallet.transaction.completed.queue}")
@@ -53,6 +57,10 @@ public class BillingTransactionOrchestrator {
         }
         if (!InternalServiceMessageAuthenticator.isReplaySafe(event)) {
             LOG.warn("billing_orchestrator_skip_complete reason=replay_validation_failed");
+            return;
+        }
+        if (!inputValidator.isValidWalletCompletedEvent(event)) {
+            LOG.warn("billing_orchestrator_skip_complete reason=invalid_event_payload");
             return;
         }
 
@@ -101,6 +109,10 @@ public class BillingTransactionOrchestrator {
         }
         if (!InternalServiceMessageAuthenticator.isReplaySafe(event)) {
             LOG.warn("billing_orchestrator_skip_reverse reason=replay_validation_failed");
+            return;
+        }
+        if (!inputValidator.isValidWalletFailedEvent(event)) {
+            LOG.warn("billing_orchestrator_skip_reverse reason=invalid_event_payload");
             return;
         }
 

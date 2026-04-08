@@ -9,6 +9,7 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
 import com.elvo.wallet.security.InternalServiceMessageAuthenticator;
+import com.elvo.wallet.security.WalletInternalEventInputValidator;
 import com.elvo.wallet.service.impl.InternalEventIdempotencyService;
 import com.elvo.wallet.service.WalletTransactionService;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -21,11 +22,14 @@ public class WalletTransactionOrchestrator {
 
     private final WalletTransactionService walletTransactionService;
     private final InternalEventIdempotencyService internalEventIdempotencyService;
+    private final WalletInternalEventInputValidator inputValidator;
 
     public WalletTransactionOrchestrator(WalletTransactionService walletTransactionService,
-                                         InternalEventIdempotencyService internalEventIdempotencyService) {
+                                         InternalEventIdempotencyService internalEventIdempotencyService,
+                                         WalletInternalEventInputValidator inputValidator) {
         this.walletTransactionService = walletTransactionService;
         this.internalEventIdempotencyService = internalEventIdempotencyService;
+        this.inputValidator = inputValidator;
     }
 
     @RabbitListener(queues = "${elvo.messaging.billing.completed-queue:billing.transaction.completed.queue}")
@@ -36,6 +40,10 @@ public class WalletTransactionOrchestrator {
         }
         if (!InternalServiceMessageAuthenticator.isReplaySafe(event)) {
             LOG.warn("wallet_orchestrator_skip_commit reason=replay_validation_failed");
+            return;
+        }
+        if (!inputValidator.isValidBillingCompletedEvent(event)) {
+            LOG.warn("wallet_orchestrator_skip_commit reason=invalid_event_payload");
             return;
         }
 
@@ -75,6 +83,10 @@ public class WalletTransactionOrchestrator {
         }
         if (!InternalServiceMessageAuthenticator.isReplaySafe(event)) {
             LOG.warn("wallet_orchestrator_skip_rollback reason=replay_validation_failed");
+            return;
+        }
+        if (!inputValidator.isValidBillingReversedEvent(event)) {
+            LOG.warn("wallet_orchestrator_skip_rollback reason=invalid_event_payload");
             return;
         }
 

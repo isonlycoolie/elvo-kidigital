@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.HashMap;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
@@ -19,6 +20,7 @@ import com.elvo.wallet.service.WalletTransactionService;
 import com.elvo.wallet.service.impl.InternalEventIdempotencyService;
 import com.elvo.wallet.service.model.WalletFlowResult;
 import com.elvo.wallet.security.InternalServiceMessageAuthenticator;
+import com.elvo.wallet.security.WalletInternalEventInputValidator;
 
 @ExtendWith(MockitoExtension.class)
 class WalletTransactionOrchestratorTest {
@@ -29,11 +31,14 @@ class WalletTransactionOrchestratorTest {
         @Mock
         private InternalEventIdempotencyService internalEventIdempotencyService;
 
+        private final WalletInternalEventInputValidator inputValidator = new WalletInternalEventInputValidator();
+
     @Test
     void shouldCommitFundsOnBillingCompletedEvent() {
         WalletTransactionOrchestrator orchestrator = new WalletTransactionOrchestrator(
                 walletTransactionService,
-                internalEventIdempotencyService);
+                internalEventIdempotencyService,
+                inputValidator);
         UUID reservationId = UUID.randomUUID();
 
         when(walletTransactionService.commitFunds(eq(reservationId), eq("idem-1"))).thenReturn(
@@ -49,7 +54,8 @@ class WalletTransactionOrchestratorTest {
     void shouldRollbackFundsOnBillingReversedEvent() {
         WalletTransactionOrchestrator orchestrator = new WalletTransactionOrchestrator(
                 walletTransactionService,
-                internalEventIdempotencyService);
+                internalEventIdempotencyService,
+                inputValidator);
         UUID reservationId = UUID.randomUUID();
 
         when(walletTransactionService.rollbackFunds(eq(reservationId), eq("idem-2"))).thenReturn(
@@ -65,7 +71,8 @@ class WalletTransactionOrchestratorTest {
     void shouldRejectUnsignedBillingEvent() {
         WalletTransactionOrchestrator orchestrator = new WalletTransactionOrchestrator(
                 walletTransactionService,
-                internalEventIdempotencyService);
+                internalEventIdempotencyService,
+                inputValidator);
 
         orchestrator.onBillingCompleted(Map.of(
                 "sourceService", "elvo-billing-service",
@@ -78,7 +85,8 @@ class WalletTransactionOrchestratorTest {
     void shouldIgnoreDuplicateBillingCompletedEvent() {
         WalletTransactionOrchestrator orchestrator = new WalletTransactionOrchestrator(
                 walletTransactionService,
-                internalEventIdempotencyService);
+                internalEventIdempotencyService,
+                inputValidator);
         UUID reservationId = UUID.randomUUID();
 
         when(walletTransactionService.commitFunds(eq(reservationId), eq("idem-dup"))).thenReturn(
@@ -93,6 +101,37 @@ class WalletTransactionOrchestratorTest {
 
         verify(walletTransactionService).commitFunds(eq(reservationId), eq("idem-dup"));
     }
+
+        @Test
+        void shouldRejectBillingEventWithUnknownPayloadField() {
+                WalletTransactionOrchestrator orchestrator = new WalletTransactionOrchestrator(
+                                walletTransactionService,
+                                internalEventIdempotencyService,
+                                inputValidator);
+                UUID reservationId = UUID.randomUUID();
+                Map<String, Object> payload = new HashMap<>();
+                payload.put("reservationId", reservationId.toString());
+                payload.put("idempotencyKey", "idem-bad");
+                payload.put("unexpected", "not-allowed");
+                Instant occurredAt = Instant.now();
+
+                Map<String, Object> event = InternalServiceMessageAuthenticator.signEvent(
+                                "elvo-billing-service",
+                                Map.of(
+                                                "eventType", "billing.transaction.completed",
+                                                "version", "v1",
+                                                "requestId", "req-invalid",
+                                                "messageId", UUID.randomUUID().toString(),
+                                                "nonce", UUID.randomUUID().toString(),
+                                                "occurredAt", occurredAt.toString(),
+                                                "expiresAt", occurredAt.plus(5, ChronoUnit.MINUTES).toString(),
+                                                "correlationId", "corr-invalid",
+                                                "payload", payload));
+
+                orchestrator.onBillingCompleted(event);
+
+                verify(walletTransactionService, org.mockito.Mockito.never()).commitFunds(any(), any());
+        }
 
     private Map<String, Object> signedEvent(String eventType, UUID reservationId, String idempotencyKey) {
         Instant occurredAt = Instant.now();
