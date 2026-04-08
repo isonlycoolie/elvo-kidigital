@@ -2,10 +2,12 @@ services:
   identity-db:
     image: postgres:16-alpine
     container_name: identity-db
+    hostname: identity-db
     environment:
       POSTGRES_DB: ${IDENTITY_DB_NAME:-identity_db}
       POSTGRES_USER: ${IDENTITY_DB_USER:-identity_user}
       POSTGRES_PASSWORD: ${IDENTITY_DB_PASSWORD:-identity_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     expose:
       - "5432"
     volumes:
@@ -22,10 +24,12 @@ services:
   wallet-db:
     image: postgres:16-alpine
     container_name: wallet-db
+    hostname: wallet-db
     environment:
       POSTGRES_DB: ${WALLET_DB_NAME:-wallet_db}
       POSTGRES_USER: ${WALLET_DB_USER:-wallet_user}
       POSTGRES_PASSWORD: ${WALLET_DB_PASSWORD:-wallet_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     expose:
       - "5432"
     volumes:
@@ -42,10 +46,12 @@ services:
   billing-db:
     image: postgres:16-alpine
     container_name: billing-db
+    hostname: billing-db
     environment:
       POSTGRES_DB: ${BILLING_DB_NAME:-billing_db}
       POSTGRES_USER: ${BILLING_DB_USER:-billing_user}
       POSTGRES_PASSWORD: ${BILLING_DB_PASSWORD:-billing_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     expose:
       - "5432"
     volumes:
