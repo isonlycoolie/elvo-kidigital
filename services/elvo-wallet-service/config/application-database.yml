@@ -1,9 +1,12 @@
 spring:
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/elvo_wallet}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/elvo_wallet?sslmode=require}
     username: ${DB_USER:${ELVO_DB_USER:elvo}}
     password: ${DB_PASS:${ELVO_DB_PASSWORD:elvo}}
     hikari:
+      data-source-properties:
+        ssl: ${ELVO_DB_SSL_ENABLED:true}
+        sslmode: ${ELVO_DB_SSL_MODE:require}
       maximum-pool-size: ${ELVO_DB_POOL_MAX:20}
       minimum-idle: ${ELVO_DB_POOL_MIN:5}
       connection-timeout: ${ELVO_DB_CONNECTION_TIMEOUT_MS:30000}

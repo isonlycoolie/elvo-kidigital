@@ -1,7 +1,11 @@
 spring:
   rabbitmq:
     addresses: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672}
+    ssl:
+      enabled: ${RABBITMQ_SSL_ENABLED:true}
   data:
     redis:
       url: ${REDIS_URL:redis://localhost:6379}
       timeout: ${ELVO_REDIS_TIMEOUT_MS:5000}
+      ssl:
+        enabled: ${ELVO_REDIS_SSL_ENABLED:true}
