@@ -102,6 +102,7 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\m
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\security\SecurityConfig.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\security\SecurityHashingService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\security\SecurityLibHashingService.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\security\SensitiveDataMasker.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\security\TokenRevocationChecker.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\security\TokenRevocationService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\service\EacManagementService.java

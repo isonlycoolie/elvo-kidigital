@@ -10,6 +10,7 @@ com\elvo\wallet\security\AmlCaseWorkflowService.class
 com\elvo\wallet\security\WalletFraudVelocityService$Operation.class
 com\elvo\wallet\dto\response\FlowResultResponseDto.class
 com\elvo\wallet\security\WalletBruteForceGuardService.class
+com\elvo\wallet\security\WalletInternalEventInputValidator.class
 com\elvo\wallet\security\MobileMoneyCallbackSecurityService.class
 com\elvo\wallet\service\impl\WalletServiceImpl$Operation.class
 com\elvo\wallet\ElvoWalletServiceApplication.class
@@ -31,6 +32,7 @@ com\elvo\wallet\service\model\TransferCommand.class
 com\elvo\wallet\messaging\outbox\WalletOutboxService$OutboxEvent.class
 com\elvo\wallet\security\StepUpAuthenticationService.class
 com\elvo\wallet\dto\response\BalanceResponseDto.class
+com\elvo\wallet\service\WalletTransactionService.class
 com\elvo\wallet\controller\AdminFraudController.class
 com\elvo\wallet\statemachine\WalletEventSubscriber.class
 com\elvo\wallet\security\DeviceLocationRiskService.class
@@ -46,6 +48,7 @@ com\elvo\wallet\service\DepositFlowService.class
 com\elvo\wallet\service\impl\LedgerSnapshotService.class
 com\elvo\wallet\security\SanctionsScreeningService$ScreeningDecision.class
 com\elvo\wallet\controller\HealthController.class
+com\elvo\wallet\security\WalletReservationStateTransitionValidator.class
 com\elvo\wallet\entity\Reservation$ReservationStatus.class
 com\elvo\wallet\security\InternalServiceAuthorizationMatrix$EndpointRule.class
 com\elvo\wallet\security\SanctionsScreeningService$Snapshot.class
@@ -100,10 +103,12 @@ com\elvo\wallet\service\TransactionLifecycleService.class
 com\elvo\wallet\service\impl\DefaultReservationFlowService.class
 com\elvo\wallet\monitoring\WalletMetricsRecorder.class
 com\elvo\wallet\dto\event\package-info.class
+com\elvo\wallet\security\InternalServiceMessageAuthenticator$MessageDigestHelper.class
 com\elvo\wallet\messaging\consumer\package-info.class
 com\elvo\wallet\dto\response\AuditEventResponseDto.class
 com\elvo\wallet\exception\ErrorResponseDto.class
 com\elvo\wallet\exception\ValidationErrorResponseDto.class
+com\elvo\wallet\security\InternalServiceMessageAuthenticator.class
 com\elvo\wallet\repository\EtcRepositoryCustom.class
 com\elvo\wallet\security\UserJwtAuthenticationFilter.class
 com\elvo\wallet\monitoring\DisasterRecoveryValidationService.class
@@ -112,6 +117,7 @@ com\elvo\wallet\security\UserJwtPrincipal.class
 com\elvo\wallet\client\IdentityClientProperties.class
 com\elvo\wallet\security\WalletBruteForceAuthenticationEntryPoint.class
 com\elvo\wallet\security\TransactionChallengeReplayProtectionService.class
+com\elvo\wallet\service\orchestration\WalletTransactionOrchestrator.class
 com\elvo\wallet\dto\response\EtcResponseDto.class
 com\elvo\wallet\service\impl\WalletLedgerIntegrationService.class
 com\elvo\wallet\security\AmlCaseWorkflowService$CaseStatus.class
@@ -125,6 +131,7 @@ com\elvo\wallet\mapper\package-info.class
 com\elvo\wallet\config\InfrastructurePlaceholdersConfig.class
 com\elvo\wallet\security\WalletOperationRateLimitService$RateLimitResult.class
 com\elvo\wallet\service\impl\DefaultEtcFlowService.class
+com\elvo\wallet\service\impl\InternalEventIdempotencyService.class
 com\elvo\wallet\service\model\DepositCommand.class
 com\elvo\wallet\dto\request\AmlCaseResolutionRequestDto.class
 com\elvo\wallet\security\SanctionsScreeningService.class
@@ -141,13 +148,16 @@ com\elvo\wallet\dto\response\package-info.class
 com\elvo\wallet\security\WalletOperationRateLimitService$Dimension.class
 com\elvo\wallet\util\package-info.class
 com\elvo\wallet\exception\GlobalExceptionHandler.class
+com\elvo\wallet\entity\ProcessedInternalEvent.class
 com\elvo\wallet\security\EtcCodeSecurityService.class
+com\elvo\wallet\security\WalletPrivilegedAccessControlService.class
 com\elvo\wallet\entity\TransactionStatusHistory.class
 com\elvo\wallet\security\WalletClientKeyResolver.class
 com\elvo\wallet\security\WalletFraudVelocityService.class
 com\elvo\wallet\messaging\producer\WalletEventPublisher.class
 com\elvo\wallet\service\ReservationFlowService.class
 com\elvo\wallet\service\impl\WalletLimitEnforcementService.class
+com\elvo\wallet\repository\ProcessedInternalEventRepository.class
 com\elvo\wallet\service\impl\WalletLimitEnforcementService$FlowType.class
 com\elvo\wallet\repository\EtcRepository.class
 com\elvo\wallet\security\AmlCaseWorkflowService$AmlCase.class
@@ -175,6 +185,7 @@ com\elvo\wallet\entity\Wallet$WalletStatus.class
 com\elvo\wallet\exception\ApiResponse.class
 com\elvo\wallet\dto\request\ReservationRequestDto.class
 com\elvo\wallet\messaging\producer\package-info.class
+com\elvo\wallet\security\SensitiveDataMasker.class
 com\elvo\wallet\exception\IdempotencyReplayDetectedException.class
 com\elvo\wallet\dto\request\InternalReservationActionRequestDto.class
 com\elvo\wallet\dto\request\MakerCheckerDecisionRequestDto.class
@@ -192,6 +203,7 @@ com\elvo\wallet\service\impl\DefaultWalletLifecycleService.class
 com\elvo\wallet\security\IdentityJwksKeyResolver$JwksDocument.class
 com\elvo\wallet\repository\package-info.class
 com\elvo\wallet\config\CorrelationIdFilter.class
+com\elvo\wallet\service\impl\DefaultWalletTransactionService.class
 com\elvo\wallet\statemachine\WalletCompensationHandler.class
 com\elvo\wallet\security\InternalServiceJwtProperties.class
 com\elvo\wallet\dto\response\LimitsResponseDto.class
@@ -209,6 +221,7 @@ com\elvo\wallet\service\impl\MobileCallbackReconciliationService.class
 com\elvo\wallet\service\model\WithdrawalCommand.class
 com\elvo\wallet\dto\request\TransferRequestDto.class
 com\elvo\wallet\monitoring\SecurityAlertStreamingService.class
+com\elvo\wallet\security\WalletSecurityConfigurationValidator.class
 com\elvo\wallet\statemachine\WalletStateTransitionHandlers.class
 com\elvo\wallet\service\EacReplayProtectionService.class
 com\elvo\wallet\statemachine\WalletRetryMechanism.class

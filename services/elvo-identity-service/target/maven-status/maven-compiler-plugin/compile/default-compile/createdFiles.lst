@@ -108,6 +108,7 @@ com\elvo\identity\config\package-info.class
 com\elvo\identity\dto\request\VerifyOtpRequest.class
 com\elvo\identity\service\VerificationTokenService.class
 com\elvo\identity\controller\FastLoginController.class
+com\elvo\identity\security\SensitiveDataMasker.class
 com\elvo\identity\util\TokenService$TokenPayload.class
 com\elvo\identity\security\SecurityConfig.class
 com\elvo\identity\dto\response\EspGenerateResponse.class
