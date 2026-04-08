@@ -4,6 +4,8 @@ import com.elvo.billing.entity.BillPayment;
 import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.service.BillingTransactionService;
+import com.elvo.billing.security.BillingServiceAuthorizationMatrix;
+import com.elvo.billing.security.InternalServiceMessageAuthenticator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -17,19 +19,35 @@ import java.util.UUID;
 public class BillingTransactionOrchestrator {
 
     private static final Logger LOG = LoggerFactory.getLogger(BillingTransactionOrchestrator.class);
+    private static final String EXPECTED_SOURCE_SERVICE = "elvo-wallet-service";
+    private static final String COMPLETED_QUEUE = "wallet.transaction.completed.queue";
+    private static final String FAILED_QUEUE = "wallet.transaction.failed.queue";
 
     private final BillPaymentRepository billPaymentRepository;
     private final BillingTransactionService billingTransactionService;
+    private final BillingServiceAuthorizationMatrix authorizationMatrix;
 
     public BillingTransactionOrchestrator(
             BillPaymentRepository billPaymentRepository,
-            BillingTransactionService billingTransactionService) {
+            BillingTransactionService billingTransactionService,
+            BillingServiceAuthorizationMatrix authorizationMatrix) {
         this.billPaymentRepository = billPaymentRepository;
         this.billingTransactionService = billingTransactionService;
+        this.authorizationMatrix = authorizationMatrix;
     }
 
     @RabbitListener(queues = "${elvo.messaging.wallet.completed-queue:wallet.transaction.completed.queue}")
     public void onWalletCompleted(Map<String, Object> event) {
+        if (!authorizationMatrix.isAllowed("wallet-service", "CONSUME", COMPLETED_QUEUE)) {
+            LOG.warn("billing_orchestrator_skip_complete reason=queue_not_authorized");
+            return;
+        }
+
+        if (!InternalServiceMessageAuthenticator.isTrusted(event, EXPECTED_SOURCE_SERVICE)) {
+            LOG.warn("billing_orchestrator_skip_complete reason=invalid_service_token");
+            return;
+        }
+
         UUID paymentId = resolvePaymentId(event);
         if (paymentId == null) {
             LOG.warn("billing_orchestrator_skip_complete reason=missing_payment_id");
@@ -50,6 +68,16 @@ public class BillingTransactionOrchestrator {
 
     @RabbitListener(queues = "${elvo.messaging.wallet.failed-queue:wallet.transaction.failed.queue}")
     public void onWalletFailed(Map<String, Object> event) {
+        if (!authorizationMatrix.isAllowed("wallet-service", "CONSUME", FAILED_QUEUE)) {
+            LOG.warn("billing_orchestrator_skip_reverse reason=queue_not_authorized");
+            return;
+        }
+
+        if (!InternalServiceMessageAuthenticator.isTrusted(event, EXPECTED_SOURCE_SERVICE)) {
+            LOG.warn("billing_orchestrator_skip_reverse reason=invalid_service_token");
+            return;
+        }
+
         UUID paymentId = resolvePaymentId(event);
         if (paymentId == null) {
             LOG.warn("billing_orchestrator_skip_reverse reason=missing_payment_id");
