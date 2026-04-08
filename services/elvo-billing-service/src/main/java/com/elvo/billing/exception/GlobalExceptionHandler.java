@@ -48,6 +48,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("DUPLICATE_PAYMENT", SensitiveDataMasker.maskText(ex.getMessage())));
     }
 
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRateLimitExceeded(RateLimitExceededException ex) {
+        sentryExceptionMapper.capture(ex, "RATE_LIMIT_EXCEEDED");
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(ApiResponse.error("RATE_LIMIT_EXCEEDED", "Too many requests"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex) {
         sentryExceptionMapper.capture(ex, "INTERNAL_ERROR");

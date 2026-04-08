@@ -5,13 +5,17 @@ import java.util.UUID;
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
 import com.elvo.billing.dto.response.LookupResponseDto;
 import com.elvo.billing.dto.response.PaymentResponseDto;
+import com.elvo.billing.exception.RateLimitExceededException;
+import com.elvo.billing.security.BillingOperationRateLimitService;
 import com.elvo.billing.service.BillingService;
 import io.sentry.ITransaction;
 import io.sentry.Sentry;
 import io.sentry.SpanStatus;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,9 +29,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class BillPaymentController {
 
     private final BillingService billingService;
+    private BillingOperationRateLimitService operationRateLimitService;
 
     public BillPaymentController(BillingService billingService) {
         this.billingService = billingService;
+    }
+
+    @Autowired(required = false)
+    void setOperationRateLimitService(@Nullable BillingOperationRateLimitService operationRateLimitService) {
+        this.operationRateLimitService = operationRateLimitService;
     }
 
     @PostMapping
@@ -39,6 +49,11 @@ public class BillPaymentController {
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
         }
+
+        enforceRateLimit(
+                BillingOperationRateLimitService.Operation.CREATE_PAYMENT,
+                correlationId,
+                request == null ? null : request.getReferenceNumber());
 
         try {
             PaymentResponseDto response = billingService.executePayment(request);
@@ -95,6 +110,11 @@ public class BillPaymentController {
             correlationId = UUID.randomUUID().toString();
         }
 
+        enforceRateLimit(
+                BillingOperationRateLimitService.Operation.LOOKUP_PAYMENT,
+                correlationId,
+                request == null ? null : request.getReferenceNumber());
+
         try {
             LookupResponseDto response = billingService.lookupPayment(request);
             transaction.setStatus(SpanStatus.OK);
@@ -105,6 +125,16 @@ public class BillPaymentController {
             throw ex;
         } finally {
             transaction.finish();
+        }
+    }
+
+    private void enforceRateLimit(BillingOperationRateLimitService.Operation operation, String primaryKey, String secondaryKey) {
+        if (operationRateLimitService == null) {
+            return;
+        }
+        BillingOperationRateLimitService.RateLimitResult result = operationRateLimitService.enforce(operation, primaryKey, secondaryKey);
+        if (!result.allowed()) {
+            throw new RateLimitExceededException(result.reason());
         }
     }
 }

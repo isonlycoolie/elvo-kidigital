@@ -7,6 +7,7 @@ import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.service.BillingTransactionService;
 import com.elvo.billing.service.impl.InternalEventIdempotencyService;
 import com.elvo.billing.security.BillingInternalEventInputValidator;
+import com.elvo.billing.security.BillingOperationRateLimitService;
 import com.elvo.billing.security.BillingPaymentStateTransitionValidator;
 import com.elvo.billing.security.BillingServiceAuthorizationMatrix;
 import com.elvo.billing.security.InternalServiceMessageAuthenticator;
@@ -36,6 +37,7 @@ public class BillingTransactionOrchestrator {
     private final BillingInternalEventInputValidator inputValidator;
     private final BillingPaymentStateTransitionValidator stateTransitionValidator;
     private final SecurityMonitoringService securityMonitoringService;
+    private final BillingOperationRateLimitService operationRateLimitService;
 
     public BillingTransactionOrchestrator(
             BillPaymentRepository billPaymentRepository,
@@ -51,6 +53,7 @@ public class BillingTransactionOrchestrator {
                 internalEventIdempotencyService,
                 inputValidator,
                 stateTransitionValidator,
+                null,
                 null);
     }
 
@@ -62,6 +65,26 @@ public class BillingTransactionOrchestrator {
             BillingInternalEventInputValidator inputValidator,
             BillingPaymentStateTransitionValidator stateTransitionValidator,
             @Nullable SecurityMonitoringService securityMonitoringService) {
+        this(
+                billPaymentRepository,
+                billingTransactionService,
+                authorizationMatrix,
+                internalEventIdempotencyService,
+                inputValidator,
+                stateTransitionValidator,
+                securityMonitoringService,
+                null);
+    }
+
+    public BillingTransactionOrchestrator(
+            BillPaymentRepository billPaymentRepository,
+            BillingTransactionService billingTransactionService,
+            BillingServiceAuthorizationMatrix authorizationMatrix,
+            InternalEventIdempotencyService internalEventIdempotencyService,
+            BillingInternalEventInputValidator inputValidator,
+            BillingPaymentStateTransitionValidator stateTransitionValidator,
+            @Nullable SecurityMonitoringService securityMonitoringService,
+            @Nullable BillingOperationRateLimitService operationRateLimitService) {
         this.billPaymentRepository = billPaymentRepository;
         this.billingTransactionService = billingTransactionService;
         this.authorizationMatrix = authorizationMatrix;
@@ -69,6 +92,7 @@ public class BillingTransactionOrchestrator {
         this.inputValidator = inputValidator;
         this.stateTransitionValidator = stateTransitionValidator;
         this.securityMonitoringService = securityMonitoringService;
+        this.operationRateLimitService = operationRateLimitService;
     }
 
     @RabbitListener(queues = "${elvo.messaging.wallet.completed-queue:wallet.transaction.completed.queue}")
@@ -93,6 +117,10 @@ public class BillingTransactionOrchestrator {
         if (!inputValidator.isValidWalletCompletedEvent(event)) {
             LOG.warn("billing_orchestrator_skip_complete reason=invalid_event_payload");
             monitorSuspicious("billing.security.invalid_event_payload", "invalid_event_payload", COMPLETED_QUEUE, rootValue(event, "eventType"));
+            return;
+        }
+        if (!enforceEventRateLimit(event, "wallet.transaction.completed")) {
+            LOG.warn("billing_orchestrator_skip_complete reason=rate_limited");
             return;
         }
 
@@ -157,6 +185,10 @@ public class BillingTransactionOrchestrator {
         if (!inputValidator.isValidWalletFailedEvent(event)) {
             LOG.warn("billing_orchestrator_skip_reverse reason=invalid_event_payload");
             monitorSuspicious("billing.security.invalid_event_payload", "invalid_event_payload", FAILED_QUEUE, rootValue(event, "eventType"));
+            return;
+        }
+        if (!enforceEventRateLimit(event, "wallet.transaction.failed")) {
+            LOG.warn("billing_orchestrator_skip_reverse reason=rate_limited");
             return;
         }
 
@@ -262,5 +294,20 @@ public class BillingTransactionOrchestrator {
                     "queue", queue == null ? "unknown" : queue,
                     "eventRef", eventRef == null ? "unknown" : eventRef));
         }
+    }
+
+    private boolean enforceEventRateLimit(Map<String, Object> event, String fallbackType) {
+        if (operationRateLimitService == null) {
+            return true;
+        }
+        BillingOperationRateLimitService.RateLimitResult result = operationRateLimitService.enforce(
+                BillingOperationRateLimitService.Operation.WALLET_EVENT_CONSUME,
+                rootValue(event, "eventType") == null ? fallbackType : rootValue(event, "eventType"),
+                rootValue(event, InternalServiceMessageAuthenticator.MESSAGE_ID_FIELD));
+        if (!result.allowed()) {
+            monitorSuspicious("billing.security.event_rate_limit_exceeded", "rate_limit_exceeded", fallbackType, rootValue(event, InternalServiceMessageAuthenticator.MESSAGE_ID_FIELD));
+            return false;
+        }
+        return true;
     }
 }
