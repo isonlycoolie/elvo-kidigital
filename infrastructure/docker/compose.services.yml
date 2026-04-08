@@ -27,6 +27,7 @@ services:
       rabbitmq:
         condition: service_healthy
     networks:
+      - frontend-network
       - backend-network
 
   elvo-wallet-service:
@@ -59,6 +60,7 @@ services:
       elvo-identity-service:
         condition: service_started
     networks:
+      - frontend-network
       - backend-network
 
   elvo-billing-service:
@@ -91,4 +93,5 @@ services:
       elvo-wallet-service:
         condition: service_started
     networks:
+      - frontend-network
       - backend-network
