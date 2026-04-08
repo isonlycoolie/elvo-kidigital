@@ -42,7 +42,7 @@ logging:
     root: ${ELVO_LOG_LEVEL_ROOT:INFO}
     com.elvo.wallet: ${ELVO_LOG_LEVEL_APP:INFO}
   pattern:
-    level: "%5p [corr:%X{correlationId}]"
+    level: "%5p [req:%X{requestId}] [corr:%X{correlationId}] [idem:%X{idempotencyKey}]"
 
 sentry:
   dsn: ${SENTRY_DSN:}
@@ -86,6 +86,7 @@ elvo:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:wallet-service}
   security:
+    internal-service-secret: ${ELVO_INTERNAL_SERVICE_SECRET:sm://elvo-internal-service-secret}
     jwt:
       secret: ${ELVO_JWT_SECRET_REF:sm://wallet-user-jwt-secret}
       issuer: ${ELVO_JWT_ISSUER:elvo-identity-service-${spring.profiles.active:dev}}

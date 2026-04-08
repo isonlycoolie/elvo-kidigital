@@ -1,18 +1,21 @@
 package com.elvo.billing.service.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.Mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -60,6 +63,11 @@ class BillingServiceImplTest {
     @Mock
     private BillingRoleBasedAccessControl roleBasedAccessControl;
 
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
     @Test
     void shouldReversePaymentUsingLockedReferenceAndPublishCompensationEvent() {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
@@ -68,10 +76,10 @@ class BillingServiceImplTest {
                 java.util.List.of(new SimpleGrantedAuthority("ROLE_OPERATIONS_ADMIN"))));
 
         BillingServiceImpl service = new BillingServiceImpl(
-            paymentFlow,
-            lookupFlow,
-            billPaymentRepository,
-            billingEventPublisher,
+                paymentFlow,
+                lookupFlow,
+                billPaymentRepository,
+                billingEventPublisher,
                 paymentAuditLogger,
                 billingMetricsRecorder,
                 sentryBreadcrumbLogger,
@@ -99,15 +107,14 @@ class BillingServiceImplTest {
         verify(billingEventPublisher).publish(eq("billing.payment.reversed"), eq("REQ-REV-1"), eq(response.getMetadata()), eq("v1"));
         verify(billingMetricsRecorder).recordPendingPayments(3L);
         verify(roleBasedAccessControl).authorize(com.elvo.billing.security.BillingSensitivePermission.PAYMENT_REVERSE);
-        SecurityContextHolder.clearContext();
     }
 
     @Test
     void shouldRejectReverseWhenPaymentIsNotSuccessful() {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-            "ops-admin",
-            "N/A",
-            java.util.List.of(new SimpleGrantedAuthority("ROLE_OPERATIONS_ADMIN"))));
+                "ops-admin",
+                "N/A",
+                java.util.List.of(new SimpleGrantedAuthority("ROLE_OPERATIONS_ADMIN"))));
 
         BillingServiceImpl service = new BillingServiceImpl(
                 paymentFlow,
@@ -116,8 +123,8 @@ class BillingServiceImplTest {
                 billingEventPublisher,
                 paymentAuditLogger,
                 billingMetricsRecorder,
-            sentryBreadcrumbLogger,
-            roleBasedAccessControl);
+                sentryBreadcrumbLogger,
+                roleBasedAccessControl);
 
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("REF-REV-2");
@@ -139,41 +146,39 @@ class BillingServiceImplTest {
         verify(billingEventPublisher, never()).publish(
                 eq("billing.payment.reversed"),
                 eq("REQ-REV-2"),
-                org.mockito.ArgumentMatchers.anyString(),
+                any(),
                 eq("v1"));
         verify(roleBasedAccessControl).authorize(com.elvo.billing.security.BillingSensitivePermission.PAYMENT_REVERSE);
-        SecurityContextHolder.clearContext();
-        }
+    }
 
-        @Test
-        void shouldRejectReverseWhenRbacDeniesPermission() {
+    @Test
+    void shouldRejectReverseWhenRbacDeniesPermission() {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-            "billing-user",
-            "N/A",
-            java.util.List.of(new SimpleGrantedAuthority("ROLE_BILLING_USER"))));
+                "billing-user",
+                "N/A",
+                java.util.List.of(new SimpleGrantedAuthority("ROLE_BILLING_USER"))));
 
         BillingServiceImpl service = new BillingServiceImpl(
-            paymentFlow,
-            lookupFlow,
-            billPaymentRepository,
-            billingEventPublisher,
-            paymentAuditLogger,
-            billingMetricsRecorder,
-            sentryBreadcrumbLogger,
-            roleBasedAccessControl);
+                paymentFlow,
+                lookupFlow,
+                billPaymentRepository,
+                billingEventPublisher,
+                paymentAuditLogger,
+                billingMetricsRecorder,
+                sentryBreadcrumbLogger,
+                roleBasedAccessControl);
 
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("REF-RBAC-1");
 
         org.mockito.Mockito.doThrow(new AccessDeniedException("RBAC denied"))
-            .when(roleBasedAccessControl)
-            .authorize(com.elvo.billing.security.BillingSensitivePermission.PAYMENT_REVERSE);
+                .when(roleBasedAccessControl)
+                .authorize(com.elvo.billing.security.BillingSensitivePermission.PAYMENT_REVERSE);
 
         assertThatThrownBy(() -> service.reversePayment(request))
-            .isInstanceOf(AccessDeniedException.class)
-            .hasMessageContaining("RBAC denied");
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("RBAC denied");
 
         verify(billPaymentRepository, never()).getPaymentByReferenceWithLock("REF-RBAC-1");
-        SecurityContextHolder.clearContext();
     }
 }

@@ -10,6 +10,9 @@ spring:
     username: ${ELVO_DB_USER:elvo}
     password: ${ELVO_DB_PASSWORD:elvo}
     hikari:
+      data-source-properties:
+        ssl: ${ELVO_DB_SSL_ENABLED:true}
+        sslmode: ${ELVO_DB_SSL_MODE:require}
       maximum-pool-size: ${ELVO_DB_POOL_MAX_SIZE:10}
       minimum-idle: ${ELVO_DB_POOL_MIN_IDLE:2}
   jpa:
@@ -20,12 +23,16 @@ spring:
     redis:
       host: ${ELVO_REDIS_HOST:localhost}
       port: ${ELVO_REDIS_PORT:6379}
+      ssl:
+        enabled: ${ELVO_REDIS_SSL_ENABLED:true}
   rabbitmq:
     host: ${ELVO_RABBITMQ_HOST:localhost}
     port: ${ELVO_RABBITMQ_PORT:5672}
     username: ${ELVO_RABBITMQ_USERNAME:guest}
     password: ${ELVO_RABBITMQ_PASSWORD:guest}
     virtual-host: ${ELVO_RABBITMQ_VHOST:/}
+    ssl:
+      enabled: ${ELVO_RABBITMQ_SSL_ENABLED:true}
 
 elvo:
   billing:
@@ -41,8 +48,19 @@ elvo:
           secret: ${ELVO_BILLING_SELCOM_SECRET:}
         mock:
           enabled: ${ELVO_BILLING_MOCK_ADAPTER_ENABLED:true}
+    sentry:
+      alerts:
+        enabled: ${ELVO_BILLING_SENTRY_ALERTS_ENABLED:true}
+        critical-error-threshold: ${ELVO_BILLING_SENTRY_CRITICAL_THRESHOLD:1}
+        adapter-failure-threshold: ${ELVO_BILLING_SENTRY_ADAPTER_FAILURE_THRESHOLD:3}
+        anomaly-latency-threshold-ms: ${ELVO_BILLING_SENTRY_ANOMALY_LATENCY_MS:2000}
+  security:
+    internal-service-secret: ${ELVO_INTERNAL_SERVICE_SECRET:sm://elvo-internal-service-secret}
 
 management:
+  metrics:
+    tags:
+      service: ${ELVO_SERVICE_TAG:billing-service}
   prometheus:
     metrics:
       export:
@@ -62,4 +80,11 @@ logging:
   file:
     name: ${ELVO_LOG_FILE:}
   pattern:
-    level: "%5p [corr:%X{correlationId}] [req:%X{requestId}] [idemp:%X{idempotencyKey}]"
+    level: "%5p [service:${ELVO_SERVICE_TAG:billing-service}] [corr:%X{correlationId}] [req:%X{requestId}] [idemp:%X{idempotencyKey}]"
+
+sentry:
+  enabled: ${ELVO_SENTRY_ENABLED:false}
+  dsn: ${ELVO_SENTRY_DSN:}
+  environment: ${ELVO_SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:default}}
+  release: ${ELVO_SENTRY_RELEASE:elvo-billing-service@local}
+  traces-sample-rate: ${ELVO_SENTRY_TRACES_SAMPLE_RATE:0.0}

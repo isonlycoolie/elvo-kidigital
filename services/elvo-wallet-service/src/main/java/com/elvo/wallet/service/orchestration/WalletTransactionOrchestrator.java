@@ -16,8 +16,8 @@ import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.security.InternalServiceMessageAuthenticator;
 import com.elvo.wallet.security.WalletInternalEventInputValidator;
 import com.elvo.wallet.security.WalletReservationStateTransitionValidator;
-import com.elvo.wallet.service.impl.InternalEventIdempotencyService;
 import com.elvo.wallet.service.WalletTransactionService;
+import com.elvo.wallet.service.impl.InternalEventIdempotencyService;
 import com.elvo.wallet.service.model.WalletFlowResult;
 
 @Component

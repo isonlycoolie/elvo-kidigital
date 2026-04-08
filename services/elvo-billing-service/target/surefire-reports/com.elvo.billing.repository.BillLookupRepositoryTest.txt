@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.elvo.billing.repository.BillLookupRepositoryTest
 -------------------------------------------------------------------------------
-Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 19.61 s -- in com.elvo.billing.repository.BillLookupRepositoryTest
+Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 15.88 s -- in com.elvo.billing.repository.BillLookupRepositoryTest

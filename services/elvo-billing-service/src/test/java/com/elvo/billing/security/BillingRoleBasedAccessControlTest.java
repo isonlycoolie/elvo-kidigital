@@ -1,8 +1,9 @@
 package com.elvo.billing.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -12,7 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class BillingRoleBasedAccessControlTest {
 
     @AfterEach
-    void clearContext() {
+    void clearSecurityContext() {
         SecurityContextHolder.clearContext();
     }
 
