@@ -15,6 +15,8 @@ import com.elvo.billing.exception.PaymentValidationException;
 import com.elvo.billing.monitoring.BillingMetricsRecorder;
 import com.elvo.billing.monitoring.SentryBreadcrumbLogger;
 import com.elvo.billing.repository.BillPaymentRepository;
+import com.elvo.billing.security.BillingRoleBasedAccessControl;
+import com.elvo.billing.security.BillingSensitivePermission;
 import com.elvo.billing.service.BillingService;
 import com.elvo.billing.service.event.BillingEventPublisher;
 import com.elvo.billing.service.orchestration.LookupFlow;
@@ -33,6 +35,7 @@ public class BillingServiceImpl implements BillingService {
     private final PaymentAuditLogger paymentAuditLogger;
     private final BillingMetricsRecorder billingMetricsRecorder;
     private final SentryBreadcrumbLogger sentryBreadcrumbLogger;
+    private final BillingRoleBasedAccessControl roleBasedAccessControl;
 
     public BillingServiceImpl(
             PaymentFlow paymentFlow,
@@ -41,7 +44,8 @@ public class BillingServiceImpl implements BillingService {
             BillingEventPublisher billingEventPublisher,
             PaymentAuditLogger paymentAuditLogger,
             BillingMetricsRecorder billingMetricsRecorder,
-            SentryBreadcrumbLogger sentryBreadcrumbLogger) {
+            SentryBreadcrumbLogger sentryBreadcrumbLogger,
+            BillingRoleBasedAccessControl roleBasedAccessControl) {
         this.paymentFlow = paymentFlow;
         this.lookupFlow = lookupFlow;
         this.billPaymentRepository = billPaymentRepository;
@@ -49,6 +53,7 @@ public class BillingServiceImpl implements BillingService {
         this.paymentAuditLogger = paymentAuditLogger;
         this.billingMetricsRecorder = billingMetricsRecorder;
         this.sentryBreadcrumbLogger = sentryBreadcrumbLogger;
+        this.roleBasedAccessControl = roleBasedAccessControl;
     }
 
     @Override
@@ -113,6 +118,8 @@ public class BillingServiceImpl implements BillingService {
 
     @Override
     public PaymentResponseDto reversePayment(UtilityPaymentRequestDto reversalRequest) {
+        roleBasedAccessControl.authorize(BillingSensitivePermission.PAYMENT_REVERSE);
+
         String referenceNumber = reversalRequest.getReferenceNumber();
         BillPayment payment = billPaymentRepository.getPaymentByReferenceWithLock(referenceNumber)
                 .orElseThrow(() -> new PaymentValidationException("payment not found for referenceNumber"));
