@@ -1,0 +1,12 @@
+services:
+  identity-db:
+    ports:
+      - "5433:5432"
+
+  wallet-db:
+    ports:
+      - "5434:5432"
+
+  billing-db:
+    ports:
+      - "5435:5432"
