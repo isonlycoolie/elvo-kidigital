@@ -2,6 +2,7 @@ package com.elvo.billing.service.orchestration;
 
 import com.elvo.billing.entity.BillPayment;
 import com.elvo.billing.entity.enums.PaymentStatus;
+import com.elvo.billing.messaging.DeadLetterPublishingService;
 import com.elvo.billing.monitoring.SecurityMonitoringService;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.service.BillingTransactionService;
@@ -38,6 +39,7 @@ public class BillingTransactionOrchestrator {
     private final BillingPaymentStateTransitionValidator stateTransitionValidator;
     private final SecurityMonitoringService securityMonitoringService;
     private final BillingOperationRateLimitService operationRateLimitService;
+    private final DeadLetterPublishingService deadLetterPublishingService;
 
     public BillingTransactionOrchestrator(
             BillPaymentRepository billPaymentRepository,
@@ -53,6 +55,7 @@ public class BillingTransactionOrchestrator {
                 internalEventIdempotencyService,
                 inputValidator,
                 stateTransitionValidator,
+                null,
                 null,
                 null);
     }
@@ -73,6 +76,7 @@ public class BillingTransactionOrchestrator {
                 inputValidator,
                 stateTransitionValidator,
                 securityMonitoringService,
+                null,
                 null);
     }
 
@@ -84,7 +88,8 @@ public class BillingTransactionOrchestrator {
             BillingInternalEventInputValidator inputValidator,
             BillingPaymentStateTransitionValidator stateTransitionValidator,
             @Nullable SecurityMonitoringService securityMonitoringService,
-            @Nullable BillingOperationRateLimitService operationRateLimitService) {
+            @Nullable BillingOperationRateLimitService operationRateLimitService,
+            @Nullable DeadLetterPublishingService deadLetterPublishingService) {
         this.billPaymentRepository = billPaymentRepository;
         this.billingTransactionService = billingTransactionService;
         this.authorizationMatrix = authorizationMatrix;
@@ -93,6 +98,7 @@ public class BillingTransactionOrchestrator {
         this.stateTransitionValidator = stateTransitionValidator;
         this.securityMonitoringService = securityMonitoringService;
         this.operationRateLimitService = operationRateLimitService;
+        this.deadLetterPublishingService = deadLetterPublishingService;
     }
 
     @RabbitListener(queues = "${elvo.messaging.wallet.completed-queue:wallet.transaction.completed.queue}")
@@ -101,32 +107,38 @@ public class BillingTransactionOrchestrator {
         if (!authorizationMatrix.isAllowed("wallet-service", "CONSUME", COMPLETED_QUEUE)) {
             LOG.warn("billing_orchestrator_skip_complete reason=queue_not_authorized");
             monitorSuspicious("billing.security.unauthorized_queue_access", "queue_not_authorized", COMPLETED_QUEUE, null);
+            deadLetter(COMPLETED_QUEUE, "queue_not_authorized", event);
             return;
         }
 
         if (!InternalServiceMessageAuthenticator.isTrusted(event, EXPECTED_SOURCE_SERVICE)) {
             LOG.warn("billing_orchestrator_skip_complete reason=invalid_service_token");
             monitorInvalidSignature("onWalletCompleted");
+            deadLetter(COMPLETED_QUEUE, "invalid_service_token", event);
             return;
         }
         if (!InternalServiceMessageAuthenticator.isReplaySafe(event)) {
             LOG.warn("billing_orchestrator_skip_complete reason=replay_validation_failed");
             monitorReplay("onWalletCompleted");
+            deadLetter(COMPLETED_QUEUE, "replay_validation_failed", event);
             return;
         }
         if (!inputValidator.isValidWalletCompletedEvent(event)) {
             LOG.warn("billing_orchestrator_skip_complete reason=invalid_event_payload");
             monitorSuspicious("billing.security.invalid_event_payload", "invalid_event_payload", COMPLETED_QUEUE, rootValue(event, "eventType"));
+            deadLetter(COMPLETED_QUEUE, "invalid_event_payload", event);
             return;
         }
         if (!enforceEventRateLimit(event, "wallet.transaction.completed")) {
             LOG.warn("billing_orchestrator_skip_complete reason=rate_limited");
+            deadLetter(COMPLETED_QUEUE, "rate_limited", event);
             return;
         }
 
         UUID paymentId = resolvePaymentId(event);
         if (paymentId == null) {
             LOG.warn("billing_orchestrator_skip_complete reason=missing_payment_id");
+            deadLetter(COMPLETED_QUEUE, "missing_payment_id", event);
             return;
         }
         String eventId = rootValue(event, InternalServiceMessageAuthenticator.MESSAGE_ID_FIELD);
@@ -141,12 +153,14 @@ public class BillingTransactionOrchestrator {
                 eventType == null ? "wallet.transaction.completed" : eventType,
                 EXPECTED_SOURCE_SERVICE)) {
             LOG.warn("billing_orchestrator_skip_complete reason=duplicate_event eventId={}", eventId);
+            deadLetter(COMPLETED_QUEUE, "duplicate_event", event);
             return;
         }
 
         Optional<BillPayment> paymentOptional = billPaymentRepository.getPaymentByIdWithLock(paymentId);
         if (paymentOptional.isEmpty()) {
             LOG.warn("billing_orchestrator_skip_complete reason=payment_not_found paymentId={}", paymentId);
+            deadLetter(COMPLETED_QUEUE, "payment_not_found", event);
             return;
         }
 
@@ -156,6 +170,7 @@ public class BillingTransactionOrchestrator {
                     paymentId,
                     payment.getStatus());
             monitorSuspicious("billing.security.invalid_state_transition", "invalid_state_transition", COMPLETED_QUEUE, paymentId.toString());
+            deadLetter(COMPLETED_QUEUE, "invalid_state_transition", event);
             return;
         }
         billingTransactionService.completeTransaction(payment);
@@ -169,32 +184,38 @@ public class BillingTransactionOrchestrator {
         if (!authorizationMatrix.isAllowed("wallet-service", "CONSUME", FAILED_QUEUE)) {
             LOG.warn("billing_orchestrator_skip_reverse reason=queue_not_authorized");
             monitorSuspicious("billing.security.unauthorized_queue_access", "queue_not_authorized", FAILED_QUEUE, null);
+            deadLetter(FAILED_QUEUE, "queue_not_authorized", event);
             return;
         }
 
         if (!InternalServiceMessageAuthenticator.isTrusted(event, EXPECTED_SOURCE_SERVICE)) {
             LOG.warn("billing_orchestrator_skip_reverse reason=invalid_service_token");
             monitorInvalidSignature("onWalletFailed");
+            deadLetter(FAILED_QUEUE, "invalid_service_token", event);
             return;
         }
         if (!InternalServiceMessageAuthenticator.isReplaySafe(event)) {
             LOG.warn("billing_orchestrator_skip_reverse reason=replay_validation_failed");
             monitorReplay("onWalletFailed");
+            deadLetter(FAILED_QUEUE, "replay_validation_failed", event);
             return;
         }
         if (!inputValidator.isValidWalletFailedEvent(event)) {
             LOG.warn("billing_orchestrator_skip_reverse reason=invalid_event_payload");
             monitorSuspicious("billing.security.invalid_event_payload", "invalid_event_payload", FAILED_QUEUE, rootValue(event, "eventType"));
+            deadLetter(FAILED_QUEUE, "invalid_event_payload", event);
             return;
         }
         if (!enforceEventRateLimit(event, "wallet.transaction.failed")) {
             LOG.warn("billing_orchestrator_skip_reverse reason=rate_limited");
+            deadLetter(FAILED_QUEUE, "rate_limited", event);
             return;
         }
 
         UUID paymentId = resolvePaymentId(event);
         if (paymentId == null) {
             LOG.warn("billing_orchestrator_skip_reverse reason=missing_payment_id");
+            deadLetter(FAILED_QUEUE, "missing_payment_id", event);
             return;
         }
         String eventId = rootValue(event, InternalServiceMessageAuthenticator.MESSAGE_ID_FIELD);
@@ -209,12 +230,14 @@ public class BillingTransactionOrchestrator {
                 eventType == null ? "wallet.transaction.failed" : eventType,
                 EXPECTED_SOURCE_SERVICE)) {
             LOG.warn("billing_orchestrator_skip_reverse reason=duplicate_event eventId={}", eventId);
+            deadLetter(FAILED_QUEUE, "duplicate_event", event);
             return;
         }
 
         Optional<BillPayment> paymentOptional = billPaymentRepository.getPaymentByIdWithLock(paymentId);
         if (paymentOptional.isEmpty()) {
             LOG.warn("billing_orchestrator_skip_reverse reason=payment_not_found paymentId={}", paymentId);
+            deadLetter(FAILED_QUEUE, "payment_not_found", event);
             return;
         }
 
@@ -224,6 +247,7 @@ public class BillingTransactionOrchestrator {
                     paymentId,
                     payment.getStatus());
             monitorSuspicious("billing.security.invalid_state_transition", "invalid_state_transition", FAILED_QUEUE, paymentId.toString());
+            deadLetter(FAILED_QUEUE, "invalid_state_transition", event);
             return;
         }
         String reason = payloadValue(event, "reason");
@@ -309,5 +333,11 @@ public class BillingTransactionOrchestrator {
             return false;
         }
         return true;
+    }
+
+    private void deadLetter(String sourceQueue, String reason, Map<String, Object> event) {
+        if (deadLetterPublishingService != null) {
+            deadLetterPublishingService.publish(sourceQueue, reason, event);
+        }
     }
 }
