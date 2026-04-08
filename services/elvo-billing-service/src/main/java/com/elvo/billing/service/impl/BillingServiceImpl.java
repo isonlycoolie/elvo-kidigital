@@ -16,6 +16,7 @@ import com.elvo.billing.monitoring.BillingMetricsRecorder;
 import com.elvo.billing.monitoring.SecurityMonitoringService;
 import com.elvo.billing.monitoring.SentryBreadcrumbLogger;
 import com.elvo.billing.repository.BillPaymentRepository;
+import com.elvo.billing.security.BillingFraudDetectionService;
 import com.elvo.billing.security.BillingRoleBasedAccessControl;
 import com.elvo.billing.security.BillingSensitivePermission;
 import com.elvo.billing.service.BillingService;
@@ -39,6 +40,7 @@ public class BillingServiceImpl implements BillingService {
     private final SentryBreadcrumbLogger sentryBreadcrumbLogger;
     private final BillingRoleBasedAccessControl roleBasedAccessControl;
     private final SecurityMonitoringService securityMonitoringService;
+    private final BillingFraudDetectionService billingFraudDetectionService;
 
     public BillingServiceImpl(
             PaymentFlow paymentFlow,
@@ -58,6 +60,7 @@ public class BillingServiceImpl implements BillingService {
                 billingMetricsRecorder,
                 sentryBreadcrumbLogger,
                 roleBasedAccessControl,
+                null,
                 null);
     }
 
@@ -71,6 +74,30 @@ public class BillingServiceImpl implements BillingService {
             SentryBreadcrumbLogger sentryBreadcrumbLogger,
             BillingRoleBasedAccessControl roleBasedAccessControl,
             @Nullable SecurityMonitoringService securityMonitoringService) {
+        this(
+                paymentFlow,
+                lookupFlow,
+                billPaymentRepository,
+                billingEventPublisher,
+                paymentAuditLogger,
+                billingMetricsRecorder,
+                sentryBreadcrumbLogger,
+                roleBasedAccessControl,
+                securityMonitoringService,
+                null);
+    }
+
+    public BillingServiceImpl(
+            PaymentFlow paymentFlow,
+            LookupFlow lookupFlow,
+            BillPaymentRepository billPaymentRepository,
+            BillingEventPublisher billingEventPublisher,
+            PaymentAuditLogger paymentAuditLogger,
+            BillingMetricsRecorder billingMetricsRecorder,
+            SentryBreadcrumbLogger sentryBreadcrumbLogger,
+            BillingRoleBasedAccessControl roleBasedAccessControl,
+            @Nullable SecurityMonitoringService securityMonitoringService,
+            @Nullable BillingFraudDetectionService billingFraudDetectionService) {
         this.paymentFlow = paymentFlow;
         this.lookupFlow = lookupFlow;
         this.billPaymentRepository = billPaymentRepository;
@@ -80,12 +107,17 @@ public class BillingServiceImpl implements BillingService {
         this.sentryBreadcrumbLogger = sentryBreadcrumbLogger;
         this.roleBasedAccessControl = roleBasedAccessControl;
         this.securityMonitoringService = securityMonitoringService;
+        this.billingFraudDetectionService = billingFraudDetectionService;
     }
 
     @Override
     public PaymentResponseDto createPayment(UtilityPaymentRequestDto paymentRequest) {
         if (paymentRequest == null) {
             throw new PaymentValidationException("request body is required");
+        }
+
+        if (billingFraudDetectionService != null) {
+            billingFraudDetectionService.analyzePaymentAttempt(paymentRequest);
         }
 
         BillPayment payment = new BillPayment();
@@ -251,6 +283,9 @@ public class BillingServiceImpl implements BillingService {
 
         PaymentStatus callbackStatus = resolvePaymentStatus(callback.getStatus());
         billPaymentRepository.updatePaymentStatus(payment.getPaymentId(), callbackStatus);
+        if (billingFraudDetectionService != null) {
+            billingFraudDetectionService.recordCallbackOutcome(callback.getReferenceNumber(), callback.getStatus());
+        }
 
         if (callback.getReceiptNumber() != null) {
             payment.setReceiptNumber(callback.getReceiptNumber());
