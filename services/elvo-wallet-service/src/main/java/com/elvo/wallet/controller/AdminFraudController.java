@@ -22,6 +22,7 @@ import com.elvo.wallet.monitoring.WalletMetricsRecorder;
 import com.elvo.wallet.security.AmlCaseWorkflowService;
 import com.elvo.wallet.security.FraudRulesEngine;
 import com.elvo.wallet.security.MakerCheckerApprovalService;
+import com.elvo.wallet.security.WalletPrivilegedAccessControlService;
 
 import jakarta.validation.Valid;
 
@@ -35,21 +36,25 @@ public class AdminFraudController {
     private final MakerCheckerApprovalService makerCheckerApprovalService;
     private final AmlCaseWorkflowService amlCaseWorkflowService;
     private final WalletMetricsRecorder walletMetricsRecorder;
+    private final WalletPrivilegedAccessControlService privilegedAccessControlService;
 
     public AdminFraudController(FraudRulesEngine fraudRulesEngine,
                                 MakerCheckerApprovalService makerCheckerApprovalService,
                                 AmlCaseWorkflowService amlCaseWorkflowService,
-                                WalletMetricsRecorder walletMetricsRecorder) {
+                                WalletMetricsRecorder walletMetricsRecorder,
+                                WalletPrivilegedAccessControlService privilegedAccessControlService) {
         this.fraudRulesEngine = fraudRulesEngine;
         this.makerCheckerApprovalService = makerCheckerApprovalService;
         this.amlCaseWorkflowService = amlCaseWorkflowService;
         this.walletMetricsRecorder = walletMetricsRecorder;
+        this.privilegedAccessControlService = privilegedAccessControlService;
     }
 
     @PostMapping("/overrides/users/{userId}")
     public ResponseEntity<Map<String, Object>> overrideUser(
             @PathVariable UUID userId,
             @Valid @RequestBody FraudOverrideRequestDto request) {
+        privilegedAccessControlService.authorizePrivilegedAction("fraud_override_user", userId.toString());
         fraudRulesEngine.setUserOverride(userId, request.getDecision());
         return ResponseEntity.accepted().body(Map.of(
                 "scope", "user",
@@ -61,6 +66,7 @@ public class AdminFraudController {
     public ResponseEntity<Map<String, Object>> overrideTarget(
             @PathVariable String targetIdentifier,
             @Valid @RequestBody FraudOverrideRequestDto request) {
+        privilegedAccessControlService.authorizePrivilegedAction("fraud_override_target", targetIdentifier);
         fraudRulesEngine.setTargetOverride(targetIdentifier, request.getDecision());
         return ResponseEntity.accepted().body(Map.of(
                 "scope", "target",
@@ -72,6 +78,7 @@ public class AdminFraudController {
     public ResponseEntity<Map<String, Object>> decideMakerChecker(
             @PathVariable String approvalId,
             @Valid @RequestBody MakerCheckerDecisionRequestDto request) {
+        privilegedAccessControlService.authorizePrivilegedAction("maker_checker_decision", approvalId);
         makerCheckerApprovalService.recordDecision(approvalId, request.isApproved(), request.getReason());
         return ResponseEntity.accepted().body(Map.of(
                 "approvalId", approvalId,
@@ -83,12 +90,14 @@ public class AdminFraudController {
     public ResponseEntity<List<AmlCaseWorkflowService.AmlCase>> listAmlCases(
             @RequestParam(name = "status", required = false) String status,
             @RequestParam(name = "limit", defaultValue = "50") int limit) {
+        privilegedAccessControlService.authorizePrivilegedAction("aml_case_list", status);
         AmlCaseWorkflowService.CaseStatus filter = parseStatus(status);
         return ResponseEntity.ok(amlCaseWorkflowService.listCases(filter, limit));
     }
 
     @PostMapping("/aml-cases/{caseId}/review")
     public ResponseEntity<Map<String, Object>> markAmlCaseUnderReview(@PathVariable String caseId) {
+        privilegedAccessControlService.authorizePrivilegedAction("aml_case_under_review", caseId);
         AmlCaseWorkflowService.AmlCase amlCase = amlCaseWorkflowService.setUnderReview(caseId);
         if (amlCase == null) {
             return ResponseEntity.notFound().build();
@@ -103,6 +112,7 @@ public class AdminFraudController {
     public ResponseEntity<Map<String, Object>> resolveAmlCase(
             @PathVariable String caseId,
             @Valid @RequestBody AmlCaseResolutionRequestDto request) {
+        privilegedAccessControlService.authorizePrivilegedAction("aml_case_resolve", caseId);
         String resolver = "fraud-admin";
         AmlCaseWorkflowService.AmlCase amlCase = amlCaseWorkflowService.resolveCase(
                 caseId,
