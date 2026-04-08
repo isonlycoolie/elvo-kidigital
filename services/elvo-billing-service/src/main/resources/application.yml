@@ -47,6 +47,8 @@ elvo:
         critical-error-threshold: ${ELVO_BILLING_SENTRY_CRITICAL_THRESHOLD:1}
         adapter-failure-threshold: ${ELVO_BILLING_SENTRY_ADAPTER_FAILURE_THRESHOLD:3}
         anomaly-latency-threshold-ms: ${ELVO_BILLING_SENTRY_ANOMALY_LATENCY_MS:2000}
+  security:
+    internal-service-secret: ${ELVO_INTERNAL_SERVICE_SECRET:sm://elvo-internal-service-secret}
 
 management:
   metrics:

@@ -29,7 +29,9 @@ public final class InternalServiceMessageAuthenticator {
     public static final String EXPIRES_AT_FIELD = "expiresAt";
 
     private static final String SECRET_ENV = "ELVO_INTERNAL_SERVICE_SECRET";
-    private static final String DEFAULT_SECRET = "elvo-internal-service-secret";
+    private static final String SECRET_MANAGER_PREFIX = "sm://";
+    private static final String SECRET_MANAGER_PROPERTY_PREFIX = "elvo.secret-manager.secrets.";
+    private static final String TEST_FALLBACK_SECRET = "elvo-test-internal-service-secret";
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     private static final Duration MAX_ACCEPTED_EVENT_AGE = Duration.ofMinutes(5);
     private static final Duration MAX_FUTURE_DRIFT = Duration.ofMinutes(1);
@@ -227,7 +229,15 @@ public final class InternalServiceMessageAuthenticator {
     private static String resolveSecret() {
         String secret = System.getenv(SECRET_ENV);
         if (secret == null || secret.isBlank()) {
-            secret = DEFAULT_SECRET;
+            return TEST_FALLBACK_SECRET;
+        }
+        if (secret.startsWith(SECRET_MANAGER_PREFIX)) {
+            String secretName = secret.substring(SECRET_MANAGER_PREFIX.length()).trim();
+            if (secretName.isEmpty()) {
+                return TEST_FALLBACK_SECRET;
+            }
+            String resolvedSecret = System.getProperty(SECRET_MANAGER_PROPERTY_PREFIX + secretName);
+            return resolvedSecret == null || resolvedSecret.isBlank() ? TEST_FALLBACK_SECRET : resolvedSecret.trim();
         }
         return secret;
     }

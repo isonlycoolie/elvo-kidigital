@@ -86,6 +86,7 @@ elvo:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:wallet-service}
   security:
+    internal-service-secret: ${ELVO_INTERNAL_SERVICE_SECRET:sm://elvo-internal-service-secret}
     jwt:
       secret: ${ELVO_JWT_SECRET_REF:sm://wallet-user-jwt-secret}
       issuer: ${ELVO_JWT_ISSUER:elvo-identity-service-${spring.profiles.active:dev}}
