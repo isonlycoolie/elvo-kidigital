@@ -8,8 +8,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
+import com.elvo.wallet.entity.Reservation;
+import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.security.InternalServiceMessageAuthenticator;
 import com.elvo.wallet.security.WalletInternalEventInputValidator;
+import com.elvo.wallet.security.WalletReservationStateTransitionValidator;
 import com.elvo.wallet.service.impl.InternalEventIdempotencyService;
 import com.elvo.wallet.service.WalletTransactionService;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -23,13 +26,19 @@ public class WalletTransactionOrchestrator {
     private final WalletTransactionService walletTransactionService;
     private final InternalEventIdempotencyService internalEventIdempotencyService;
     private final WalletInternalEventInputValidator inputValidator;
+    private final ReservationRepository reservationRepository;
+    private final WalletReservationStateTransitionValidator stateTransitionValidator;
 
     public WalletTransactionOrchestrator(WalletTransactionService walletTransactionService,
                                          InternalEventIdempotencyService internalEventIdempotencyService,
-                                         WalletInternalEventInputValidator inputValidator) {
+                                         WalletInternalEventInputValidator inputValidator,
+                                         ReservationRepository reservationRepository,
+                                         WalletReservationStateTransitionValidator stateTransitionValidator) {
         this.walletTransactionService = walletTransactionService;
         this.internalEventIdempotencyService = internalEventIdempotencyService;
         this.inputValidator = inputValidator;
+        this.reservationRepository = reservationRepository;
+        this.stateTransitionValidator = stateTransitionValidator;
     }
 
     @RabbitListener(queues = "${elvo.messaging.billing.completed-queue:billing.transaction.completed.queue}")
@@ -71,7 +80,20 @@ public class WalletTransactionOrchestrator {
             return;
         }
 
-        WalletFlowResult result = walletTransactionService.commitFunds(UUID.fromString(reservationId), idempotencyKey);
+        UUID reservationUuid = UUID.fromString(reservationId);
+        Reservation reservation = reservationRepository.findById(reservationUuid).orElse(null);
+        if (reservation == null) {
+            LOG.warn("wallet_orchestrator_skip_commit reason=reservation_not_found reservationId={}", reservationId);
+            return;
+        }
+        if (!stateTransitionValidator.canCommit(reservation.getStatus())) {
+            LOG.warn("wallet_orchestrator_skip_commit reason=invalid_state_transition reservationId={} status={}",
+                    reservationId,
+                    reservation.getStatus());
+            return;
+        }
+
+        WalletFlowResult result = walletTransactionService.commitFunds(reservationUuid, idempotencyKey);
         LOG.info("wallet_orchestrator_commit reservationId={} success={} message={}", reservationId, result.success(), result.message());
     }
 
@@ -114,7 +136,20 @@ public class WalletTransactionOrchestrator {
             return;
         }
 
-        WalletFlowResult result = walletTransactionService.rollbackFunds(UUID.fromString(reservationId), idempotencyKey);
+        UUID reservationUuid = UUID.fromString(reservationId);
+        Reservation reservation = reservationRepository.findById(reservationUuid).orElse(null);
+        if (reservation == null) {
+            LOG.warn("wallet_orchestrator_skip_rollback reason=reservation_not_found reservationId={}", reservationId);
+            return;
+        }
+        if (!stateTransitionValidator.canRollback(reservation.getStatus())) {
+            LOG.warn("wallet_orchestrator_skip_rollback reason=invalid_state_transition reservationId={} status={}",
+                    reservationId,
+                    reservation.getStatus());
+            return;
+        }
+
+        WalletFlowResult result = walletTransactionService.rollbackFunds(reservationUuid, idempotencyKey);
         LOG.info("wallet_orchestrator_rollback reservationId={} success={} message={}", reservationId, result.success(), result.message());
     }
 

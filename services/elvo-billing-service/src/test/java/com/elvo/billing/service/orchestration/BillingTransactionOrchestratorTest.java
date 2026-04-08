@@ -6,6 +6,7 @@ import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.service.BillingTransactionService;
 import com.elvo.billing.service.impl.InternalEventIdempotencyService;
 import com.elvo.billing.security.BillingInternalEventInputValidator;
+import com.elvo.billing.security.BillingPaymentStateTransitionValidator;
 import com.elvo.billing.security.BillingServiceAuthorizationMatrix;
 import com.elvo.billing.security.BillingServiceAuthorizationProperties;
 import com.elvo.billing.security.InternalServiceMessageAuthenticator;
@@ -40,6 +41,7 @@ class BillingTransactionOrchestratorTest {
     private InternalEventIdempotencyService internalEventIdempotencyService;
 
     private final BillingInternalEventInputValidator inputValidator = new BillingInternalEventInputValidator();
+    private final BillingPaymentStateTransitionValidator stateTransitionValidator = new BillingPaymentStateTransitionValidator();
 
     @Test
     void shouldMarkPaymentSuccessWhenWalletCompletedEventIsReceived() {
@@ -48,11 +50,13 @@ class BillingTransactionOrchestratorTest {
             billingTransactionService,
             new BillingServiceAuthorizationMatrix(new BillingServiceAuthorizationProperties()),
             internalEventIdempotencyService,
-            inputValidator);
+        inputValidator,
+        stateTransitionValidator);
 
         UUID paymentId = UUID.randomUUID();
         BillPayment payment = new BillPayment();
         payment.setPaymentId(paymentId);
+        payment.setStatus(PaymentStatus.PROCESSING);
 
         when(billPaymentRepository.getPaymentById(paymentId)).thenReturn(Optional.of(payment));
         when(internalEventIdempotencyService.markIfFirstProcessed(any(), any(), any(), any())).thenReturn(true);
@@ -70,11 +74,13 @@ class BillingTransactionOrchestratorTest {
             billingTransactionService,
             new BillingServiceAuthorizationMatrix(new BillingServiceAuthorizationProperties()),
             internalEventIdempotencyService,
-            inputValidator);
+        inputValidator,
+        stateTransitionValidator);
 
         UUID paymentId = UUID.randomUUID();
         BillPayment payment = new BillPayment();
         payment.setPaymentId(paymentId);
+        payment.setStatus(PaymentStatus.PROCESSING);
 
         when(billPaymentRepository.getPaymentById(paymentId)).thenReturn(Optional.of(payment));
         when(internalEventIdempotencyService.markIfFirstProcessed(any(), any(), any(), any())).thenReturn(true);
@@ -92,7 +98,8 @@ class BillingTransactionOrchestratorTest {
             billingTransactionService,
             new BillingServiceAuthorizationMatrix(new BillingServiceAuthorizationProperties()),
             internalEventIdempotencyService,
-            inputValidator);
+        inputValidator,
+        stateTransitionValidator);
 
         orchestrator.onWalletCompleted(Map.of("payload", Map.of("otherKey", "value")));
 
@@ -107,7 +114,8 @@ class BillingTransactionOrchestratorTest {
             billingTransactionService,
             new BillingServiceAuthorizationMatrix(new BillingServiceAuthorizationProperties()),
             internalEventIdempotencyService,
-            inputValidator);
+        inputValidator,
+        stateTransitionValidator);
 
         orchestrator.onWalletCompleted(Map.of(
                 "sourceService", "elvo-wallet-service",
@@ -124,11 +132,13 @@ class BillingTransactionOrchestratorTest {
                 billingTransactionService,
                 new BillingServiceAuthorizationMatrix(new BillingServiceAuthorizationProperties()),
             internalEventIdempotencyService,
-            inputValidator);
+        inputValidator,
+        stateTransitionValidator);
 
         UUID paymentId = UUID.randomUUID();
         BillPayment payment = new BillPayment();
         payment.setPaymentId(paymentId);
+        payment.setStatus(PaymentStatus.PROCESSING);
 
         when(billPaymentRepository.getPaymentById(paymentId)).thenReturn(Optional.of(payment));
         when(internalEventIdempotencyService.markIfFirstProcessed(any(), any(), any(), any()))
@@ -172,7 +182,8 @@ class BillingTransactionOrchestratorTest {
                 billingTransactionService,
                 new BillingServiceAuthorizationMatrix(new BillingServiceAuthorizationProperties()),
                 internalEventIdempotencyService,
-                inputValidator);
+        inputValidator,
+        stateTransitionValidator);
 
         UUID paymentId = UUID.randomUUID();
         Map<String, Object> payload = new HashMap<>();
