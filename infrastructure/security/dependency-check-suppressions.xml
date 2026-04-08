@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.2.0.xsd">
+    <!-- 
+    This file contains suppressed CVEs for known vulnerabilities in dependencies 
+    that have been reviewed and deemed acceptable for this environment.
+    
+    Each suppression entry includes:
+    - CVE ID: The Common Vulnerabilities and Exposures identifier
+    - Justification: Why this vulnerability is acceptable for our context
+    - Package details: The affected dependency identifier
+    
+    All suppressions must be reviewed and approved by the security team.
+    Do not blindly suppress CVEs without understanding the risk.
+    -->
+    
+    <!-- Example: To suppress a specific CVE for a package, uncomment and modify the following:
+    <suppress>
+        <notes>
+            <note>Justification: This vulnerability does not affect our usage of the library.
+                We only use specific methods that are not vulnerable.
+            </note>
+        </notes>
+        <cve>CVE-2024-XXXXX</cve>
+        <packageUrl regex="true">pkg:maven/groupId/artifactId@.*</packageUrl>
+    </suppress>
+    -->
+    
+</suppressions>

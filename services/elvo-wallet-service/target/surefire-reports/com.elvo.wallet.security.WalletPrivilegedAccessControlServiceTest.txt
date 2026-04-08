@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.elvo.wallet.security.WalletPrivilegedAccessControlServiceTest
+-------------------------------------------------------------------------------
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.095 s -- in com.elvo.wallet.security.WalletPrivilegedAccessControlServiceTest

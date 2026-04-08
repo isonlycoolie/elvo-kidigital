@@ -46,6 +46,7 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\ma
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\entity\package-info.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\entity\PaymentHistory.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\entity\ProcessedInternalEvent.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\entity\UserSession.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\exception\ApiResponse.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\exception\CallbackVerificationFailedException.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\exception\DuplicatePaymentException.java
@@ -87,9 +88,11 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\ma
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\BillingFieldEncryptionService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\BillingFraudDetectionService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\BillingInternalEventInputValidator.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\BillingMfaService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\BillingOperationRateLimitService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\BillingPaymentStateTransitionValidator.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\BillingRoleBasedAccessControl.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\BillingSecurityConfigurationValidator.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\BillingSensitivePermission.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\BillingServiceAuthorizationMatrix.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\BillingServiceAuthorizationProperties.java
@@ -98,6 +101,7 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\ma
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\package-info.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\SecurityConfig.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\SensitiveDataMasker.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\security\SessionSecurityService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\service\BillingService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\service\BillingTransactionService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-billing-service\src\main\java\com\elvo\billing\service\event\BillingEventPublisher.java

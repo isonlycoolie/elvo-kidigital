@@ -37,6 +37,8 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\tes
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\test\java\com\elvo\wallet\security\StepUpAuthenticationServiceUnitTest.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\test\java\com\elvo\wallet\security\TransactionSigningChallengeServiceTest.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\test\java\com\elvo\wallet\security\UserJwtAuthenticationFilterTest.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\test\java\com\elvo\wallet\security\WalletPrivilegedAccessControlServiceTest.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\test\java\com\elvo\wallet\security\WalletSecurityConfigurationValidatorTest.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\test\java\com\elvo\wallet\service\impl\ChaosResilienceSuiteTest.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\test\java\com\elvo\wallet\service\impl\DefaultWalletTransactionServiceTest.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\test\java\com\elvo\wallet\service\impl\InMemoryEacReplayProtectionServiceTest.java

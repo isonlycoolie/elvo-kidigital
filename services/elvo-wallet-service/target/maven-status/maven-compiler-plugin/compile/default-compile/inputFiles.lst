@@ -127,7 +127,9 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\mai
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\security\WalletFraudVelocityService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\security\WalletInternalEventInputValidator.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\security\WalletOperationRateLimitService.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\security\WalletPrivilegedAccessControlService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\security\WalletReservationStateTransitionValidator.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\security\WalletSecurityConfigurationValidator.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\service\DepositFlowService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\service\EacReplayProtectionService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\service\EtcFlowService.java
