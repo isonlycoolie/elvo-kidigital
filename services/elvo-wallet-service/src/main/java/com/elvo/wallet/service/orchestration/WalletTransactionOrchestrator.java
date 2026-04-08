@@ -6,10 +6,12 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.entity.Reservation;
+import com.elvo.wallet.monitoring.SecurityAlertStreamingService;
 import com.elvo.wallet.repository.ReservationRepository;
 import com.elvo.wallet.security.InternalServiceMessageAuthenticator;
 import com.elvo.wallet.security.WalletInternalEventInputValidator;
@@ -29,17 +31,34 @@ public class WalletTransactionOrchestrator {
     private final WalletInternalEventInputValidator inputValidator;
     private final ReservationRepository reservationRepository;
     private final WalletReservationStateTransitionValidator stateTransitionValidator;
+    private final SecurityAlertStreamingService securityAlertStreamingService;
 
     public WalletTransactionOrchestrator(WalletTransactionService walletTransactionService,
                                          InternalEventIdempotencyService internalEventIdempotencyService,
                                          WalletInternalEventInputValidator inputValidator,
                                          ReservationRepository reservationRepository,
                                          WalletReservationStateTransitionValidator stateTransitionValidator) {
+                        this(
+                            walletTransactionService,
+                            internalEventIdempotencyService,
+                            inputValidator,
+                            reservationRepository,
+                            stateTransitionValidator,
+                            null);
+                        }
+
+                        public WalletTransactionOrchestrator(WalletTransactionService walletTransactionService,
+                                         InternalEventIdempotencyService internalEventIdempotencyService,
+                                         WalletInternalEventInputValidator inputValidator,
+                                         ReservationRepository reservationRepository,
+                                         WalletReservationStateTransitionValidator stateTransitionValidator,
+                                         @Nullable SecurityAlertStreamingService securityAlertStreamingService) {
         this.walletTransactionService = walletTransactionService;
         this.internalEventIdempotencyService = internalEventIdempotencyService;
         this.inputValidator = inputValidator;
         this.reservationRepository = reservationRepository;
         this.stateTransitionValidator = stateTransitionValidator;
+                        this.securityAlertStreamingService = securityAlertStreamingService;
     }
 
     @RabbitListener(queues = "${elvo.messaging.billing.completed-queue:billing.transaction.completed.queue}")
@@ -47,14 +66,17 @@ public class WalletTransactionOrchestrator {
     public void onBillingCompleted(Map<String, Object> event) {
         if (!InternalServiceMessageAuthenticator.isTrusted(event, EXPECTED_SOURCE_SERVICE)) {
             LOG.warn("wallet_orchestrator_skip_commit reason=invalid_service_token");
+            streamAlert("wallet.security.invalid_internal_signature", "HIGH", Map.of("operation", "onBillingCompleted"));
             return;
         }
         if (!InternalServiceMessageAuthenticator.isReplaySafe(event)) {
             LOG.warn("wallet_orchestrator_skip_commit reason=replay_validation_failed");
+            streamAlert("wallet.security.replay_attempt", "HIGH", Map.of("operation", "onBillingCompleted"));
             return;
         }
         if (!inputValidator.isValidBillingCompletedEvent(event)) {
             LOG.warn("wallet_orchestrator_skip_commit reason=invalid_event_payload");
+            streamAlert("wallet.security.invalid_event_payload", "WARN", Map.of("operation", "onBillingCompleted"));
             return;
         }
 
@@ -92,6 +114,7 @@ public class WalletTransactionOrchestrator {
             LOG.warn("wallet_orchestrator_skip_commit reason=invalid_state_transition reservationId={} status={}",
                     reservationId,
                     reservation.getStatus());
+            streamAlert("wallet.security.invalid_state_transition", "WARN", Map.of("reservationId", reservationId));
             return;
         }
 
@@ -104,14 +127,17 @@ public class WalletTransactionOrchestrator {
     public void onBillingReversed(Map<String, Object> event) {
         if (!InternalServiceMessageAuthenticator.isTrusted(event, EXPECTED_SOURCE_SERVICE)) {
             LOG.warn("wallet_orchestrator_skip_rollback reason=invalid_service_token");
+            streamAlert("wallet.security.invalid_internal_signature", "HIGH", Map.of("operation", "onBillingReversed"));
             return;
         }
         if (!InternalServiceMessageAuthenticator.isReplaySafe(event)) {
             LOG.warn("wallet_orchestrator_skip_rollback reason=replay_validation_failed");
+            streamAlert("wallet.security.replay_attempt", "HIGH", Map.of("operation", "onBillingReversed"));
             return;
         }
         if (!inputValidator.isValidBillingReversedEvent(event)) {
             LOG.warn("wallet_orchestrator_skip_rollback reason=invalid_event_payload");
+            streamAlert("wallet.security.invalid_event_payload", "WARN", Map.of("operation", "onBillingReversed"));
             return;
         }
 
@@ -149,6 +175,7 @@ public class WalletTransactionOrchestrator {
             LOG.warn("wallet_orchestrator_skip_rollback reason=invalid_state_transition reservationId={} status={}",
                     reservationId,
                     reservation.getStatus());
+            streamAlert("wallet.security.invalid_state_transition", "WARN", Map.of("reservationId", reservationId));
             return;
         }
 
@@ -183,5 +210,11 @@ public class WalletTransactionOrchestrator {
         }
         String text = String.valueOf(value).trim();
         return text.isEmpty() ? null : text;
+    }
+
+    private void streamAlert(String eventType, String severity, Map<String, Object> context) {
+        if (securityAlertStreamingService != null) {
+            securityAlertStreamingService.stream(eventType, severity, null, context);
+        }
     }
 }

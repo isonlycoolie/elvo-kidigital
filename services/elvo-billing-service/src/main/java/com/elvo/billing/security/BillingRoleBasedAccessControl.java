@@ -5,16 +5,21 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import com.elvo.billing.monitoring.SecurityMonitoringService;
+
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 @Component
 public class BillingRoleBasedAccessControl {
 
     private final Map<BillingSensitivePermission, Set<String>> roleMatrix = new EnumMap<>(BillingSensitivePermission.class);
+    private SecurityMonitoringService securityMonitoringService;
 
     public BillingRoleBasedAccessControl() {
         roleMatrix.put(BillingSensitivePermission.PAYMENT_REVERSE, Set.of("ROLE_OPERATIONS_ADMIN", "ROLE_BILLING_ADMIN"));
@@ -25,8 +30,18 @@ public class BillingRoleBasedAccessControl {
 
     public void authorize(BillingSensitivePermission permission) {
         if (!isAllowed(permission)) {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String principal = authentication == null ? "anonymous" : authentication.getName();
+            if (securityMonitoringService != null) {
+                securityMonitoringService.recordPrivilegeEscalationAttempt(principal, permission == null ? "unknown" : permission.name());
+            }
             throw new AccessDeniedException("RBAC denied for permission " + permission);
         }
+    }
+
+    @Autowired(required = false)
+    void setSecurityMonitoringService(@Nullable SecurityMonitoringService securityMonitoringService) {
+        this.securityMonitoringService = securityMonitoringService;
     }
 
     public boolean isAllowed(BillingSensitivePermission permission) {

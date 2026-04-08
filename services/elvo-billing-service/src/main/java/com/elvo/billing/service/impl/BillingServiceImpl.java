@@ -13,6 +13,7 @@ import com.elvo.billing.entity.enums.PaymentStatus;
 import com.elvo.billing.exception.DuplicatePaymentException;
 import com.elvo.billing.exception.PaymentValidationException;
 import com.elvo.billing.monitoring.BillingMetricsRecorder;
+import com.elvo.billing.monitoring.SecurityMonitoringService;
 import com.elvo.billing.monitoring.SentryBreadcrumbLogger;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.security.BillingRoleBasedAccessControl;
@@ -21,6 +22,7 @@ import com.elvo.billing.service.BillingService;
 import com.elvo.billing.service.event.BillingEventPublisher;
 import com.elvo.billing.service.orchestration.LookupFlow;
 import com.elvo.billing.service.orchestration.PaymentFlow;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,7 @@ public class BillingServiceImpl implements BillingService {
     private final BillingMetricsRecorder billingMetricsRecorder;
     private final SentryBreadcrumbLogger sentryBreadcrumbLogger;
     private final BillingRoleBasedAccessControl roleBasedAccessControl;
+    private final SecurityMonitoringService securityMonitoringService;
 
     public BillingServiceImpl(
             PaymentFlow paymentFlow,
@@ -46,6 +49,28 @@ public class BillingServiceImpl implements BillingService {
             BillingMetricsRecorder billingMetricsRecorder,
             SentryBreadcrumbLogger sentryBreadcrumbLogger,
             BillingRoleBasedAccessControl roleBasedAccessControl) {
+        this(
+                paymentFlow,
+                lookupFlow,
+                billPaymentRepository,
+                billingEventPublisher,
+                paymentAuditLogger,
+                billingMetricsRecorder,
+                sentryBreadcrumbLogger,
+                roleBasedAccessControl,
+                null);
+    }
+
+    public BillingServiceImpl(
+            PaymentFlow paymentFlow,
+            LookupFlow lookupFlow,
+            BillPaymentRepository billPaymentRepository,
+            BillingEventPublisher billingEventPublisher,
+            PaymentAuditLogger paymentAuditLogger,
+            BillingMetricsRecorder billingMetricsRecorder,
+            SentryBreadcrumbLogger sentryBreadcrumbLogger,
+            BillingRoleBasedAccessControl roleBasedAccessControl,
+            @Nullable SecurityMonitoringService securityMonitoringService) {
         this.paymentFlow = paymentFlow;
         this.lookupFlow = lookupFlow;
         this.billPaymentRepository = billPaymentRepository;
@@ -54,6 +79,7 @@ public class BillingServiceImpl implements BillingService {
         this.billingMetricsRecorder = billingMetricsRecorder;
         this.sentryBreadcrumbLogger = sentryBreadcrumbLogger;
         this.roleBasedAccessControl = roleBasedAccessControl;
+        this.securityMonitoringService = securityMonitoringService;
     }
 
     @Override
@@ -121,6 +147,9 @@ public class BillingServiceImpl implements BillingService {
         roleBasedAccessControl.authorize(BillingSensitivePermission.PAYMENT_REVERSE);
 
         String referenceNumber = reversalRequest.getReferenceNumber();
+        if (securityMonitoringService != null) {
+            securityMonitoringService.recordRepeatedReversalAttempt(referenceNumber);
+        }
         BillPayment payment = billPaymentRepository.getPaymentByReferenceWithLock(referenceNumber)
                 .orElseThrow(() -> new PaymentValidationException("payment not found for referenceNumber"));
 

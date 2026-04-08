@@ -2,6 +2,7 @@ package com.elvo.billing.service.orchestration;
 
 import com.elvo.billing.entity.BillPayment;
 import com.elvo.billing.entity.enums.PaymentStatus;
+import com.elvo.billing.monitoring.SecurityMonitoringService;
 import com.elvo.billing.repository.BillPaymentRepository;
 import com.elvo.billing.service.BillingTransactionService;
 import com.elvo.billing.service.impl.InternalEventIdempotencyService;
@@ -12,6 +13,7 @@ import com.elvo.billing.security.InternalServiceMessageAuthenticator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,7 @@ public class BillingTransactionOrchestrator {
     private final InternalEventIdempotencyService internalEventIdempotencyService;
     private final BillingInternalEventInputValidator inputValidator;
     private final BillingPaymentStateTransitionValidator stateTransitionValidator;
+    private final SecurityMonitoringService securityMonitoringService;
 
     public BillingTransactionOrchestrator(
             BillPaymentRepository billPaymentRepository,
@@ -41,12 +44,31 @@ public class BillingTransactionOrchestrator {
             InternalEventIdempotencyService internalEventIdempotencyService,
             BillingInternalEventInputValidator inputValidator,
             BillingPaymentStateTransitionValidator stateTransitionValidator) {
+        this(
+                billPaymentRepository,
+                billingTransactionService,
+                authorizationMatrix,
+                internalEventIdempotencyService,
+                inputValidator,
+                stateTransitionValidator,
+                null);
+    }
+
+    public BillingTransactionOrchestrator(
+            BillPaymentRepository billPaymentRepository,
+            BillingTransactionService billingTransactionService,
+            BillingServiceAuthorizationMatrix authorizationMatrix,
+            InternalEventIdempotencyService internalEventIdempotencyService,
+            BillingInternalEventInputValidator inputValidator,
+            BillingPaymentStateTransitionValidator stateTransitionValidator,
+            @Nullable SecurityMonitoringService securityMonitoringService) {
         this.billPaymentRepository = billPaymentRepository;
         this.billingTransactionService = billingTransactionService;
         this.authorizationMatrix = authorizationMatrix;
         this.internalEventIdempotencyService = internalEventIdempotencyService;
         this.inputValidator = inputValidator;
         this.stateTransitionValidator = stateTransitionValidator;
+        this.securityMonitoringService = securityMonitoringService;
     }
 
     @RabbitListener(queues = "${elvo.messaging.wallet.completed-queue:wallet.transaction.completed.queue}")
@@ -54,19 +76,23 @@ public class BillingTransactionOrchestrator {
     public void onWalletCompleted(Map<String, Object> event) {
         if (!authorizationMatrix.isAllowed("wallet-service", "CONSUME", COMPLETED_QUEUE)) {
             LOG.warn("billing_orchestrator_skip_complete reason=queue_not_authorized");
+            monitorSuspicious("billing.security.unauthorized_queue_access", "queue_not_authorized", COMPLETED_QUEUE, null);
             return;
         }
 
         if (!InternalServiceMessageAuthenticator.isTrusted(event, EXPECTED_SOURCE_SERVICE)) {
             LOG.warn("billing_orchestrator_skip_complete reason=invalid_service_token");
+            monitorInvalidSignature("onWalletCompleted");
             return;
         }
         if (!InternalServiceMessageAuthenticator.isReplaySafe(event)) {
             LOG.warn("billing_orchestrator_skip_complete reason=replay_validation_failed");
+            monitorReplay("onWalletCompleted");
             return;
         }
         if (!inputValidator.isValidWalletCompletedEvent(event)) {
             LOG.warn("billing_orchestrator_skip_complete reason=invalid_event_payload");
+            monitorSuspicious("billing.security.invalid_event_payload", "invalid_event_payload", COMPLETED_QUEUE, rootValue(event, "eventType"));
             return;
         }
 
@@ -101,6 +127,7 @@ public class BillingTransactionOrchestrator {
             LOG.warn("billing_orchestrator_skip_complete reason=invalid_state_transition paymentId={} status={}",
                     paymentId,
                     payment.getStatus());
+            monitorSuspicious("billing.security.invalid_state_transition", "invalid_state_transition", COMPLETED_QUEUE, paymentId.toString());
             return;
         }
         billingTransactionService.completeTransaction(payment);
@@ -113,19 +140,23 @@ public class BillingTransactionOrchestrator {
     public void onWalletFailed(Map<String, Object> event) {
         if (!authorizationMatrix.isAllowed("wallet-service", "CONSUME", FAILED_QUEUE)) {
             LOG.warn("billing_orchestrator_skip_reverse reason=queue_not_authorized");
+            monitorSuspicious("billing.security.unauthorized_queue_access", "queue_not_authorized", FAILED_QUEUE, null);
             return;
         }
 
         if (!InternalServiceMessageAuthenticator.isTrusted(event, EXPECTED_SOURCE_SERVICE)) {
             LOG.warn("billing_orchestrator_skip_reverse reason=invalid_service_token");
+            monitorInvalidSignature("onWalletFailed");
             return;
         }
         if (!InternalServiceMessageAuthenticator.isReplaySafe(event)) {
             LOG.warn("billing_orchestrator_skip_reverse reason=replay_validation_failed");
+            monitorReplay("onWalletFailed");
             return;
         }
         if (!inputValidator.isValidWalletFailedEvent(event)) {
             LOG.warn("billing_orchestrator_skip_reverse reason=invalid_event_payload");
+            monitorSuspicious("billing.security.invalid_event_payload", "invalid_event_payload", FAILED_QUEUE, rootValue(event, "eventType"));
             return;
         }
 
@@ -160,6 +191,7 @@ public class BillingTransactionOrchestrator {
             LOG.warn("billing_orchestrator_skip_reverse reason=invalid_state_transition paymentId={} status={}",
                     paymentId,
                     payment.getStatus());
+            monitorSuspicious("billing.security.invalid_state_transition", "invalid_state_transition", FAILED_QUEUE, paymentId.toString());
             return;
         }
         String reason = payloadValue(event, "reason");
@@ -210,5 +242,25 @@ public class BillingTransactionOrchestrator {
         }
         String text = String.valueOf(value).trim();
         return text.isEmpty() ? null : text;
+    }
+
+    private void monitorInvalidSignature(String operation) {
+        if (securityMonitoringService != null) {
+            securityMonitoringService.recordInvalidSignature(EXPECTED_SOURCE_SERVICE, operation);
+        }
+    }
+
+    private void monitorReplay(String operation) {
+        if (securityMonitoringService != null) {
+            securityMonitoringService.recordReplayAttempt(EXPECTED_SOURCE_SERVICE, operation);
+        }
+    }
+
+    private void monitorSuspicious(String eventType, String reason, String queue, String eventRef) {
+        if (securityMonitoringService != null) {
+            securityMonitoringService.recordSuspiciousEvent(eventType, reason, Map.of(
+                    "queue", queue == null ? "unknown" : queue,
+                    "eventRef", eventRef == null ? "unknown" : eventRef));
+        }
     }
 }
