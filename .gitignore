@@ -11,3 +11,6 @@
 !.env.example
 !.env.shared.example
 !**/.env.example
+
+# Documentation artifacts
+docs/
