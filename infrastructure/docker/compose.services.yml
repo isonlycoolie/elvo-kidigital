@@ -65,7 +65,7 @@ services:
       ELVO_DB_PORT: 5432
       ELVO_DB_NAME: wallet_db
       ELVO_DB_USER: wallet_user
-      ELVO_ACCOUNT_MANAGEMENT_INTERNAL_BASE_URL: http://elvo-account-management-service:8084/api/v1/internal/accounts
+      ELVO_ACCOUNT_MANAGEMENT_INTERNAL_BASE_URL: https://elvo-account-management-service:8084/api/v1/internal/accounts
       SENTRY_DSN: ${ELVO_RUNTIME_SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: ${ELVO_RUNTIME_SENTRY_ENVIRONMENT:-local}
       SENTRY_RELEASE: ${ELVO_RUNTIME_SENTRY_RELEASE_WALLET:-elvo-wallet-service@local}
