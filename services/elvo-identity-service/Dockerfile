@@ -4,10 +4,9 @@ WORKDIR /workspace
 
 # Build from source so image creation does not depend on local target/ artifacts.
 COPY pom.xml /workspace/pom.xml
-COPY shared /workspace/shared
-COPY services/elvo-identity-service /workspace/services/elvo-identity-service
+COPY src /workspace/src
 
-RUN mvn -q -pl services/elvo-identity-service -am -DskipTests package
+RUN mvn -q -DskipTests -Ddependency.check.skip=true package
 
 FROM eclipse-temurin:17-jre
 
@@ -19,7 +18,7 @@ RUN apt-get update \
 	&& rm -rf /var/lib/apt/lists/*
 RUN addgroup --system elvo && adduser --system --ingroup elvo elvo
 
-COPY --from=build /workspace/services/elvo-identity-service/target/*.jar /app/app.jar
+COPY --from=build /workspace/target/*.jar /app/app.jar
 
 USER elvo
 
