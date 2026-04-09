@@ -1,6 +1,7 @@
 package com.elvo.billing.security;
 
 import java.lang.reflect.Array;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
@@ -194,8 +195,11 @@ public final class InternalServiceMessageAuthenticator {
         if (value == null) {
             return "null";
         }
-        if (value instanceof CharSequence || value instanceof Number || value instanceof Boolean || value instanceof Enum<?>) {
+        if (value instanceof CharSequence || value instanceof Boolean || value instanceof Enum<?>) {
             return value.toString();
+        }
+        if (value instanceof Number number) {
+            return normalizeNumber(number);
         }
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> sorted = new TreeMap<>();
@@ -252,6 +256,14 @@ public final class InternalServiceMessageAuthenticator {
 
     private static String nullSafe(String value) {
         return value == null ? "" : value;
+    }
+
+    private static String normalizeNumber(Number number) {
+        try {
+            return new BigDecimal(number.toString()).stripTrailingZeros().toPlainString();
+        } catch (NumberFormatException ex) {
+            return number.toString();
+        }
     }
 
     private static final class MessageDigestHelper {

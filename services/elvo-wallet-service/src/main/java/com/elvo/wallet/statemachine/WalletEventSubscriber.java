@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.messaging.producer.WalletEventPublisher;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -28,6 +29,7 @@ public class WalletEventSubscriber {
     }
 
     @RabbitListener(queues = "${elvo.messaging.billing.requested-queue:billing.transaction.requested.queue}")
+    @Transactional
     public void onBillingTransactionRequested(Map<String, Object> event) {
         Map<String, Object> payload = payloadOf(event);
         String walletId = stringValue(payload.get("walletId"));
@@ -43,12 +45,11 @@ public class WalletEventSubscriber {
                     amount,
                     correlationId);
             Map<String, Object> failedPayload = new HashMap<>();
-            failedPayload.put("walletId", walletId);
-            failedPayload.put("amount", amount);
+            failedPayload.put("paymentId", billingReference == null ? UUID.randomUUID().toString() : billingReference);
+            failedPayload.put("transactionId", billingReference == null ? UUID.randomUUID().toString() : billingReference);
+            failedPayload.put("idempotencyKey", idempotencyKey == null ? "missing-idempotency-key" : idempotencyKey);
             failedPayload.put("reason", "missing_wallet_or_amount");
-            failedPayload.put("transactionId", billingReference);
-            failedPayload.put("correlationId", correlationId);
-            eventPublisher.publish("wallet.transaction.failed", failedPayload);
+            publishFailedEvent(failedPayload, correlationId);
             return;
         }
 
@@ -60,12 +61,13 @@ public class WalletEventSubscriber {
                 billingReference);
 
             if (!reserveResult.success()) {
-                eventPublisher.publish("wallet.transaction.failed", Map.of(
-                    "walletId", walletId,
-                    "amount", amount,
-                    "reason", reserveResult.message(),
-                    "transactionId", billingReference,
-                    "correlationId", correlationId));
+                Map<String, Object> failedPayload = new HashMap<>();
+                String safeReference = billingReference == null ? UUID.randomUUID().toString() : billingReference;
+                failedPayload.put("paymentId", safeReference);
+                failedPayload.put("transactionId", safeReference);
+                failedPayload.put("idempotencyKey", idempotencyKey == null ? safeReference : idempotencyKey);
+                failedPayload.put("reason", reserveResult.message() == null ? "reservation_failed" : reserveResult.message());
+                publishFailedEvent(failedPayload, correlationId);
                 return;
             }
 
@@ -74,6 +76,14 @@ public class WalletEventSubscriber {
                 "amount", amount,
                 "transactionId", billingReference,
                 "correlationId", correlationId));
+    }
+
+    private void publishFailedEvent(Map<String, Object> failedPayload, String correlationId) {
+        try {
+            eventPublisher.publish("wallet.transaction.failed", failedPayload);
+        } catch (RuntimeException ex) {
+            LOG.error("wallet_event_subscriber_publish_failed correlationId={}", correlationId, ex);
+        }
     }
 
     @SuppressWarnings("unchecked")
