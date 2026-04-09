@@ -1,6 +1,7 @@
 param(
     [string]$RootPath = (Resolve-Path "$PSScriptRoot/../..").Path,
-    [switch]$SkipTests = $true
+    [switch]$SkipTests = $true,
+    [switch]$IncludeMonitoring = $false
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,10 +25,18 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host '[start-local] Starting Docker Compose stack...'
-& docker compose -f $composeFile up -d --build
+$composeArgs = @('-f', $composeFile)
+if ($IncludeMonitoring) {
+    $composeArgs += @('--profile', 'monitoring')
+}
+$composeArgs += @('up', '-d', '--build')
+& docker compose @composeArgs
 if ($LASTEXITCODE -ne 0) {
     throw 'Docker compose startup failed.'
 }
 
 Write-Host '[start-local] Stack started. Current status:'
 & docker compose -f $composeFile ps
+if ($IncludeMonitoring) {
+    Write-Host '[start-local] Monitoring URLs: Prometheus http://localhost:9090, Grafana http://localhost:3000, Alertmanager http://localhost:9093'
+}

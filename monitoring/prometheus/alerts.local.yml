@@ -1,0 +1,11 @@
+groups:
+  - name: elvo-service-availability
+    rules:
+      - alert: ElvoServiceDown
+        expr: up{job=~"elvo-(identity|wallet|billing)-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: ELVO service is down
+          description: "{{ $labels.job }} has been down for more than 1 minute."

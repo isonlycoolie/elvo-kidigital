@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: ELVO Local Dashboards
+    orgId: 1
+    folder: ELVO Local Runtime
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

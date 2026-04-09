@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="$ROOT_PATH/infrastructure/docker/docker-compose.yml"
 SKIP_TESTS="${SKIP_TESTS:-true}"
+INCLUDE_MONITORING="${INCLUDE_MONITORING:-false}"
 
 build_module() {
   local module_path="$1"
@@ -28,7 +29,14 @@ build_module "$ROOT_PATH/services/elvo-wallet-service"
 build_module "$ROOT_PATH/services/elvo-billing-service"
 
 echo "[rebuild-local] Recreating runtime stack with rebuilt images..."
-docker compose -f "$COMPOSE_FILE" up -d --build --force-recreate
+if [[ "$INCLUDE_MONITORING" == "true" ]]; then
+  docker compose -f "$COMPOSE_FILE" --profile monitoring up -d --build --force-recreate
+else
+  docker compose -f "$COMPOSE_FILE" up -d --build --force-recreate
+fi
 
 echo "[rebuild-local] Current status:"
 docker compose -f "$COMPOSE_FILE" ps
+if [[ "$INCLUDE_MONITORING" == "true" ]]; then
+  echo "[rebuild-local] Monitoring URLs: Prometheus http://localhost:9090, Grafana http://localhost:3000, Alertmanager http://localhost:9093"
+fi

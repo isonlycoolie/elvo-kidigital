@@ -12,3 +12,6 @@ volumes:
   billing-db-data:
   redis-data:
   rabbitmq-data:
+  prometheus-data:
+  grafana-data:
+  alertmanager-data:

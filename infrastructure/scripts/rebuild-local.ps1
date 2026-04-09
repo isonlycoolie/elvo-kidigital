@@ -1,6 +1,7 @@
 param(
     [string]$RootPath = (Resolve-Path "$PSScriptRoot/../..").Path,
-    [switch]$SkipTests = $true
+    [switch]$SkipTests = $true,
+    [switch]$IncludeMonitoring = $false
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,10 +25,18 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host '[rebuild-local] Recreating runtime stack with rebuilt images...'
-& docker compose -f $composeFile up -d --build --force-recreate
+$composeArgs = @('-f', $composeFile)
+if ($IncludeMonitoring) {
+    $composeArgs += @('--profile', 'monitoring')
+}
+$composeArgs += @('up', '-d', '--build', '--force-recreate')
+& docker compose @composeArgs
 if ($LASTEXITCODE -ne 0) {
     throw 'Docker compose rebuild failed.'
 }
 
 Write-Host '[rebuild-local] Current status:'
 & docker compose -f $composeFile ps
+if ($IncludeMonitoring) {
+    Write-Host '[rebuild-local] Monitoring URLs: Prometheus http://localhost:9090, Grafana http://localhost:3000, Alertmanager http://localhost:9093'
+}

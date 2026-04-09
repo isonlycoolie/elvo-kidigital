@@ -102,3 +102,72 @@ services:
       start_period: 20s
     networks:
       - backend-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../../monitoring/prometheus/prometheus.local.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../monitoring/prometheus/alerts.local.yml:/etc/prometheus/alerts.local.yml:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    depends_on:
+      elvo-identity-service:
+        condition: service_started
+      elvo-wallet-service:
+        condition: service_started
+      elvo-billing-service:
+        condition: service_started
+    networks:
+      - backend-network
+      - frontend-network
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ../../monitoring/alertmanager/alertmanager.local.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    networks:
+      - backend-network
+      - frontend-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../../monitoring/grafana:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    depends_on:
+      prometheus:
+        condition: service_started
+    networks:
+      - backend-network
+      - frontend-network

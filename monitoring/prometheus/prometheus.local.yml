@@ -1,0 +1,48 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.local.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - localhost:9090
+        labels:
+          service: monitoring
+          domain: observability
+
+  - job_name: elvo-identity-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - elvo-identity-service:8081
+        labels:
+          service: identity-service
+          domain: identity
+
+  - job_name: elvo-wallet-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - elvo-wallet-service:8082
+        labels:
+          service: wallet-service
+          domain: wallet
+
+  - job_name: elvo-billing-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - elvo-billing-service:8083
+        labels:
+          service: billing-service
+          domain: billing
