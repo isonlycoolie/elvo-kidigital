@@ -16,6 +16,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                     .requestMatchers(EndpointRequest.to("health", "info", "prometheus")).permitAll()
+                    .requestMatchers("/internal/diagnostics/sentry-probe").permitAll()
                     .requestMatchers("/auth/**", "/esp/**", "/eac/**", "/fast-login/**", "/.well-known/**").permitAll()
                         .anyRequest().authenticated())
                 .httpBasic(Customizer.withDefaults())

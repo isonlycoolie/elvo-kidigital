@@ -105,6 +105,9 @@ elvo:
   monitoring:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:elvo-identity-service}
+      probe:
+        enabled: ${ELVO_SENTRY_PROBE_ENABLED:false}
+        token: ${ELVO_SENTRY_PROBE_TOKEN:}
   security:
     otp:
       hash-pepper: ${ELVO_OTP_HASH_PEPPER:change-this-otp-pepper}

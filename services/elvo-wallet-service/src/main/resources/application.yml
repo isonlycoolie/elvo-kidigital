@@ -49,7 +49,7 @@ sentry:
   environment: ${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}
   release: ${SENTRY_RELEASE:elvo-wallet-service@${spring.application.name}-${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}}
   traces-sample-rate: ${SENTRY_TRACES_SAMPLE_RATE:1.0}
-  send-default-pii: true
+  send-default-pii: ${SENTRY_SEND_DEFAULT_PII:false}
   max-breadcrumbs: ${SENTRY_MAX_BREADCRUMBS:100}
   attach-stacktrace: true
   in-app-includes:
@@ -85,6 +85,9 @@ elvo:
   monitoring:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:wallet-service}
+      probe:
+        enabled: ${ELVO_SENTRY_PROBE_ENABLED:false}
+        token: ${ELVO_SENTRY_PROBE_TOKEN:}
   security:
     internal-service-secret: ${ELVO_INTERNAL_SERVICE_SECRET:sm://elvo-internal-service-secret}
     jwt:

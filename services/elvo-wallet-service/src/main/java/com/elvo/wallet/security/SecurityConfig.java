@@ -136,6 +136,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                     .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/internal/diagnostics/sentry-probe").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/admin/audit/**").hasRole("AUDIT_ADMIN")
                     .requestMatchers("/api/v1/admin/emergency/**").hasRole("OPERATIONS_ADMIN")
                     .requestMatchers("/api/v1/admin/fraud/**").hasRole("FRAUD_ADMIN")
