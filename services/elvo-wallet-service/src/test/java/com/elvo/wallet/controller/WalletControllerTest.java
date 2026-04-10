@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,6 +54,8 @@ import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
 import com.elvo.wallet.service.impl.WalletLimitEnforcementService;
 import com.elvo.wallet.service.model.WalletFlowResult;
+import com.elvo.wallet.service.model.WithdrawalCommand;
+import com.elvo.wallet.service.model.WithdrawalMode;
 
 @WebMvcTest(WalletController.class)
 @Import({WalletMapper.class, GlobalExceptionHandler.class, WalletControllerTest.WalletControllerTestConfig.class})
@@ -248,6 +251,38 @@ class WalletControllerTest {
             .andExpect(jsonPath("$.message").value("Location anomaly detected; additional verification required"));
 
         verify(walletService, never()).processWithdrawal(any());
+    }
+
+    @Test
+    void deviceFreeWithdrawalEndpointShouldUseDedicatedContractAndProcessWithDeviceFreeMode() throws Exception {
+        Wallet wallet = new Wallet();
+        ReflectionTestUtils.setField(wallet, "id", UUID.randomUUID());
+
+        when(walletRepository.findByUserId(AUTHENTICATED_USER_ID)).thenReturn(java.util.Optional.of(wallet));
+        when(operationRateLimitService.enforce(any(), any(), any(), any(), any()))
+            .thenReturn(WalletOperationRateLimitService.RateLimitResult.allow());
+        when(destinationRiskService.evaluate(any(), any(), any()))
+            .thenReturn(new DestinationRiskService.DestinationRiskDecision(false, false, null));
+        when(walletService.processWithdrawal(any()))
+            .thenReturn(WalletFlowResult.success("Withdrawal completed", wallet.getId(), UUID.randomUUID(), "wallet.withdrawal.completed"));
+
+        mockMvc.perform(post("/wallets/withdrawals/device-free")
+                .with(csrf())
+                .contentType("application/json")
+                .content("""
+                    {
+                      "amount":20.00,
+                      "targetNumber":"+1234567890",
+                      "espCode":"esp-1234",
+                      "eacCode":"eac-1234",
+                      "idempotencyKey":"idem-device-free-1"
+                    }
+                    """))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.eventType").value("wallet.withdrawal.completed"));
+
+        verify(walletService).processWithdrawal(argThat((WithdrawalCommand command) -> command.mode() == WithdrawalMode.DEVICE_FREE));
     }
 
     @Test

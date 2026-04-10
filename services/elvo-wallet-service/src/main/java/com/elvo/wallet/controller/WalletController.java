@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.elvo.wallet.dto.request.DepositRequestDto;
+import com.elvo.wallet.dto.request.DeviceFreeWithdrawalRequestDto;
 import com.elvo.wallet.dto.request.EtcRedeemRequestDto;
 import com.elvo.wallet.dto.request.FreezeUnfreezeRequestDto;
 import com.elvo.wallet.dto.request.ReservationRequestDto;
@@ -422,6 +423,26 @@ public class WalletController {
                 .body(new FlowResultResponseDto(false, "Invalid withdrawal mode: " + request.getMode(),
                     wallet.getId(), null, "wallet.withdrawal.failed"));
         }
+    }
+
+    /**
+     * Process a dedicated device-free withdrawal flow.
+     */
+    @PostMapping("/withdrawals/device-free")
+    public ResponseEntity<FlowResultResponseDto> withdrawDeviceFree(@Valid @RequestBody DeviceFreeWithdrawalRequestDto request,
+                                                                    HttpServletRequest httpRequest) {
+        WithdrawalRequestDto withdrawalRequest = new WithdrawalRequestDto();
+        withdrawalRequest.setAmount(request.getAmount());
+        withdrawalRequest.setMode(WithdrawalMode.DEVICE_FREE.name());
+        withdrawalRequest.setTargetNumber(request.getTargetNumber());
+        withdrawalRequest.setEspCode(request.getEspCode());
+        withdrawalRequest.setEacCode(request.getEacCode());
+        withdrawalRequest.setIdempotencyKey(request.getIdempotencyKey());
+        withdrawalRequest.setReference(request.getReference());
+        withdrawalRequest.setStepUpMethod(request.getStepUpMethod());
+        withdrawalRequest.setStepUpToken(request.getStepUpToken());
+        withdrawalRequest.setTransactionChallengeToken(request.getTransactionChallengeToken());
+        return withdraw(withdrawalRequest, httpRequest);
     }
 
     /**
