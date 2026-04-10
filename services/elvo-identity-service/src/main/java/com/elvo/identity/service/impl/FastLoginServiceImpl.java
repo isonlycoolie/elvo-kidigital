@@ -3,7 +3,10 @@ package com.elvo.identity.service.impl;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,24 +33,35 @@ public class FastLoginServiceImpl implements FastLoginService {
     private static final Duration REQUEST_RATE_LIMIT = Duration.ofSeconds(20);
     private static final int PIN_LENGTH = 6;
     private static final String BIOMETRIC_PREFIX = "BIO:";
+    private static final String METHOD_PIN = "pin";
+    private static final String METHOD_BIOMETRIC = "biometric";
 
     private final UserRepository userRepository;
     private final DeviceRepository deviceRepository;
     private final AuditRepository auditRepository;
     private final SessionManagementService sessionManagementService;
     private final SecurityHashingService hashingService;
+    private final StringRedisTemplate redisTemplate;
+    private final Duration methodPolicyTtl;
+    private final String methodPolicyKeyPrefix;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public FastLoginServiceImpl(UserRepository userRepository,
                                 DeviceRepository deviceRepository,
                                 AuditRepository auditRepository,
                                 SessionManagementService sessionManagementService,
-                                SecurityHashingService hashingService) {
+                                SecurityHashingService hashingService,
+                                StringRedisTemplate redisTemplate,
+                                @Value("${elvo.security.fast-login.method-policy.ttl-days:30}") long methodPolicyTtlDays,
+                                @Value("${elvo.security.fast-login.method-policy.key-prefix:elvo:fast-login:method:}") String methodPolicyKeyPrefix) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.auditRepository = auditRepository;
         this.sessionManagementService = sessionManagementService;
         this.hashingService = hashingService;
+        this.redisTemplate = redisTemplate;
+        this.methodPolicyTtl = Duration.ofDays(Math.max(1, methodPolicyTtlDays));
+        this.methodPolicyKeyPrefix = methodPolicyKeyPrefix;
     }
 
     @Override
@@ -55,6 +69,11 @@ public class FastLoginServiceImpl implements FastLoginService {
     public FastLoginChallengeResponse generateFastLoginPin(FastLoginGenerateRequest request) {
         User user = loadUser(request.getUserId());
         enforceRateLimit(user);
+        Device device = registerOrRefreshDevice(user, request.getDeviceId(), request.getDeviceType(), request.getSourceIp());
+        String persistedMethod = loadPersistedMethod(user.getId(), device.getDeviceId());
+        if (METHOD_BIOMETRIC.equals(persistedMethod)) {
+            throw new IllegalStateException("Fast login method policy requires biometric on this device");
+        }
 
         String pin = generatePin();
         user.setFastLoginPinHash(hashingService.hashOneTimeCode(pin));
@@ -63,7 +82,7 @@ public class FastLoginServiceImpl implements FastLoginService {
         user.setFastLoginLastRequestedAt(Instant.now());
         userRepository.save(user);
 
-        registerOrRefreshDevice(user, request.getDeviceId(), request.getDeviceType(), request.getSourceIp());
+        persistMethod(user.getId(), device.getDeviceId(), METHOD_PIN);
         audit(user, "Fast login PIN generated", request.getSourceIp(), request.getSourceUserAgent());
 
         return new FastLoginChallengeResponse(pin, user.getFastLoginExpiresAt(), user.isMfaEnabled());
@@ -73,7 +92,7 @@ public class FastLoginServiceImpl implements FastLoginService {
     @Transactional
     public FastLoginResponse verifyFastLogin(FastLoginVerifyRequest request) {
         User user = loadUser(request.getUserId());
-        Device device = registerOrRefreshDevice(user, request.getDeviceId(), "FAST-LOGIN", request.getSourceIp());
+        Device device = loadOrRegisterVerificationDevice(user, request.getDeviceId(), request.getSourceIp());
 
         boolean biometricSuccess = request.getBiometricToken() != null
                 && request.getBiometricToken().equals(BIOMETRIC_PREFIX + user.getId() + ":" + device.getDeviceId());
@@ -90,6 +109,9 @@ public class FastLoginServiceImpl implements FastLoginService {
             throw new IllegalArgumentException("Fast login verification failed");
         }
 
+        String attemptedMethod = biometricSuccess ? METHOD_BIOMETRIC : METHOD_PIN;
+        enforceMethodPolicy(user.getId(), device, attemptedMethod);
+
         user.setFastLoginPinHash(null);
         user.setFastLoginExpiresAt(null);
         user.setFastLoginFailedAttempts(0);
@@ -100,6 +122,7 @@ public class FastLoginServiceImpl implements FastLoginService {
         device.setSuspicious(false);
         device.setLastUsedAt(Instant.now());
         deviceRepository.save(device);
+        persistMethod(user.getId(), device.getDeviceId(), attemptedMethod);
 
         SessionTokenResponse session = sessionManagementService.createSession(buildSessionRequest(user, device, request));
         audit(user, biometricSuccess ? "Fast login biometric success" : "Fast login PIN success", request.getSourceIp(), request.getSourceUserAgent());
@@ -135,6 +158,43 @@ public class FastLoginServiceImpl implements FastLoginService {
         device.setSuspicious(false);
         device.setLastUsedAt(Instant.now());
         return deviceRepository.save(device);
+    }
+
+    private Device loadOrRegisterVerificationDevice(User user, String deviceId, String sourceIp) {
+        return deviceRepository.findByUserIdAndDeviceId(user.getId(), deviceId)
+                .orElseGet(() -> registerOrRefreshDevice(user, deviceId, "UNKNOWN", sourceIp));
+    }
+
+    private void enforceMethodPolicy(java.util.UUID userId, Device device, String attemptedMethod) {
+        String persistedMethod = loadPersistedMethod(userId, device.getDeviceId());
+        if (persistedMethod != null && !persistedMethod.equals(attemptedMethod)) {
+            throw new IllegalStateException("Fast login method policy violation for device");
+        }
+
+        boolean biometricCapable = isBiometricCapable(device.getDeviceType());
+        if (METHOD_BIOMETRIC.equals(attemptedMethod) && !biometricCapable) {
+            throw new IllegalArgumentException("Biometric fast login is not supported on this device");
+        }
+    }
+
+    private boolean isBiometricCapable(String deviceType) {
+        if (deviceType == null) {
+            return false;
+        }
+        String normalized = deviceType.toUpperCase(Locale.ROOT);
+        return normalized.contains("BIO") || normalized.contains("FACE") || normalized.contains("FINGERPRINT");
+    }
+
+    private String loadPersistedMethod(java.util.UUID userId, String deviceId) {
+        return redisTemplate.opsForValue().get(methodPolicyKey(userId, deviceId));
+    }
+
+    private void persistMethod(java.util.UUID userId, String deviceId, String method) {
+        redisTemplate.opsForValue().set(methodPolicyKey(userId, deviceId), method, methodPolicyTtl);
+    }
+
+    private String methodPolicyKey(java.util.UUID userId, String deviceId) {
+        return methodPolicyKeyPrefix + userId + ":" + deviceId;
     }
 
     private SessionCreateRequest buildSessionRequest(User user, Device device, FastLoginVerifyRequest request) {
