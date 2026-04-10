@@ -17,6 +17,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                 .requestMatchers(EndpointRequest.to("health", "info", "prometheus")).permitAll()
                 .requestMatchers("/actuator/**").permitAll()
+                .requestMatchers("/internal/diagnostics/sentry-probe").permitAll()
                         .anyRequest().authenticated())
                 .httpBasic(Customizer.withDefaults())
                 .build();

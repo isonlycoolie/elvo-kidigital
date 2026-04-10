@@ -52,6 +52,9 @@ elvo:
   monitoring:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:elvo-account-management-service}
+      probe:
+        enabled: ${ELVO_SENTRY_PROBE_ENABLED:false}
+        token: ${ELVO_SENTRY_PROBE_TOKEN:}
   messaging:
     account:
       exchange: ${ELVO_ACCOUNT_EXCHANGE:elvo.account.exchange}
