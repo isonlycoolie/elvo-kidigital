@@ -20,6 +20,7 @@ import com.elvo.identity.dto.request.ProfileUpdateRequest;
 import com.elvo.identity.dto.request.TotpVerifyRequest;
 import com.elvo.identity.dto.response.DeviceInfoResponse;
 import com.elvo.identity.dto.response.ProfileResponse;
+import com.elvo.identity.dto.response.RecoveryCodesResponse;
 import com.elvo.identity.dto.response.SessionInfoResponse;
 import com.elvo.identity.dto.response.TotpEnrollmentResponse;
 import com.elvo.identity.dto.response.TotpVerificationResponse;
@@ -33,6 +34,7 @@ import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.service.ProfileManagementService;
+import com.elvo.identity.service.RecoveryCodeService;
 import com.elvo.identity.service.SessionManagementService;
 import com.elvo.identity.service.TotpManagementService;
 
@@ -52,6 +54,7 @@ public class UserController {
     private final SessionManagementService sessionManagementService;
     private final IdentityAccountReadService accountReadService;
     private final TotpManagementService totpManagementService;
+    private final RecoveryCodeService recoveryCodeService;
 
     public UserController(UserRepository userRepository,
                           DeviceRepository deviceRepository,
@@ -61,7 +64,8 @@ public class UserController {
                           ProfileManagementService profileManagementService,
                           SessionManagementService sessionManagementService,
                           IdentityAccountReadService accountReadService,
-                          TotpManagementService totpManagementService) {
+                          TotpManagementService totpManagementService,
+                          RecoveryCodeService recoveryCodeService) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.sessionRepository = sessionRepository;
@@ -71,6 +75,7 @@ public class UserController {
         this.sessionManagementService = sessionManagementService;
         this.accountReadService = accountReadService;
         this.totpManagementService = totpManagementService;
+        this.recoveryCodeService = recoveryCodeService;
     }
 
     @GetMapping
@@ -166,6 +171,15 @@ public class UserController {
                 ? new TotpVerificationResponse(true, "TOTP_ENROLLED", "TOTP enrollment verified")
                 : new TotpVerificationResponse(false, "TOTP_INVALID", "TOTP code is invalid or expired");
         return ResponseEntity.ok(ApiResponse.ok("TOTP verification processed", response));
+    }
+
+    @PostMapping("/mfa/recovery-codes")
+    public ResponseEntity<ApiResponse<RecoveryCodesResponse>> issueRecoveryCodes(
+            @RequestHeader("X-User-Id") UUID userId,
+            @Valid @RequestBody TotpVerifyRequest request) {
+        RecoveryCodeService.RecoveryCodeBatch batch = recoveryCodeService.issueCodes(userId, request.getCode());
+        RecoveryCodesResponse response = new RecoveryCodesResponse(batch.codes(), batch.remainingCount());
+        return ResponseEntity.ok(ApiResponse.ok("Recovery codes issued", response));
     }
 
     private ProfileResponse loadProfile(UUID userId) {

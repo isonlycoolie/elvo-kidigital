@@ -21,6 +21,7 @@ import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.service.LoginService;
+import com.elvo.identity.service.RecoveryCodeService;
 import com.elvo.identity.service.SecurityProtectionService;
 import com.elvo.identity.service.TotpManagementService;
 import com.elvo.identity.util.TokenService;
@@ -38,6 +39,7 @@ public class LoginServiceImpl implements LoginService {
     private final AuditEventPublisher auditEventPublisher;
     private final IdentityAccountReadService accountReadService;
     private final TotpManagementService totpManagementService;
+    private final RecoveryCodeService recoveryCodeService;
 
     public LoginServiceImpl(UserRepository userRepository,
                             DeviceRepository deviceRepository,
@@ -48,7 +50,8 @@ public class LoginServiceImpl implements LoginService {
                             SecurityHashingService hashingService,
                             AuditEventPublisher auditEventPublisher,
                             IdentityAccountReadService accountReadService,
-                            TotpManagementService totpManagementService) {
+                            TotpManagementService totpManagementService,
+                            RecoveryCodeService recoveryCodeService) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.sessionRepository = sessionRepository;
@@ -59,6 +62,7 @@ public class LoginServiceImpl implements LoginService {
         this.auditEventPublisher = auditEventPublisher;
         this.accountReadService = accountReadService;
         this.totpManagementService = totpManagementService;
+        this.recoveryCodeService = recoveryCodeService;
     }
 
     @Override
@@ -199,7 +203,11 @@ public class LoginServiceImpl implements LoginService {
             throw new IllegalArgumentException("MFA code is required");
         }
         boolean verified = totpManagementService.verifyActiveCode(user.getId(), request.getMfaCode());
-        if (!verified) {
+        if (verified) {
+            return;
+        }
+        boolean recoveryVerified = recoveryCodeService.consumeCode(user.getId(), request.getMfaCode());
+        if (!recoveryVerified) {
             throw new IllegalArgumentException("Invalid MFA code");
         }
     }

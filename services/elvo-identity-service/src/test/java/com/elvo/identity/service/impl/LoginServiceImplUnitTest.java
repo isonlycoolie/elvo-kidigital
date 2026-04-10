@@ -27,6 +27,7 @@ import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.security.SecurityHashingService;
+import com.elvo.identity.service.RecoveryCodeService;
 import com.elvo.identity.service.SecurityProtectionService;
 import com.elvo.identity.service.TotpManagementService;
 import com.elvo.identity.util.TokenService;
@@ -64,6 +65,9 @@ class LoginServiceImplUnitTest {
     @Mock
     private TotpManagementService totpManagementService;
 
+    @Mock
+    private RecoveryCodeService recoveryCodeService;
+
     private LoginServiceImpl createLoginService() {
         return new LoginServiceImpl(
                 userRepository,
@@ -75,7 +79,8 @@ class LoginServiceImplUnitTest {
                 hashingService,
                 auditEventPublisher,
                 accountReadService,
-                totpManagementService);
+                totpManagementService,
+                recoveryCodeService);
     }
 
     @Test
@@ -174,11 +179,39 @@ class LoginServiceImplUnitTest {
         when(userRepository.findByEmailIgnoreCase("mfa@elvo.com")).thenReturn(Optional.of(user));
         when(hashingService.verifyPassword("Password123", "hashed-password")).thenReturn(true);
         when(totpManagementService.verifyActiveCode(user.getId(), "000000")).thenReturn(false);
+        when(recoveryCodeService.consumeCode(user.getId(), "000000")).thenReturn(false);
         when(auditRepository.save(any(Audit.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> createLoginService().login(request));
         assertEquals("Invalid MFA code", ex.getMessage());
         verify(sessionRepository, never()).save(any());
+    }
+
+    @Test
+    void mfaEnabledUserShouldAllowBackupRecoveryCode() {
+        User user = new User();
+        setId(user, UUID.randomUUID());
+        user.setEmail("backup@elvo.com");
+        user.setHashedPassword("hashed-password");
+        user.setAccountStatus(User.AccountStatus.ACTIVE);
+        user.setEmailVerified(true);
+        user.setMfaEnabled(true);
+
+        LoginRequest request = new LoginRequest();
+        request.setIdentifier("backup@elvo.com");
+        request.setPassword("Password123");
+        request.setMfaCode("ABCDEF1234");
+        request.setDeviceId("device-1");
+        request.setDeviceType("ANDROID");
+
+        when(userRepository.findByEmailIgnoreCase("backup@elvo.com")).thenReturn(Optional.of(user));
+        when(hashingService.verifyPassword("Password123", "hashed-password")).thenReturn(true);
+        when(totpManagementService.verifyActiveCode(user.getId(), "ABCDEF1234")).thenReturn(false);
+        when(recoveryCodeService.consumeCode(user.getId(), "ABCDEF1234")).thenReturn(true);
+        when(accountReadService.resolveEan(user.getId())).thenThrow(new IllegalStateException("Fallback account service is unavailable"));
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> createLoginService().login(request));
+        assertEquals("Fallback account service is unavailable", ex.getMessage());
     }
 
     private void setId(User user, UUID id) {
