@@ -1,12 +1,10 @@
-FROM maven:3.9.9-eclipse-temurin-17 AS build
+FROM eclipse-temurin:17-jdk AS build
 
 WORKDIR /workspace
 
-# Build from source so image creation does not depend on local target/ artifacts.
-COPY pom.xml /workspace/pom.xml
-COPY src /workspace/src
-
-RUN mvn -q -DskipTests -Ddependency.check.skip=true package
+# Project-safe runtime packaging: use the prebuilt service artifact from target/.
+ARG JAR_FILE=target/*.jar
+COPY ${JAR_FILE} /workspace/app.jar
 
 FROM eclipse-temurin:17-jre
 
@@ -18,7 +16,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 RUN addgroup --system elvo && adduser --system --ingroup elvo elvo
 
-COPY --from=build /workspace/target/*.jar /app/app.jar
+COPY --from=build /workspace/app.jar /app/app.jar
 
 USER elvo
 
