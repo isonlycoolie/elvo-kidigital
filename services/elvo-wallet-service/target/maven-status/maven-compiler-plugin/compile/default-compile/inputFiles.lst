@@ -4,7 +4,10 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\mai
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\audit\ImmutableAuditStorageService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\audit\package-info.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\cache\package-info.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\client\AccountClientProperties.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\client\AccountServiceClient.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\client\AgentServiceClient.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\client\DefaultAccountServiceClient.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\client\DefaultAgentServiceClient.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\client\DefaultIdentityServiceClient.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\client\IdentityClientProperties.java
@@ -15,10 +18,12 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\mai
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\config\InfrastructurePlaceholdersConfig.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\config\package-info.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\config\SentryRequestContextFilter.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\config\WalletListenerQueueConfig.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\controller\AdminAuditController.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\controller\AdminEmergencyController.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\controller\AdminFraudController.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\controller\HealthController.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\controller\InternalDiagnosticsController.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\controller\InternalOutboxController.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\controller\InternalResilienceController.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-wallet-service\src\main\java\com\elvo\wallet\controller\InternalWalletController.java

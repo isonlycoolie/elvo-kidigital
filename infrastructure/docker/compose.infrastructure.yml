@@ -154,6 +154,8 @@ services:
         condition: service_started
       elvo-billing-service:
         condition: service_started
+      elvo-account-management-service:
+        condition: service_started
     networks:
       - backend-network
       - frontend-network
