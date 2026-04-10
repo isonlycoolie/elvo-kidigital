@@ -66,11 +66,11 @@ logging:
     level: "%5p [corr:%X{correlationId}] [req:%X{requestId}]"
 
 sentry:
-  dsn: ${SENTRY_DSN:}
+  dsn: ${SENTRY_DSN:${ELVO_SENTRY_DSN:}}
   environment: ${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}
   release: ${SENTRY_RELEASE:elvo-identity-service@${spring.application.name}-${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}}
   traces-sample-rate: ${SENTRY_TRACES_SAMPLE_RATE:0.1}
-  send-default-pii: ${SENTRY_SEND_DEFAULT_PII:false}
+  send-default-pii: ${SENTRY_SEND_DEFAULT_PII:${ELVO_SENTRY_SEND_DEFAULT_PII:false}}
   max-breadcrumbs: ${SENTRY_MAX_BREADCRUMBS:100}
   attach-stacktrace: true
   in-app-includes:
