@@ -17,6 +17,9 @@ logging:
     root: INFO
 
 elvo:
+  billing:
+    wallet:
+      settlement-enabled: false
   security:
     jwt:
       secret: test-billing-jwt-secret-which-is-at-least-32-bytes

@@ -27,6 +27,7 @@ import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.DeviceRepository;
 import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
+import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.service.ProfileManagementService;
 import com.elvo.identity.service.SessionManagementService;
 
@@ -44,6 +45,7 @@ public class UserController {
     private final AuditEventPublisher auditEventPublisher;
     private final ProfileManagementService profileManagementService;
     private final SessionManagementService sessionManagementService;
+    private final IdentityAccountReadService accountReadService;
 
     public UserController(UserRepository userRepository,
                           DeviceRepository deviceRepository,
@@ -51,7 +53,8 @@ public class UserController {
                           AuditRepository auditRepository,
                           AuditEventPublisher auditEventPublisher,
                           ProfileManagementService profileManagementService,
-                          SessionManagementService sessionManagementService) {
+                          SessionManagementService sessionManagementService,
+                          IdentityAccountReadService accountReadService) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.sessionRepository = sessionRepository;
@@ -59,6 +62,7 @@ public class UserController {
         this.auditEventPublisher = auditEventPublisher;
         this.profileManagementService = profileManagementService;
         this.sessionManagementService = sessionManagementService;
+        this.accountReadService = accountReadService;
     }
 
     @GetMapping
@@ -138,9 +142,10 @@ public class UserController {
     private ProfileResponse loadProfile(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        String resolvedEan = accountReadService.resolveEan(user.getId());
         return new ProfileResponse(
                 user.getId(),
-                user.getEan(),
+            resolvedEan,
                 user.getEmail(),
                 user.getPhone(),
                 user.getDisplayName(),

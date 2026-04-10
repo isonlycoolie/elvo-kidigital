@@ -27,14 +27,14 @@ public class DefaultWalletProvisioningClient implements WalletProvisioningClient
     public void createWallet(UUID userId, String idempotencyKey) {
         retryExecutor.execute("wallet provisioning", () -> {
             RestClient.RequestBodySpec request = restClient.post()
-                    .uri("/wallets")
+                    .uri("/api/v1/internal/wallets/{userId}", userId)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Idempotency-Key", idempotencyKey)
                     .header("X-Source-Service", properties.getSourceServiceName());
             if (StringUtils.hasText(properties.getInternalAuthToken())) {
-                request = request.header("X-Internal-Auth-Token", properties.getInternalAuthToken());
+                request = request.header("Authorization", "Bearer " + properties.getInternalAuthToken());
             }
-            request.body(Map.of("userId", userId))
+            request.body(Map.of())
                     .retrieve()
                     .toBodilessEntity();
         });

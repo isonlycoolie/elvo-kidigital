@@ -12,6 +12,7 @@ services:
       ELVO_DB_PORT: 5432
       ELVO_DB_NAME: identity_db
       ELVO_DB_USER: identity_user
+      ELVO_ACCOUNT_READ_BASE_URL: http://elvo-account-management-service:8084
       SENTRY_DSN: ${ELVO_RUNTIME_SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: ${ELVO_RUNTIME_SENTRY_ENVIRONMENT:-local}
       SENTRY_RELEASE: ${ELVO_RUNTIME_SENTRY_RELEASE_IDENTITY:-elvo-identity-service@local}
@@ -21,12 +22,17 @@ services:
       ELVO_SENTRY_PROBE_TOKEN: ${ELVO_RUNTIME_SENTRY_PROBE_TOKEN:-}
       ELVO_RABBITMQ_HOST: rabbitmq
       ELVO_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-guest}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-guest}
+      SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_DEFAULT_VHOST:-/}
       ELVO_REDIS_HOST: redis
       ELVO_REDIS_PORT: 6379
       SERVER_PORT: 8081
     ports:
       - "8081:8081"
-    restart: unless-stopped
+    restart: always
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 15s
@@ -35,6 +41,8 @@ services:
       start_period: 30s
     depends_on:
       identity-db:
+        condition: service_healthy
+      elvo-account-management-service:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -57,6 +65,7 @@ services:
       ELVO_DB_PORT: 5432
       ELVO_DB_NAME: wallet_db
       ELVO_DB_USER: wallet_user
+      ELVO_ACCOUNT_MANAGEMENT_INTERNAL_BASE_URL: https://elvo-account-management-service:8084/api/v1/internal/accounts
       SENTRY_DSN: ${ELVO_RUNTIME_SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: ${ELVO_RUNTIME_SENTRY_ENVIRONMENT:-local}
       SENTRY_RELEASE: ${ELVO_RUNTIME_SENTRY_RELEASE_WALLET:-elvo-wallet-service@local}
@@ -76,7 +85,7 @@ services:
       SERVER_PORT: 8082
     ports:
       - "8082:8082"
-    restart: unless-stopped
+    restart: always
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 15s
@@ -85,6 +94,8 @@ services:
       start_period: 30s
     depends_on:
       wallet-db:
+        condition: service_healthy
+      elvo-account-management-service:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -129,7 +140,7 @@ services:
       SERVER_PORT: 8083
     ports:
       - "8083:8083"
-    restart: unless-stopped
+    restart: always
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8083/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 15s
@@ -145,6 +156,55 @@ services:
         condition: service_healthy
       elvo-wallet-service:
         condition: service_started
+    networks:
+      - frontend-network
+      - backend-network
+
+  elvo-account-management-service:
+    build:
+      context: ../../services/elvo-account-management-service
+      dockerfile: Dockerfile
+    container_name: elvo-account-management-service
+    env_file:
+      - ../../.env.shared
+    environment:
+      ELVO_DB_HOST: account-db
+      ELVO_DB_PORT: 5432
+      ELVO_DB_NAME: account_db
+      ELVO_DB_USER: account_user
+      SERVER_PORT: 8084
+      SENTRY_DSN: ${ELVO_RUNTIME_SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${ELVO_RUNTIME_SENTRY_ENVIRONMENT:-local}
+      SENTRY_RELEASE: ${ELVO_RUNTIME_SENTRY_RELEASE_ACCOUNT:-elvo-account-management-service@local}
+      SENTRY_TRACES_SAMPLE_RATE: ${ELVO_RUNTIME_SENTRY_TRACES_SAMPLE_RATE:-0.0}
+      SENTRY_SEND_DEFAULT_PII: ${ELVO_RUNTIME_SENTRY_SEND_DEFAULT_PII:-false}
+      ELVO_SENTRY_PROBE_ENABLED: ${ELVO_RUNTIME_SENTRY_PROBE_ENABLED:-false}
+      ELVO_SENTRY_PROBE_TOKEN: ${ELVO_RUNTIME_SENTRY_PROBE_TOKEN:-}
+      ELVO_RABBITMQ_HOST: rabbitmq
+      ELVO_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-guest}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-guest}
+      SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_DEFAULT_VHOST:-/}
+      ELVO_REDIS_HOST: redis
+      ELVO_REDIS_PORT: 6379
+    ports:
+      - "8084:8084"
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8084/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    depends_on:
+      account-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - frontend-network
       - backend-network

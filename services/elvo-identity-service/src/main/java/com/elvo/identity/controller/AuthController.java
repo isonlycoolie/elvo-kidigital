@@ -45,6 +45,7 @@ import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.security.TokenRevocationService;
 import com.elvo.identity.service.LoginService;
+import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.service.OtpService;
 import com.elvo.identity.service.PostVerificationProvisioningService;
 import com.elvo.identity.service.RegistrationService;
@@ -73,6 +74,7 @@ public class AuthController {
     private final OtpService otpService;
     private final VerificationTokenService verificationTokenService;
     private final PostVerificationProvisioningService postVerificationProvisioningService;
+    private final IdentityAccountReadService accountReadService;
 
     public AuthController(RegistrationService registrationService,
                           LoginService loginService,
@@ -85,7 +87,8 @@ public class AuthController {
                           SecurityHashingService hashingService,
                           OtpService otpService,
                           VerificationTokenService verificationTokenService,
-                          PostVerificationProvisioningService postVerificationProvisioningService) {
+                          PostVerificationProvisioningService postVerificationProvisioningService,
+                          IdentityAccountReadService accountReadService) {
         this.registrationService = registrationService;
         this.loginService = loginService;
         this.sessionRepository = sessionRepository;
@@ -98,6 +101,7 @@ public class AuthController {
         this.otpService = otpService;
         this.verificationTokenService = verificationTokenService;
         this.postVerificationProvisioningService = postVerificationProvisioningService;
+        this.accountReadService = accountReadService;
     }
 
     @PostMapping("/register")
@@ -335,7 +339,8 @@ public class AuthController {
             tokenRevocationService.revokeJti(claims.jti(), claims.expiresAt());
             revokeSessionAccessTokenIfPresent(session);
 
-            TokenService.TokenPayload accessToken = tokenService.generateAccessToken(session.getUser().getId(), session.getUser().getEan());
+            String resolvedEan = accountReadService.resolveEan(session.getUser().getId());
+            TokenService.TokenPayload accessToken = tokenService.generateAccessToken(session.getUser().getId(), resolvedEan);
             TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(session.getUser().getId(), session.getAbsoluteExpiresAt());
             session.setJwtToken(accessToken.token());
             session.setRefreshToken(refreshToken.token());

@@ -19,8 +19,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByPhone(String phone);
 
-    Optional<User> findByEan(String ean);
-
     List<User> findByAccountStatusAndVerificationDeadlineBefore(User.AccountStatus accountStatus, Instant before);
 
     List<User> findByAccountStatusAndVerificationDeadlineIsNullAndCreatedAtBefore(User.AccountStatus accountStatus, Instant before);

@@ -6,10 +6,12 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.elvo.wallet.client.AccountServiceClient;
 import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.messaging.producer.WalletEventPublisher;
@@ -32,6 +34,7 @@ public class DefaultTransferFlowService implements TransferFlowService {
 
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
+    private final AccountServiceClient accountServiceClient;
     private final WalletIdempotencyService idempotencyService;
     private final WalletLedgerIntegrationService ledgerIntegrationService;
     private final WalletLimitEnforcementService limitEnforcementService;
@@ -55,8 +58,38 @@ public class DefaultTransferFlowService implements TransferFlowService {
                                       WalletFraudVelocityService fraudVelocityService,
                                       WalletFieldEncryptionService fieldEncryptionService,
                                       TransactionLifecycleService transactionLifecycleService) {
+        this(walletRepository,
+            transactionRepository,
+            null,
+            idempotencyService,
+            ledgerIntegrationService,
+            limitEnforcementService,
+            sagaOrchestrator,
+            eventPublisher,
+            stepUpAuthenticationService,
+            transactionSigningChallengeService,
+            fraudVelocityService,
+            fieldEncryptionService,
+            transactionLifecycleService);
+        }
+
+        @Autowired
+        public DefaultTransferFlowService(WalletRepository walletRepository,
+                          TransactionRepository transactionRepository,
+                          AccountServiceClient accountServiceClient,
+                          WalletIdempotencyService idempotencyService,
+                          WalletLedgerIntegrationService ledgerIntegrationService,
+                          WalletLimitEnforcementService limitEnforcementService,
+                          WalletSagaOrchestrator sagaOrchestrator,
+                          WalletEventPublisher eventPublisher,
+                          StepUpAuthenticationService stepUpAuthenticationService,
+                          TransactionSigningChallengeService transactionSigningChallengeService,
+                          WalletFraudVelocityService fraudVelocityService,
+                          WalletFieldEncryptionService fieldEncryptionService,
+                          TransactionLifecycleService transactionLifecycleService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
+        this.accountServiceClient = accountServiceClient;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
         this.limitEnforcementService = limitEnforcementService;
@@ -138,6 +171,10 @@ public class DefaultTransferFlowService implements TransferFlowService {
 
         if (source == null || target == null) {
             return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Source or target wallet not found");
+        }
+
+        if (!validateTransferAgainstAccountService(source, target, command)) {
+            return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Transfer validation failed");
         }
 
         if (source.getStatus() == Wallet.WalletStatus.FROZEN || target.getStatus() == Wallet.WalletStatus.FROZEN) {
@@ -276,6 +313,27 @@ public class DefaultTransferFlowService implements TransferFlowService {
     private String transferBinding(TransferCommand command) {
         String amount = command.amount() == null ? "0" : command.amount().stripTrailingZeros().toPlainString();
         return command.sourceWalletId() + ":" + command.targetWalletId() + ":" + amount;
+    }
+
+    private boolean validateTransferAgainstAccountService(Wallet source, Wallet target, TransferCommand command) {
+        if (accountServiceClient == null) {
+            return true;
+        }
+
+        return accountServiceClient.findAccountByUserId(source.getUserId())
+                .flatMap(sourceAccount -> accountServiceClient.findAccountByUserId(target.getUserId())
+                        .map(targetAccount -> accountServiceClient.validateTransfer(
+                                new AccountServiceClient.AccountValidationRequest(
+                                        sourceAccount.accountId(),
+                                        targetAccount.accountId(),
+                                        command.amount(),
+                                        command.idempotencyKey(),
+                                        correlationId(),
+                                        "wallet-service",
+                                        null,
+                                        null))))
+                .map(AccountServiceClient.AccountValidationResult::allowed)
+                .orElse(false);
     }
 
     private String correlationId() {

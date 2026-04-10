@@ -10,6 +10,7 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     expose:
       - "5432"
+    restart: always
     volumes:
       - identity-db-data:/var/lib/postgresql/data
     healthcheck:
@@ -32,6 +33,7 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     expose:
       - "5432"
+    restart: always
     volumes:
       - wallet-db-data:/var/lib/postgresql/data
     healthcheck:
@@ -54,10 +56,34 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     expose:
       - "5432"
+    restart: always
     volumes:
       - billing-db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${BILLING_DB_USER:-billing_user} -d ${BILLING_DB_NAME:-billing_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - backend-network
+
+  account-db:
+    image: postgres:16-alpine
+    container_name: account-db
+    hostname: account-db
+    environment:
+      POSTGRES_DB: ${ACCOUNT_DB_NAME:-account_db}
+      POSTGRES_USER: ${ACCOUNT_DB_USER:-account_user}
+      POSTGRES_PASSWORD: ${ACCOUNT_DB_PASSWORD:-account_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    expose:
+      - "5432"
+    restart: always
+    volumes:
+      - account-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ACCOUNT_DB_USER:-account_user} -d ${ACCOUNT_DB_NAME:-account_db}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -71,6 +97,7 @@ services:
     command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
     expose:
       - "6379"
+    restart: always
     volumes:
       - redis-data:/data
     healthcheck:
@@ -92,6 +119,7 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    restart: always
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
@@ -116,7 +144,7 @@ services:
       - ../../monitoring/prometheus/prometheus.local.yml:/etc/prometheus/prometheus.yml:ro
       - ../../monitoring/prometheus/alerts.local.yml:/etc/prometheus/alerts.local.yml:ro
       - prometheus-data:/prometheus
-    restart: unless-stopped
+    restart: always
     profiles:
       - monitoring
     depends_on:
@@ -125,6 +153,8 @@ services:
       elvo-wallet-service:
         condition: service_started
       elvo-billing-service:
+        condition: service_started
+      elvo-account-management-service:
         condition: service_started
     networks:
       - backend-network
@@ -141,7 +171,7 @@ services:
     volumes:
       - ../../monitoring/alertmanager/alertmanager.local.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager-data:/alertmanager
-    restart: unless-stopped
+    restart: always
     profiles:
       - monitoring
     networks:
@@ -162,7 +192,7 @@ services:
       - ../../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ../../monitoring/grafana:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
-    restart: unless-stopped
+    restart: always
     profiles:
       - monitoring
     depends_on:

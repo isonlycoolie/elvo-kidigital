@@ -10,6 +10,7 @@ volumes:
   identity-db-data:
   wallet-db-data:
   billing-db-data:
+  account-db-data:
   redis-data:
   rabbitmq-data:
   prometheus-data:

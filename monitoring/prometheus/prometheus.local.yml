@@ -46,3 +46,12 @@ scrape_configs:
         labels:
           service: billing-service
           domain: billing
+
+  - job_name: elvo-account-management-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - elvo-account-management-service:8084
+        labels:
+          service: account-management-service
+          domain: account-management

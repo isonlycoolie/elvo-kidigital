@@ -1,5 +1,7 @@
 package com.elvo.billing.service.impl;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 import com.elvo.billing.audit.PaymentAuditLogger;
@@ -23,8 +25,15 @@ import com.elvo.billing.service.BillingService;
 import com.elvo.billing.service.event.BillingEventPublisher;
 import com.elvo.billing.service.orchestration.LookupFlow;
 import com.elvo.billing.service.orchestration.PaymentFlow;
+import com.elvo.billing.service.settlement.BillingWalletSettlementService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.Nullable;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +51,13 @@ public class BillingServiceImpl implements BillingService {
     private final BillingRoleBasedAccessControl roleBasedAccessControl;
     private final SecurityMonitoringService securityMonitoringService;
     private final BillingFraudDetectionService billingFraudDetectionService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Autowired(required = false)
+    private BillingWalletSettlementService walletSettlementService;
+
+    @Value("${elvo.billing.wallet.settlement-enabled:true}")
+    private boolean walletSettlementEnabled;
 
     @Autowired
     public BillingServiceImpl(
@@ -149,15 +165,56 @@ public class BillingServiceImpl implements BillingService {
 
     @Override
     public PaymentResponseDto executePayment(UtilityPaymentRequestDto paymentRequest) {
-        return paymentFlow.execute(
-                paymentRequest,
-                resolveBillCategory(paymentRequest),
-                resolveServiceCode(paymentRequest),
-                UUID.randomUUID().toString(),
-                UUID.randomUUID().toString(),
-                UUID.randomUUID().toString(),
-                UUID.randomUUID(),
-                UUID.randomUUID());
+        if (paymentRequest == null) {
+            throw new PaymentValidationException("request body is required");
+        }
+
+        PaymentActor actor = resolvePaymentActor(paymentRequest);
+        String reference = paymentRequest.getReferenceNumber();
+        String idempotencyBase = "bill:" + reference;
+
+        UUID walletId = actor.walletId();
+        UUID reservationId = null;
+        if (isWalletSettlementEnabled()) {
+            BillingWalletSettlementService.WalletReservation reservation = walletSettlementService.reserve(
+                    actor.userId(),
+                    paymentRequest.getAmount(),
+                    idempotencyBase + ":reserve");
+            walletId = reservation.walletId();
+            reservationId = reservation.reservationId();
+            paymentRequest.setMetadata(enrichMetadata(paymentRequest.getMetadata(), actor.userId(), walletId, reservationId));
+        }
+
+        try {
+            PaymentResponseDto response = paymentFlow.execute(
+                    paymentRequest,
+                    resolveBillCategory(paymentRequest),
+                    resolveServiceCode(paymentRequest),
+                    UUID.randomUUID().toString(),
+                    UUID.randomUUID().toString(),
+                    UUID.randomUUID().toString(),
+                    actor.userId(),
+                    walletId);
+
+            if (isWalletSettlementEnabled() && reservationId != null && response.getStatus() != null) {
+                if (response.getStatus() == PaymentStatus.SUCCESS) {
+                    walletSettlementService.confirm(actor.userId(), reservationId, idempotencyBase + ":confirm");
+                } else if (response.getStatus() == PaymentStatus.FAILED || response.getStatus() == PaymentStatus.REVERSED) {
+                    walletSettlementService.release(actor.userId(), reservationId, idempotencyBase + ":release");
+                }
+            }
+
+            return response;
+        } catch (RuntimeException ex) {
+            if (isWalletSettlementEnabled() && reservationId != null) {
+                try {
+                    walletSettlementService.release(actor.userId(), reservationId, idempotencyBase + ":release");
+                } catch (RuntimeException releaseEx) {
+                    // Preserve original payment failure while best-effort releasing reserved funds.
+                }
+            }
+            throw ex;
+        }
     }
 
     @Override
@@ -267,6 +324,9 @@ public class BillingServiceImpl implements BillingService {
         BillPayment payment = billPaymentRepository.getPaymentByReferenceWithLock(callback.getReferenceNumber())
                 .orElseThrow(() -> new PaymentValidationException("payment not found for referenceNumber " + callback.getReferenceNumber()));
 
+        PaymentSettlementContext settlementContext = resolveSettlementContext(payment.getMetadata());
+        String callbackIdempotencyBase = "bill:" + callback.getReferenceNumber();
+
         PaymentStatus callbackStatus = resolvePaymentStatus(callback.getStatus());
         billPaymentRepository.updatePaymentStatus(payment.getPaymentId(), callbackStatus);
         if (billingFraudDetectionService != null) {
@@ -290,11 +350,124 @@ public class BillingServiceImpl implements BillingService {
         response.setCurrency(payment.getCurrency());
         response.setMetadata(callback.getMetadata());
 
+        if (isWalletSettlementEnabled() && settlementContext != null) {
+            if (callbackStatus == PaymentStatus.SUCCESS) {
+                walletSettlementService.confirm(settlementContext.userId(), settlementContext.reservationId(), callbackIdempotencyBase + ":confirm");
+            } else if (callbackStatus == PaymentStatus.FAILED || callbackStatus == PaymentStatus.REVERSED) {
+                walletSettlementService.release(settlementContext.userId(), settlementContext.reservationId(), callbackIdempotencyBase + ":release");
+            }
+        }
+
         paymentAuditLogger.logCallback(payment, callback);
         billingEventPublisher.publish("billing.payment.callback.received", payment.getRequestId(), response.getMetadata(), "v1");
         billingMetricsRecorder.recordPendingPayments(billPaymentRepository.countByStatus(PaymentStatus.PENDING));
         sentryBreadcrumbLogger.addCallbackBreadcrumb("processed", callback.getReferenceNumber(), callback.getStatus());
         return response;
+    }
+
+    private PaymentActor resolvePaymentActor(UtilityPaymentRequestDto paymentRequest) {
+        UUID userId = resolveUserIdFromMetadata(paymentRequest.getMetadata());
+        if (userId == null) {
+            userId = resolveUserIdFromSecurityContext();
+        }
+        if (userId == null) {
+            throw new PaymentValidationException("userId is required in metadata or authenticated principal");
+        }
+
+        UUID walletId = resolveWalletIdFromMetadata(paymentRequest.getMetadata());
+        return new PaymentActor(userId, walletId);
+    }
+
+    private UUID resolveUserIdFromSecurityContext() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(authentication.getName().trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private UUID resolveUserIdFromMetadata(String metadata) {
+        Map<String, Object> parsed = parseMetadata(metadata);
+        Object value = parsed.get("userId");
+        if (value == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(String.valueOf(value).trim());
+        } catch (IllegalArgumentException ex) {
+            throw new PaymentValidationException("metadata.userId must be a valid UUID");
+        }
+    }
+
+    private UUID resolveWalletIdFromMetadata(String metadata) {
+        Map<String, Object> parsed = parseMetadata(metadata);
+        Object value = parsed.get("walletId");
+        if (value == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(String.valueOf(value).trim());
+        } catch (IllegalArgumentException ex) {
+            throw new PaymentValidationException("metadata.walletId must be a valid UUID");
+        }
+    }
+
+    private PaymentSettlementContext resolveSettlementContext(String metadata) {
+        Map<String, Object> parsed = parseMetadata(metadata);
+        Object userId = parsed.get("userId");
+        Object reservationId = parsed.get("walletReservationId");
+        if (userId == null || reservationId == null) {
+            return null;
+        }
+
+        try {
+            return new PaymentSettlementContext(
+                    UUID.fromString(String.valueOf(userId).trim()),
+                    UUID.fromString(String.valueOf(reservationId).trim()));
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private String enrichMetadata(String metadata, UUID userId, UUID walletId, UUID reservationId) {
+        Map<String, Object> merged = new LinkedHashMap<>(parseMetadata(metadata));
+        merged.put("userId", userId);
+        if (walletId != null) {
+            merged.put("walletId", walletId);
+        }
+        if (reservationId != null) {
+            merged.put("walletReservationId", reservationId);
+        }
+        try {
+            return objectMapper.writeValueAsString(merged);
+        } catch (JsonProcessingException ex) {
+            throw new PaymentValidationException("Unable to serialize payment metadata", ex);
+        }
+    }
+
+    private Map<String, Object> parseMetadata(String metadata) {
+        if (metadata == null || metadata.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(metadata, new TypeReference<Map<String, Object>>() { });
+        } catch (JsonProcessingException ex) {
+            throw new PaymentValidationException("metadata must be valid JSON", ex);
+        }
+    }
+
+    private boolean isWalletSettlementEnabled() {
+        return walletSettlementEnabled && walletSettlementService != null;
+    }
+
+    private record PaymentActor(UUID userId, UUID walletId) {
+    }
+
+    private record PaymentSettlementContext(UUID userId, UUID reservationId) {
     }
 
     private static PaymentStatus resolvePaymentStatus(String statusString) {

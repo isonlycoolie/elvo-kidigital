@@ -10,3 +10,7 @@ services:
   billing-db:
     ports:
       - "5435:5432"
+
+  account-db:
+    ports:
+      - "5436:5432"

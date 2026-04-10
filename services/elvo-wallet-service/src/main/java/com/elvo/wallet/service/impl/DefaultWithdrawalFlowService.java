@@ -6,10 +6,12 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.elvo.wallet.client.AccountServiceClient;
 import com.elvo.wallet.client.IdentityServiceClient;
 import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.Wallet;
@@ -36,6 +38,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
     private final IdentityServiceClient identityServiceClient;
+    private final AccountServiceClient accountServiceClient;
     private final WalletIdempotencyService idempotencyService;
     private final WalletLedgerIntegrationService ledgerIntegrationService;
     private final WalletLimitEnforcementService limitEnforcementService;
@@ -65,11 +68,45 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
+        this.accountServiceClient = null;
         this.idempotencyService = idempotencyService;
         this.ledgerIntegrationService = ledgerIntegrationService;
         this.limitEnforcementService = limitEnforcementService;
-        this.eventPublisher = eventPublisher;
         this.sagaOrchestrator = sagaOrchestrator;
+        this.eventPublisher = eventPublisher;
+        this.eacReplayProtectionService = eacReplayProtectionService;
+        this.stepUpAuthenticationService = stepUpAuthenticationService;
+        this.transactionSigningChallengeService = transactionSigningChallengeService;
+        this.fraudVelocityService = fraudVelocityService;
+        this.fieldEncryptionService = fieldEncryptionService;
+        this.transactionLifecycleService = transactionLifecycleService;
+    }
+
+    @Autowired
+    public DefaultWithdrawalFlowService(WalletRepository walletRepository,
+                                        TransactionRepository transactionRepository,
+                                        IdentityServiceClient identityServiceClient,
+                                        AccountServiceClient accountServiceClient,
+                                        WalletIdempotencyService idempotencyService,
+                                        WalletLedgerIntegrationService ledgerIntegrationService,
+                                        WalletLimitEnforcementService limitEnforcementService,
+                                        WalletSagaOrchestrator sagaOrchestrator,
+                                        WalletEventPublisher eventPublisher,
+                                        EacReplayProtectionService eacReplayProtectionService,
+                                        StepUpAuthenticationService stepUpAuthenticationService,
+                                        TransactionSigningChallengeService transactionSigningChallengeService,
+                                        WalletFraudVelocityService fraudVelocityService,
+                                        WalletFieldEncryptionService fieldEncryptionService,
+                                        TransactionLifecycleService transactionLifecycleService) {
+        this.walletRepository = walletRepository;
+        this.transactionRepository = transactionRepository;
+        this.identityServiceClient = identityServiceClient;
+        this.accountServiceClient = accountServiceClient;
+        this.idempotencyService = idempotencyService;
+        this.ledgerIntegrationService = ledgerIntegrationService;
+        this.limitEnforcementService = limitEnforcementService;
+        this.sagaOrchestrator = sagaOrchestrator;
+        this.eventPublisher = eventPublisher;
         this.eacReplayProtectionService = eacReplayProtectionService;
         this.stepUpAuthenticationService = stepUpAuthenticationService;
         this.transactionSigningChallengeService = transactionSigningChallengeService;
@@ -112,12 +149,12 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Velocity risk detected");
         }
 
+        if (!validateWithdrawalAgainstAccountService(command)) {
+            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Withdrawal validation failed");
+        }
+
         String sagaReference = resolveReference(command.reference(), command.idempotencyKey());
         sagaOrchestrator.begin("withdrawal", command.walletId(), command.amount(), sagaReference);
-
-        if (!identityServiceClient.isUserActive(command.userId())) {
-            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "User is not active");
-        }
 
         if (!identityServiceClient.verifyEsp(command.userId(), command.espCode())) {
             return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "ESP/EAC verification failed");
@@ -130,11 +167,11 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
 
         boolean requiresStepUp = stepUpAuthenticationService.requiresStepUpForWithdrawal(command.amount(), command.mode());
         if (requiresStepUp && !transactionSigningChallengeService.isValidChallenge(
-            command.transactionChallengeToken(),
-            command.userId(),
-            "WITHDRAWAL",
-            command.amount(),
-            command.targetNumber())) {
+                command.transactionChallengeToken(),
+                command.userId(),
+                "WITHDRAWAL",
+                command.amount(),
+                command.targetNumber())) {
             return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Transaction challenge confirmation required");
         }
 
@@ -199,11 +236,11 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         transaction = transactionLifecycleService.initialize(transaction, "Withdrawal initiated", correlationId(), resolvedReference);
         if (command.mode() == WithdrawalMode.REGISTERED_NUMBER || command.mode() == WithdrawalMode.OTHER_NUMBER) {
             transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PENDING,
-            "Withdrawal queued", correlationId(), null, null);
+                    "Withdrawal queued", correlationId(), null, null);
         }
         if (command.mode() == WithdrawalMode.OTHER_NUMBER) {
             transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.AWAITING_CONFIRMATION,
-                "Waiting for EAC confirmation", correlationId(), null, null);
+                    "Waiting for EAC confirmation", correlationId(), null, null);
 
             if (!identityServiceClient.verifyEac(command.userId(), command.eacCode())) {
                 return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "ESP/EAC verification failed");
@@ -217,7 +254,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             if (!replayCheck.accepted()) {
                 if (isExpiredEac(replayCheck.message())) {
                     transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.EXPIRED,
-                        "Withdrawal confirmation window expired", correlationId(), "WITHDRAWAL_EAC_EXPIRED", replayCheck.message());
+                            "Withdrawal confirmation window expired", correlationId(), "WITHDRAWAL_EAC_EXPIRED", replayCheck.message());
                     return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Withdrawal confirmation expired");
                 }
                 return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, replayCheck.message());
@@ -225,7 +262,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         }
         if (command.mode() == WithdrawalMode.DEVICE_FREE) {
             transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.AWAITING_CONFIRMATION,
-                "Waiting for device-free withdrawal confirmation", correlationId(), null, null);
+                    "Waiting for device-free withdrawal confirmation", correlationId(), null, null);
 
             EacReplayProtectionService.EacValidationResult replayCheck = eacReplayProtectionService.validateAndConsume(
                     command.userId(),
@@ -235,17 +272,17 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             if (!replayCheck.accepted()) {
                 if (isExpiredEac(replayCheck.message())) {
                     transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.EXPIRED,
-                        "Device-free withdrawal confirmation expired", correlationId(), "WITHDRAWAL_DEVICE_EXPIRED", replayCheck.message());
+                            "Device-free withdrawal confirmation expired", correlationId(), "WITHDRAWAL_DEVICE_EXPIRED", replayCheck.message());
                     return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Device-free withdrawal expired");
                 }
                 return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, replayCheck.message());
             }
 
             transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.RESERVED,
-                "Funds reserved for device-free payout", correlationId(), null, null);
+                    "Funds reserved for device-free payout", correlationId(), null, null);
         }
         transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.PROCESSING,
-            "Posting withdrawal", correlationId(), null, null);
+                "Posting withdrawal", correlationId(), null, null);
 
         try {
             if (command.mode() == WithdrawalMode.DEVICE_FREE) {
@@ -257,7 +294,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             limitEnforcementService.record(wallet.getId(), WalletLimitEnforcementService.FlowType.WITHDRAWAL, command.amount());
 
             transactionLifecycleService.transition(transaction, Transaction.TransactionStatus.COMPLETED,
-                "Withdrawal completed", correlationId(), null, null);
+                    "Withdrawal completed", correlationId(), null, null);
 
             sagaOrchestrator.complete("withdrawal", wallet.getId(), command.amount(), transaction.getReference());
 
@@ -272,27 +309,47 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             if (command.mode() == WithdrawalMode.DEVICE_FREE) {
                 restoreDeviceFreeFunds(wallet, command.amount());
                 transitionSafely(transaction,
-                    Transaction.TransactionStatus.REVERSED,
-                    "Device-free withdrawal reversed after failure",
-                    "WITHDRAWAL_REVERSED",
-                    ex.getMessage());
+                        Transaction.TransactionStatus.REVERSED,
+                        "Device-free withdrawal reversed after failure",
+                        "WITHDRAWAL_REVERSED",
+                        ex.getMessage());
                 return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Device-free withdrawal reversed");
             }
 
             if (isTemporaryFailure(ex)) {
                 transitionSafely(transaction,
-                    Transaction.TransactionStatus.RETRYING,
-                    "Temporary withdrawal posting failure; retry scheduled",
-                    "WITHDRAWAL_RETRYING",
-                    ex.getMessage());
+                        Transaction.TransactionStatus.RETRYING,
+                        "Temporary withdrawal posting failure; retry scheduled",
+                        "WITHDRAWAL_RETRYING",
+                        ex.getMessage());
             }
             transitionSafely(transaction,
-                Transaction.TransactionStatus.FAILED,
-                "Withdrawal processing failed",
-                "WITHDRAWAL_PROCESSING_FAILED",
-                ex.getMessage());
+                    Transaction.TransactionStatus.FAILED,
+                    "Withdrawal processing failed",
+                    "WITHDRAWAL_PROCESSING_FAILED",
+                    ex.getMessage());
             return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Withdrawal processing failed");
         }
+    }
+
+    private boolean validateWithdrawalAgainstAccountService(WithdrawalCommand command) {
+        if (accountServiceClient == null) {
+            return true;
+        }
+
+        return accountServiceClient.findAccountByUserId(command.userId())
+                .map(account -> accountServiceClient.validateWithdrawal(
+                        new AccountServiceClient.AccountValidationRequest(
+                                account.accountId(),
+                                null,
+                                command.amount(),
+                                command.idempotencyKey(),
+                                correlationId(),
+                                "wallet-service",
+                                null,
+                                null))
+                        .allowed())
+                .orElse(false);
     }
 
     private WalletFlowResult failed(UUID walletId,
@@ -301,7 +358,10 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
                                     String endpointScope,
                                     String payloadFingerprint,
                                     String message) {
-        emitWithdrawalEvent(false, walletId, idempotencyKey, null, message);
+        AUDIT_LOG.warn("event=wallet.withdrawal.failed walletId={} reason={}", walletId, message);
+        eventPublisher.publish("wallet.withdrawal.failed", java.util.Map.of(
+                "walletId", walletId,
+                "reason", message));
         WalletFlowResult result = WalletFlowResult.failure(message, walletId, "wallet.withdrawal.failed");
         sagaOrchestrator.compensate("withdrawal", walletId, null, idempotencyKey, new IllegalStateException(message));
         idempotencyService.put(idempotencyKey, userScope, endpointScope, payloadFingerprint, result);
@@ -378,14 +438,14 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     }
 
     private void transitionSafely(Transaction transaction,
-                                  Transaction.TransactionStatus nextStatus,
+                                  Transaction.TransactionStatus status,
                                   String reason,
                                   String failureCode,
                                   String failureMessage) {
         try {
-            transactionLifecycleService.transition(transaction, nextStatus, reason, correlationId(), failureCode, failureMessage);
+            transactionLifecycleService.transition(transaction, status, reason, correlationId(), failureCode, failureMessage);
         } catch (RuntimeException ignored) {
-            // Best effort transition in withdrawal failure path.
+            // Best effort lifecycle transition during failure handling.
         }
     }
 

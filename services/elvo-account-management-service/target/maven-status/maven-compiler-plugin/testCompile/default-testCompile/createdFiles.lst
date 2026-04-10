@@ -1,0 +1,6 @@
+com\elvo\accountmanagement\messaging\listener\IdentityRegistrationIntentListenerTest.class
+com\elvo\accountmanagement\InternalPingIntegrationTest.class
+com\elvo\accountmanagement\messaging\publisher\DefaultAccountAuditEventPublisherTest.class
+com\elvo\accountmanagement\ApplicationContextTest.class
+com\elvo\accountmanagement\service\impl\DefaultAccountManagementServiceTest.class
+com\elvo\accountmanagement\messaging\publisher\DefaultAccountEventPublisherTest.class

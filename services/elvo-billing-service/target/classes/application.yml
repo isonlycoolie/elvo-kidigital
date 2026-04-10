@@ -48,6 +48,11 @@ elvo:
           secret: ${ELVO_BILLING_SELCOM_SECRET:}
         mock:
           enabled: ${ELVO_BILLING_MOCK_ADAPTER_ENABLED:true}
+    wallet:
+      settlement-enabled: ${ELVO_BILLING_WALLET_SETTLEMENT_ENABLED:true}
+      base-url: ${ELVO_WALLET_BASE_URL:http://localhost:8083}
+      internal-auth-token: ${ELVO_BILLING_WALLET_INTERNAL_AUTH_TOKEN:}
+      source-service: ${ELVO_BILLING_SOURCE_SERVICE:billing-service}
     sentry:
       alerts:
         enabled: ${ELVO_BILLING_SENTRY_ALERTS_ENABLED:true}
@@ -56,6 +61,11 @@ elvo:
         anomaly-latency-threshold-ms: ${ELVO_BILLING_SENTRY_ANOMALY_LATENCY_MS:2000}
   security:
     internal-service-secret: ${ELVO_INTERNAL_SERVICE_SECRET:sm://elvo-internal-service-secret}
+  monitoring:
+    sentry:
+      probe:
+        enabled: ${ELVO_SENTRY_PROBE_ENABLED:false}
+        token: ${ELVO_SENTRY_PROBE_TOKEN:}
 
 management:
   metrics:
@@ -84,7 +94,8 @@ logging:
 
 sentry:
   enabled: ${ELVO_SENTRY_ENABLED:false}
-  dsn: ${ELVO_SENTRY_DSN:}
+  dsn: ${ELVO_SENTRY_DSN:${SENTRY_DSN:}}
   environment: ${ELVO_SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:default}}
   release: ${ELVO_SENTRY_RELEASE:elvo-billing-service@local}
   traces-sample-rate: ${ELVO_SENTRY_TRACES_SAMPLE_RATE:0.0}
+  send-default-pii: ${ELVO_SENTRY_SEND_DEFAULT_PII:${SENTRY_SEND_DEFAULT_PII:false}}

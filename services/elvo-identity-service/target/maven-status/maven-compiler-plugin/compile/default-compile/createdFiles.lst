@@ -1,9 +1,11 @@
 com\elvo\identity\dto\request\EmailRegistrationRequest.class
+com\elvo\identity\config\AccountIntentMessagingProperties.class
 com\elvo\identity\dto\response\EacGenerateResponse.class
 com\elvo\identity\dto\response\ForgotPasswordResponse.class
 com\elvo\identity\service\ServicePlaceholder.class
 com\elvo\identity\cache\package-info.class
 com\elvo\identity\util\TokenService$AccessTokenClaims.class
+com\elvo\identity\client\DefaultAccountReadClient$ApiResponse.class
 com\elvo\identity\config\AuditMessagingProperties.class
 com\elvo\identity\util\TokenService$JwkKey.class
 com\elvo\identity\service\EspManagementService.class
@@ -19,10 +21,10 @@ com\elvo\identity\service\FastLoginService.class
 com\elvo\identity\util\TokenService.class
 com\elvo\identity\dto\request\InternalVerifyEacRequest.class
 com\elvo\identity\service\OtpService.class
-com\elvo\identity\util\EanGenerator.class
 com\elvo\identity\service\LoginService.class
 com\elvo\identity\util\TokenService$JwksDocument.class
 com\elvo\identity\entity\VerificationOtp$Status.class
+com\elvo\identity\client\AccountReadClientProperties.class
 com\elvo\identity\service\PostVerificationProvisioningService.class
 com\elvo\identity\dto\package-info.class
 com\elvo\identity\repository\UserRepository.class
@@ -42,6 +44,7 @@ com\elvo\identity\dto\request\AuthLogoutRequest.class
 com\elvo\identity\entity\VerificationOtp$Channel.class
 com\elvo\identity\repository\VerificationOtpRepository.class
 com\elvo\identity\repository\DeviceRepository.class
+com\elvo\identity\service\IdentityAccountReadService.class
 com\elvo\identity\config\UnhandledExceptionCaptureConfig.class
 com\elvo\identity\mapper\package-info.class
 com\elvo\identity\audit\DefaultAuditEventPublisher.class
@@ -51,6 +54,7 @@ com\elvo\identity\dto\response\package-info.class
 com\elvo\identity\service\impl\EspManagementServiceImpl.class
 com\elvo\identity\service\SmsSenderService.class
 com\elvo\identity\messaging\consumer\package-info.class
+com\elvo\identity\controller\InternalDiagnosticsController.class
 com\elvo\identity\validation\ActionNameValidator.class
 com\elvo\identity\entity\package-info.class
 com\elvo\identity\security\TokenRevocationChecker.class
@@ -103,6 +107,8 @@ com\elvo\identity\security\SecurityLibHashingService.class
 com\elvo\identity\service\EmailSenderService.class
 com\elvo\identity\service\impl\ProfileManagementServiceImpl.class
 com\elvo\identity\controller\InternalController.class
+com\elvo\identity\dto\event\AccountCreationIntentEvent.class
+com\elvo\identity\client\DefaultAccountReadClient$AccountData.class
 com\elvo\identity\entity\Audit$SourceType.class
 com\elvo\identity\config\package-info.class
 com\elvo\identity\dto\request\VerifyOtpRequest.class
@@ -129,10 +135,12 @@ com\elvo\identity\dto\request\FastLoginGenerateRequest.class
 com\elvo\identity\dto\request\package-info.class
 com\elvo\identity\validation\DeviceIdentifierValidator.class
 com\elvo\identity\validation\IdentityIdentifier.class
+com\elvo\identity\client\AccountReadClient.class
 com\elvo\identity\config\AuditMessagingConfig.class
 com\elvo\identity\dto\request\AuthLogoutAllRequest.class
 com\elvo\identity\service\impl\PendingRegistrationCleanupJob.class
 com\elvo\identity\dto\request\ForgotPasswordRequest.class
+com\elvo\identity\config\AccountIntentMessagingConfig.class
 com\elvo\identity\controller\EacController.class
 com\elvo\identity\service\OtpService$OtpVerificationResult.class
 com\elvo\identity\dto\response\RegistrationResponse.class
@@ -143,6 +151,7 @@ com\elvo\identity\entity\User.class
 com\elvo\identity\security\SecurityHashingService.class
 com\elvo\identity\config\InfrastructurePlaceholdersConfig.class
 com\elvo\identity\idempotency\package-info.class
+com\elvo\identity\client\DefaultAccountReadClient.class
 com\elvo\identity\dto\request\RegistrationRequest.class
 com\elvo\identity\dto\request\SessionCreateRequest.class
 com\elvo\identity\dto\response\FastLoginChallengeResponse.class
@@ -151,12 +160,15 @@ com\elvo\identity\dto\event\AuditEvent.class
 com\elvo\identity\service\VerificationTokenService$VerificationToken.class
 com\elvo\identity\client\ProfileProvisioningClient.class
 com\elvo\identity\exception\package-info.class
+com\elvo\identity\messaging\account\AccountCreationIntentPublisher.class
+com\elvo\identity\client\DefaultAccountReadClient$1.class
 com\elvo\identity\client\WalletProvisioningClient.class
 com\elvo\identity\controller\EspController.class
 com\elvo\identity\validation\IdentityIdentifierValidator.class
 com\elvo\identity\audit\AuditEventPublisher.class
 com\elvo\identity\saga\package-info.class
 com\elvo\identity\validation\package-info.class
+com\elvo\identity\messaging\account\DefaultAccountCreationIntentPublisher.class
 com\elvo\identity\entity\User$AccountStatus.class
 com\elvo\identity\service\impl\SmtpEmailSenderService.class
 com\elvo\identity\dto\response\DeviceInfoResponse.class
@@ -168,4 +180,5 @@ com\elvo\identity\repository\AuditRepository.class
 com\elvo\identity\monitoring\ApplicationFailureListener.class
 com\elvo\identity\repository\SessionRepository.class
 com\elvo\identity\dto\event\package-info.class
+com\elvo\identity\config\AccountReadClientConfig.class
 com\elvo\identity\service\ProfileManagementService.class

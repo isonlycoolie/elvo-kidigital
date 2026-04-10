@@ -19,6 +19,7 @@ import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.DeviceRepository;
 import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
+import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.service.SessionManagementService;
 import com.elvo.identity.util.TokenService;
 
@@ -33,19 +34,22 @@ public class SessionManagementServiceImpl implements SessionManagementService {
     private final AuditRepository auditRepository;
     private final TokenService tokenService;
     private final AuditEventPublisher auditEventPublisher;
+    private final IdentityAccountReadService accountReadService;
 
     public SessionManagementServiceImpl(UserRepository userRepository,
                                         DeviceRepository deviceRepository,
                                         SessionRepository sessionRepository,
                                         AuditRepository auditRepository,
                                         TokenService tokenService,
-                                        AuditEventPublisher auditEventPublisher) {
+                                        AuditEventPublisher auditEventPublisher,
+                                        IdentityAccountReadService accountReadService) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.sessionRepository = sessionRepository;
         this.auditRepository = auditRepository;
         this.tokenService = tokenService;
         this.auditEventPublisher = auditEventPublisher;
+        this.accountReadService = accountReadService;
     }
 
     @Override
@@ -65,7 +69,8 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         device.setLastUsedAt(Instant.now());
         Device savedDevice = deviceRepository.save(device);
 
-        TokenService.TokenPayload accessToken = tokenService.generateAccessToken(user.getId(), user.getEan());
+        String resolvedEan = accountReadService.resolveEan(user.getId());
+        TokenService.TokenPayload accessToken = tokenService.generateAccessToken(user.getId(), resolvedEan);
         Instant absoluteSessionExpiresAt = tokenService.calculateSessionAbsoluteExpiry();
         TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(user.getId(), absoluteSessionExpiresAt);
 

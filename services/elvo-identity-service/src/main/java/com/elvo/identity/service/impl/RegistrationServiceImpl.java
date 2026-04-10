@@ -18,31 +18,31 @@ import com.elvo.identity.entity.Audit;
 import com.elvo.identity.entity.User;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.UserRepository;
+import com.elvo.identity.messaging.account.AccountCreationIntentPublisher;
 import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.service.RegistrationService;
-import com.elvo.identity.util.EanGenerator;
 
 @Service
 public class RegistrationServiceImpl implements RegistrationService {
 
     private final UserRepository userRepository;
     private final AuditRepository auditRepository;
-    private final EanGenerator eanGenerator;
     private final SecurityHashingService hashingService;
     private final AuditEventPublisher auditEventPublisher;
+    private final AccountCreationIntentPublisher accountCreationIntentPublisher;
     private final Duration verificationDeadlineDuration;
 
     public RegistrationServiceImpl(UserRepository userRepository,
                                    AuditRepository auditRepository,
-                                   EanGenerator eanGenerator,
                                    SecurityHashingService hashingService,
                                    AuditEventPublisher auditEventPublisher,
+                                   AccountCreationIntentPublisher accountCreationIntentPublisher,
                                    @Value("${elvo.security.pending-registration.expiry-hours:24}") long pendingRegistrationExpiryHours) {
         this.userRepository = userRepository;
         this.auditRepository = auditRepository;
-        this.eanGenerator = eanGenerator;
         this.hashingService = hashingService;
         this.auditEventPublisher = auditEventPublisher;
+        this.accountCreationIntentPublisher = accountCreationIntentPublisher;
         this.verificationDeadlineDuration = Duration.ofHours(Math.max(1, pendingRegistrationExpiryHours));
     }
 
@@ -58,6 +58,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         User savedUser = userRepository.save(user);
         auditRegistration(savedUser, request.getSourceIp(), request.getSourceUserAgent());
+        accountCreationIntentPublisher.publish(savedUser, request.getSourceIp(), request.getSourceUserAgent());
 
         return toResponse(savedUser);
     }
@@ -75,6 +76,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         User savedUser = userRepository.save(user);
         auditRegistration(savedUser, request.getSourceIp(), request.getSourceUserAgent());
+        accountCreationIntentPublisher.publish(savedUser, request.getSourceIp(), request.getSourceUserAgent());
 
         return toResponse(savedUser);
     }
@@ -92,6 +94,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         User savedUser = userRepository.save(user);
         auditRegistration(savedUser, request.getSourceIp(), request.getSourceUserAgent());
+        accountCreationIntentPublisher.publish(savedUser, request.getSourceIp(), request.getSourceUserAgent());
 
         return toResponse(savedUser);
     }
@@ -113,7 +116,6 @@ public class RegistrationServiceImpl implements RegistrationService {
         user.setVerificationStatus(User.VerificationStatus.UNVERIFIED);
         user.setAccountStatus(User.AccountStatus.PENDING_VERIFICATION);
         user.setVerificationDeadline(Instant.now().plus(verificationDeadlineDuration));
-        user.setEan(generateUniqueEan());
         return user;
     }
 
@@ -155,7 +157,7 @@ public class RegistrationServiceImpl implements RegistrationService {
     private RegistrationResponse toResponse(User savedUser) {
         return new RegistrationResponse(
                 savedUser.getId(),
-                savedUser.getEan(),
+                null,
                 savedUser.getEmail(),
                 savedUser.getPhone(),
                 savedUser.isMfaEnabled());
@@ -189,13 +191,4 @@ public class RegistrationServiceImpl implements RegistrationService {
         }
     }
 
-    private String generateUniqueEan() {
-        for (int attempt = 0; attempt < 10; attempt++) {
-            String ean = eanGenerator.generate();
-            if (userRepository.findByEan(ean).isEmpty()) {
-                return ean;
-            }
-        }
-        throw new IllegalStateException("Unable to generate a unique EAN");
-    }
 }

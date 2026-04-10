@@ -66,11 +66,11 @@ logging:
     level: "%5p [corr:%X{correlationId}] [req:%X{requestId}]"
 
 sentry:
-  dsn: ${SENTRY_DSN:}
+  dsn: ${SENTRY_DSN:${ELVO_SENTRY_DSN:}}
   environment: ${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}
   release: ${SENTRY_RELEASE:elvo-identity-service@${spring.application.name}-${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}}
   traces-sample-rate: ${SENTRY_TRACES_SAMPLE_RATE:0.1}
-  send-default-pii: ${SENTRY_SEND_DEFAULT_PII:false}
+  send-default-pii: ${SENTRY_SEND_DEFAULT_PII:${ELVO_SENTRY_SEND_DEFAULT_PII:false}}
   max-breadcrumbs: ${SENTRY_MAX_BREADCRUMBS:100}
   attach-stacktrace: true
   in-app-includes:
@@ -102,6 +102,12 @@ elvo:
       retry-backoff-ms: ${ELVO_PROVISIONING_RETRY_BACKOFF_MS:150}
       retry-backoff-multiplier: ${ELVO_PROVISIONING_RETRY_BACKOFF_MULTIPLIER:2.0}
       retry-max-backoff-ms: ${ELVO_PROVISIONING_RETRY_MAX_BACKOFF_MS:1000}
+    account:
+      base-url: ${ELVO_ACCOUNT_READ_BASE_URL:http://localhost:8084}
+      source-service-name: ${ELVO_ACCOUNT_READ_SOURCE_SERVICE:identity-service}
+      internal-auth-token: ${ELVO_ACCOUNT_READ_INTERNAL_AUTH_TOKEN:}
+      connect-timeout-ms: ${ELVO_ACCOUNT_READ_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${ELVO_ACCOUNT_READ_READ_TIMEOUT_MS:3000}
   monitoring:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:elvo-identity-service}
@@ -163,6 +169,21 @@ elvo:
       publish-initial-interval-ms: ${ELVO_AUDIT_PUBLISH_INITIAL_INTERVAL_MS:200}
       publish-multiplier: ${ELVO_AUDIT_PUBLISH_MULTIPLIER:2.0}
       publish-max-interval-ms: ${ELVO_AUDIT_PUBLISH_MAX_INTERVAL_MS:2000}
+    account-intent:
+      event-version: ${ELVO_ACCOUNT_INTENT_EVENT_VERSION:v1}
+      exchange: ${ELVO_ACCOUNT_INTENT_EXCHANGE:elvo.identity.account.exchange}
+      routing-key: ${ELVO_ACCOUNT_INTENT_ROUTING_KEY:elvo.identity.account.creation.intent}
+      dead-letter-exchange: ${ELVO_ACCOUNT_INTENT_DLX:elvo.identity.account.dlx}
+      dead-letter-routing-key: ${ELVO_ACCOUNT_INTENT_DLQ_ROUTING_KEY:elvo.identity.account.dead}
+      queue: ${ELVO_ACCOUNT_INTENT_QUEUE:elvo.identity.account.queue}
+      dead-letter-queue: ${ELVO_ACCOUNT_INTENT_DLQ:elvo.identity.account.dlq}
+      retry-queue: ${ELVO_ACCOUNT_INTENT_RETRY_QUEUE:elvo.identity.account.retry.queue}
+      retry-routing-key: ${ELVO_ACCOUNT_INTENT_RETRY_ROUTING_KEY:elvo.identity.account.retry}
+      retry-delay-ms: ${ELVO_ACCOUNT_INTENT_RETRY_DELAY_MS:5000}
+      publish-max-attempts: ${ELVO_ACCOUNT_INTENT_PUBLISH_MAX_ATTEMPTS:3}
+      publish-initial-interval-ms: ${ELVO_ACCOUNT_INTENT_PUBLISH_INITIAL_INTERVAL_MS:200}
+      publish-multiplier: ${ELVO_ACCOUNT_INTENT_PUBLISH_MULTIPLIER:2.0}
+      publish-max-interval-ms: ${ELVO_ACCOUNT_INTENT_PUBLISH_MAX_INTERVAL_MS:2000}
 
 ---
 spring:

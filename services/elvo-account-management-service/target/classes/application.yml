@@ -1,0 +1,75 @@
+spring:
+  application:
+    name: elvo-account-management-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  config:
+    import: optional:classpath:/shared/config-lib.yml,optional:classpath:/shared/messaging-lib.yml
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://${ELVO_DB_HOST:account-db}:${ELVO_DB_PORT:5432}/${ELVO_DB_NAME:account_db}}
+    username: ${DB_USER:${ELVO_DB_USER:account_user}}
+    password: ${DB_PASS:${ELVO_DB_PASSWORD:account_password}}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        '[format_sql]': false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+
+logging:
+  level:
+    root: ${ELVO_LOG_LEVEL_ROOT:INFO}
+    '[com.elvo.accountmanagement]': ${ELVO_LOG_LEVEL_APP:INFO}
+  pattern:
+    level: "%5p [corr:%X{correlationId}] [req:%X{requestId}]"
+
+sentry:
+  dsn: ${SENTRY_DSN:${ELVO_SENTRY_DSN:}}
+  environment: ${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}
+  release: ${SENTRY_RELEASE:elvo-account-management-service@${spring.application.name}-${SENTRY_ENVIRONMENT:${SPRING_PROFILES_ACTIVE:dev}}}
+  traces-sample-rate: ${SENTRY_TRACES_SAMPLE_RATE:0.1}
+  send-default-pii: ${SENTRY_SEND_DEFAULT_PII:${ELVO_SENTRY_SEND_DEFAULT_PII:false}}
+  max-breadcrumbs: ${SENTRY_MAX_BREADCRUMBS:100}
+  attach-stacktrace: true
+  in-app-includes:
+    - com.elvo.accountmanagement
+  tags:
+    service: ${ELVO_SERVICE_TAG:elvo-account-management-service}
+    domain: account-management
+    platform: spring-boot
+
+elvo:
+  monitoring:
+    sentry:
+      service-tag: ${ELVO_SERVICE_TAG:elvo-account-management-service}
+      probe:
+        enabled: ${ELVO_SENTRY_PROBE_ENABLED:false}
+        token: ${ELVO_SENTRY_PROBE_TOKEN:}
+  messaging:
+    account:
+      exchange: ${ELVO_ACCOUNT_EXCHANGE:elvo.account.exchange}
+      created-routing-key: ${ELVO_ACCOUNT_CREATED_ROUTING_KEY:account.created}
+      updated-routing-key: ${ELVO_ACCOUNT_UPDATED_ROUTING_KEY:account.updated}
+      lifecycle-routing-key: ${ELVO_ACCOUNT_LIFECYCLE_ROUTING_KEY:account.lifecycle.v1}
+      policy-routing-key: ${ELVO_ACCOUNT_POLICY_ROUTING_KEY:account.policy.v1}
+    account-audit:
+      event-version: ${ELVO_ACCOUNT_AUDIT_EVENT_VERSION:v1}
+      exchange: ${ELVO_ACCOUNT_AUDIT_EXCHANGE:elvo.account.audit.exchange}
+      routing-key: ${ELVO_ACCOUNT_AUDIT_ROUTING_KEY:account.audit.v1}
+    identity-registration:
+      exchange: ${ELVO_IDENTITY_ACCOUNT_INTENT_EXCHANGE:elvo.identity.account.exchange}
+      routing-key: ${ELVO_IDENTITY_ACCOUNT_INTENT_ROUTING_KEY:elvo.identity.account.creation.intent}
+      queue: ${ELVO_IDENTITY_ACCOUNT_INTENT_QUEUE:elvo.account.identity-registration.queue}
+      dead-letter-exchange: ${ELVO_IDENTITY_ACCOUNT_INTENT_DLX:elvo.account.identity-registration.dlx}
+      dead-letter-routing-key: ${ELVO_IDENTITY_ACCOUNT_INTENT_DLQ_ROUTING_KEY:elvo.account.identity-registration.dead}
+      dead-letter-queue: ${ELVO_IDENTITY_ACCOUNT_INTENT_DLQ:elvo.account.identity-registration.dlq}

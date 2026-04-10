@@ -107,10 +107,6 @@ public class DefaultDepositFlowService implements DepositFlowService {
         String sagaReference = resolveReference(command.reference(), command.idempotencyKey());
         sagaOrchestrator.begin("deposit", command.walletId(), command.amount(), sagaReference);
 
-        if (!identityServiceClient.isUserActive(command.userId())) {
-            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "User is not active");
-        }
-
         if (command.channel() == WalletChannel.AGENT
                 && (!command.agentFloatAvailable() || !agentServiceClient.hasAvailableFloat(command.userId(), command.amount()))) {
             return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Agent float is insufficient");

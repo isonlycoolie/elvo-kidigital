@@ -30,6 +30,7 @@ import com.elvo.identity.monitoring.SentryExceptionReporter;
 import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.security.TokenRevocationService;
 import com.elvo.identity.service.LoginService;
+import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.service.OtpService;
 import com.elvo.identity.service.PostVerificationProvisioningService;
 import com.elvo.identity.service.RegistrationService;
@@ -80,6 +81,9 @@ class AuthControllerUnitTest {
 
     @MockBean
     private PostVerificationProvisioningService postVerificationProvisioningService;
+
+    @MockBean
+    private IdentityAccountReadService accountReadService;
 
     @MockBean
     private SentryExceptionReporter sentryExceptionReporter;

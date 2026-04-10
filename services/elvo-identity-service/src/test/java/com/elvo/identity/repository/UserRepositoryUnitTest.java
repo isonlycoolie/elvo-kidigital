@@ -22,7 +22,6 @@ class UserRepositoryUnitTest {
     @Test
     void findByEmailIgnoreCaseShouldLocateUser() {
         User user = new User();
-        user.setEan("ELVO-TEST-000001");
         user.setEmail("unit.test@elvo.com");
         user.setPhone("+12025550101");
         user.setHashedPassword("hashed-password");
