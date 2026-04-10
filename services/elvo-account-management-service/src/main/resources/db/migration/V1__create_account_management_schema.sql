@@ -6,8 +6,8 @@ create table accounts (
     account_status varchar(32) not null,
     kyc_status varchar(32) not null,
     parent_account_id uuid null,
-    created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now(),
+    created_at timestamp with time zone not null default now(),
+    updated_at timestamp with time zone not null default now(),
     version bigint not null default 0
 );
 
@@ -26,10 +26,10 @@ create table account_permissions (
     can_use_agent_withdrawal boolean not null default false,
     can_perform_bill_payment boolean not null default true,
     can_create_sub_accounts boolean not null default false,
-    effective_from timestamptz not null default now(),
-    effective_to timestamptz null,
-    created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now()
+    effective_from timestamp with time zone not null default now(),
+    effective_to timestamp with time zone null,
+    created_at timestamp with time zone not null default now(),
+    updated_at timestamp with time zone not null default now()
 );
 
 create table account_limits (
@@ -41,8 +41,8 @@ create table account_limits (
     deposit_limit numeric(19,2) null,
     bill_payment_limit numeric(19,2) null,
     max_single_transaction numeric(19,2) null,
-    created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now(),
+    created_at timestamp with time zone not null default now(),
+    updated_at timestamp with time zone not null default now(),
     version bigint not null default 0
 );
 
@@ -52,10 +52,10 @@ create table account_relationships (
     child_account_id uuid not null references accounts(account_id) on delete cascade,
     relationship_type varchar(32) not null,
     status varchar(32) not null,
-    start_date timestamptz not null default now(),
-    end_date timestamptz null,
-    created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now()
+    start_date timestamp with time zone not null default now(),
+    end_date timestamp with time zone null,
+    created_at timestamp with time zone not null default now(),
+    updated_at timestamp with time zone not null default now()
 );
 
 create index idx_account_relationships_parent on account_relationships (parent_account_id);
@@ -66,11 +66,11 @@ create table account_restrictions (
     account_id uuid not null references accounts(account_id) on delete cascade,
     restriction_type varchar(32) not null,
     reason varchar(255) null,
-    start_date timestamptz not null default now(),
-    end_date timestamptz null,
+    start_date timestamp with time zone not null default now(),
+    end_date timestamp with time zone null,
     created_by varchar(128) null,
-    created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now()
+    created_at timestamp with time zone not null default now(),
+    updated_at timestamp with time zone not null default now()
 );
 
 create index idx_account_restrictions_account_id on account_restrictions (account_id);
@@ -86,8 +86,9 @@ create table account_audit_log (
     source_ip varchar(64) null,
     source_user_agent varchar(255) null,
     created_by varchar(128) null,
-    created_at timestamptz not null default now()
+    created_at timestamp with time zone not null default now()
 );
 
 create index idx_account_audit_account_id on account_audit_log (account_id);
 create index idx_account_audit_request_id on account_audit_log (request_id);
+
