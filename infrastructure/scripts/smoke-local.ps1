@@ -252,7 +252,7 @@ try {
         $walletDbPassword = 'wallet_password'
     }
 
-    $walletProbeUserId = docker exec wallet-db sh -lc "PGPASSWORD='$walletDbPassword' psql -U '$walletDbUser' -d '$walletDbName' -t -A -c \"select user_id::text from wallets order by created_at asc limit 1;\""
+    $walletProbeUserId = docker exec -e PGPASSWORD=$walletDbPassword wallet-db psql -U $walletDbUser -d $walletDbName -t -A -c "select user_id::text from wallets order by created_at asc limit 1;"
     if ([string]::IsNullOrWhiteSpace($walletProbeUserId)) {
         throw 'Wallet smoke failed: no wallet records found to validate internal balance flow.'
     }
