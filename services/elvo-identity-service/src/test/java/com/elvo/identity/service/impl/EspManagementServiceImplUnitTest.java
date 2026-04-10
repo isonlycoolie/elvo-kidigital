@@ -98,4 +98,23 @@ class EspManagementServiceImplUnitTest {
         assertFalse(service.verifyEsp(request));
         assertEquals(1, user.getEspFailedAttempts());
     }
+
+    @Test
+    void verifyEspShouldBlockDuringProgressiveCooldown() {
+        UUID userId = UUID.randomUUID();
+        User user = new User();
+        user.setEspHash("stored-hash");
+        user.setEspExpiresAt(Instant.now().plusSeconds(60));
+        user.setEspFailedAttempts(2);
+        user.setEspLastRequestedAt(Instant.now());
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        EspVerifyRequest request = new EspVerifyRequest();
+        request.setUserId(userId);
+        request.setEspCode("123456");
+
+        assertFalse(service.verifyEsp(request));
+        verify(userRepository).findById(userId);
+    }
 }

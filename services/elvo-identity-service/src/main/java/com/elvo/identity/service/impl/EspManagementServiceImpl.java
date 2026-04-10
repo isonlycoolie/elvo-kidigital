@@ -24,6 +24,7 @@ public class EspManagementServiceImpl implements EspManagementService {
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final Duration ESP_TTL = Duration.ofMinutes(10);
     private static final Duration ESP_RATE_LIMIT = Duration.ofSeconds(30);
+    private static final Duration BASE_FAILURE_COOLDOWN = Duration.ofSeconds(30);
 
     private final UserRepository userRepository;
     private final AuditRepository auditRepository;
@@ -72,9 +73,19 @@ public class EspManagementServiceImpl implements EspManagementService {
             return false;
         }
 
+        if (isInFailureCooldown(user)) {
+            logAudit(user, "ESP verification blocked: cooldown active", request.getSourceIp(), request.getSourceUserAgent());
+            return false;
+        }
+
         boolean match = hashingService.verifyEsp(request.getEspCode(), user.getEspHash());
         if (!match) {
-            user.setEspFailedAttempts(user.getEspFailedAttempts() + 1);
+            int failures = user.getEspFailedAttempts() + 1;
+            user.setEspFailedAttempts(failures);
+            user.setEspLastRequestedAt(Instant.now());
+            if (failures >= 3) {
+                user.setSuspiciousActivityCount(user.getSuspiciousActivityCount() + 1);
+            }
             userRepository.save(user);
             logAudit(user, "ESP verification failed", request.getSourceIp(), request.getSourceUserAgent());
             return false;
@@ -82,6 +93,7 @@ public class EspManagementServiceImpl implements EspManagementService {
 
         user.setEspEnabled(true);
         user.setEspFailedAttempts(0);
+        user.setEspLastRequestedAt(null);
         userRepository.save(user);
         logAudit(user, "ESP verified successfully", request.getSourceIp(), request.getSourceUserAgent());
         return true;
@@ -109,6 +121,16 @@ public class EspManagementServiceImpl implements EspManagementService {
         if (lastRequestedAt != null && Instant.now().isBefore(lastRequestedAt.plus(ESP_RATE_LIMIT))) {
             throw new IllegalStateException("ESP generation rate limit exceeded");
         }
+    }
+
+    private boolean isInFailureCooldown(User user) {
+        Instant lastFailureAt = user.getEspLastRequestedAt();
+        if (lastFailureAt == null || user.getEspFailedAttempts() <= 0) {
+            return false;
+        }
+        long multiplier = Math.min(8L, 1L << Math.max(0, user.getEspFailedAttempts() - 1));
+        Duration cooldown = BASE_FAILURE_COOLDOWN.multipliedBy(multiplier);
+        return Instant.now().isBefore(lastFailureAt.plus(cooldown));
     }
 
     private String generateCode() {
