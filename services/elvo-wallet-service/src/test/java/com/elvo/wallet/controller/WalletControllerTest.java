@@ -248,9 +248,72 @@ class WalletControllerTest {
                     """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.success").value(false))
-            .andExpect(jsonPath("$.message").value("Location anomaly detected; additional verification required"));
+            .andExpect(jsonPath("$.message").value("STEP_UP_REQUIRED"))
+            .andExpect(jsonPath("$.eventType").value("wallet.withdrawal.failed.step_up_required"));
 
         verify(walletService, never()).processWithdrawal(any());
+    }
+
+    @Test
+    void transferShouldReturnNormalizedStepUpCodeWhenDeviceRiskNeedsVerification() throws Exception {
+        Wallet sourceWallet = new Wallet();
+        ReflectionTestUtils.setField(sourceWallet, "id", UUID.randomUUID());
+        Wallet targetWallet = new Wallet();
+        ReflectionTestUtils.setField(targetWallet, "id", UUID.randomUUID());
+
+        when(walletRepository.findByUserId(AUTHENTICATED_USER_ID)).thenReturn(java.util.Optional.of(sourceWallet));
+        when(operationRateLimitService.enforce(any(), any(), any(), any(), any()))
+            .thenReturn(WalletOperationRateLimitService.RateLimitResult.allow());
+        when(ipGeovelocityRiskService.evaluate(any(), any(), any()))
+            .thenReturn(new IpGeovelocityRiskService.RiskDecision(false, false, null));
+        when(deviceLocationRiskService.requiresAdditionalVerification(any(), any(), any())).thenReturn(true);
+
+        String payload = String.format(
+            "{\"targetWalletId\":\"%s\",\"amount\":20.00,\"idempotencyKey\":\"idem-transfer-step-up\"}",
+            targetWallet.getId());
+
+        mockMvc.perform(post("/wallets/transfers")
+                .with(csrf())
+                .contentType("application/json")
+                .content(payload))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.message").value("STEP_UP_REQUIRED"))
+            .andExpect(jsonPath("$.eventType").value("wallet.transfer.failed.step_up_required"));
+
+        verify(walletService, never()).processTransfer(any());
+    }
+
+    @Test
+    void withdrawalShouldNormalizeChallengeFailureFromService() throws Exception {
+        Wallet wallet = new Wallet();
+        ReflectionTestUtils.setField(wallet, "id", UUID.randomUUID());
+
+        when(walletRepository.findByUserId(AUTHENTICATED_USER_ID)).thenReturn(java.util.Optional.of(wallet));
+        when(operationRateLimitService.enforce(any(), any(), any(), any(), any()))
+            .thenReturn(WalletOperationRateLimitService.RateLimitResult.allow());
+        when(destinationRiskService.evaluate(any(), any(), any()))
+            .thenReturn(new DestinationRiskService.DestinationRiskDecision(false, false, null));
+        when(walletService.processWithdrawal(any()))
+            .thenReturn(WalletFlowResult.failure("Transaction challenge confirmation required", wallet.getId(), "wallet.withdrawal.failed"));
+
+        mockMvc.perform(post("/wallets/withdrawals")
+                .with(csrf())
+                .contentType("application/json")
+                .content("""
+                    {
+                      "amount":20.00,
+                      "mode":"REGISTERED_NUMBER",
+                      "targetNumber":"+1234567890",
+                      "espCode":"esp-1234",
+                      "eacCode":"eac-1234",
+                      "idempotencyKey":"idem-withdraw-challenge"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.message").value("TRANSACTION_CHALLENGE_REQUIRED"))
+            .andExpect(jsonPath("$.eventType").value("wallet.withdrawal.failed.challenge_required"));
     }
 
     @Test

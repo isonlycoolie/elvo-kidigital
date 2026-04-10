@@ -86,6 +86,8 @@ public class WalletController {
     private static final String MOBILE_CALLBACK_SIGNATURE_HEADER = "X-Mobile-Callback-Signature";
     private static final String MOBILE_CALLBACK_TIMESTAMP_HEADER = "X-Mobile-Callback-Timestamp";
     private static final String FORWARDED_FOR_HEADER = "X-Forwarded-For";
+    private static final String STEP_UP_REQUIRED_CODE = "STEP_UP_REQUIRED";
+    private static final String CHALLENGE_REQUIRED_CODE = "TRANSACTION_CHALLENGE_REQUIRED";
 
     private final WalletService walletService;
     private final WalletRepository walletRepository;
@@ -318,13 +320,11 @@ public class WalletController {
                 .body(new FlowResultResponseDto(false, withdrawalIpDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
         }
         if (withdrawalIpDecision.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new FlowResultResponseDto(false, withdrawalIpDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
+            return stepUpRequiredFailure("withdrawal", userId, wallet.getId(), withdrawalIpDecision.reason());
         }
         boolean withdrawalRisky = deviceLocationRiskService.requiresAdditionalVerification(userId, withdrawalDeviceId, withdrawalLocationHint);
         if (withdrawalRisky && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new FlowResultResponseDto(false, "Device/location verification required", wallet.getId(), null, "wallet.withdrawal.failed"));
+            return stepUpRequiredFailure("withdrawal", userId, wallet.getId(), "Device/location verification required");
         }
 
         DestinationRiskService.DestinationRiskDecision destinationRisk = destinationRiskService.evaluate(
@@ -336,8 +336,7 @@ public class WalletController {
                 .body(new FlowResultResponseDto(false, destinationRisk.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
         }
         if (destinationRisk.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new FlowResultResponseDto(false, destinationRisk.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
+            return stepUpRequiredFailure("withdrawal", userId, wallet.getId(), destinationRisk.reason());
         }
 
         FraudRulesEngine.FraudDecision withdrawalFraudDecision = fraudRulesEngine.evaluate(
@@ -358,8 +357,7 @@ public class WalletController {
         }
         walletMetricsRecorder.recordSecurityControl("fraud_rules", false);
         if (withdrawalFraudDecision.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new FlowResultResponseDto(false, withdrawalFraudDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
+            return stepUpRequiredFailure("withdrawal", userId, wallet.getId(), withdrawalFraudDecision.reason());
         }
 
         MakerCheckerApprovalService.ApprovalDecision withdrawalApprovalDecision = makerCheckerApprovalService.evaluate(
@@ -413,6 +411,14 @@ public class WalletController {
             } else {
                 apiAbuseProtectionService.recordViolation(userId, sourceIp, deviceId);
                 destinationRiskService.recordFailure(userId, request.getTargetNumber());
+                ResponseEntity<FlowResultResponseDto> normalizedFailure = normalizeStepUpAndChallengeFailure(
+                    "withdrawal",
+                    userId,
+                    wallet.getId(),
+                    result.message());
+                if (normalizedFailure != null) {
+                    return normalizedFailure;
+                }
                 AUDIT_LOG.warn("wallet_withdrawal_failed userId={} amount={} reason={}",
                     userId, request.getAmount(), result.message());
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
@@ -511,13 +517,11 @@ public class WalletController {
                 .body(new FlowResultResponseDto(false, transferIpDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
         }
         if (transferIpDecision.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new FlowResultResponseDto(false, transferIpDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
+            return stepUpRequiredFailure("transfer", userId, sourceWallet.getId(), transferIpDecision.reason());
         }
         boolean transferRisky = deviceLocationRiskService.requiresAdditionalVerification(userId, transferDeviceId, transferLocationHint);
         if (transferRisky && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new FlowResultResponseDto(false, "Device/location verification required", sourceWallet.getId(), null, "wallet.transfer.failed"));
+            return stepUpRequiredFailure("transfer", userId, sourceWallet.getId(), "Device/location verification required");
         }
 
         FraudRulesEngine.FraudDecision transferFraudDecision = fraudRulesEngine.evaluate(
@@ -538,8 +542,7 @@ public class WalletController {
         }
         walletMetricsRecorder.recordSecurityControl("fraud_rules", false);
         if (transferFraudDecision.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new FlowResultResponseDto(false, transferFraudDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
+            return stepUpRequiredFailure("transfer", userId, sourceWallet.getId(), transferFraudDecision.reason());
         }
 
         MakerCheckerApprovalService.ApprovalDecision transferApprovalDecision = makerCheckerApprovalService.evaluate(
@@ -590,6 +593,14 @@ public class WalletController {
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } else {
             apiAbuseProtectionService.recordViolation(userId, sourceIp, deviceId);
+            ResponseEntity<FlowResultResponseDto> normalizedFailure = normalizeStepUpAndChallengeFailure(
+                "transfer",
+                userId,
+                sourceWallet.getId(),
+                result.message());
+            if (normalizedFailure != null) {
+                return normalizedFailure;
+            }
             AUDIT_LOG.warn("wallet_transfer_failed userId={} sourceWalletId={} targetWalletId={} amount={} reason={}",
                 userId, sourceWallet.getId(), request.getTargetWalletId(), request.getAmount(), result.message());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
@@ -956,6 +967,50 @@ public class WalletController {
             LOGGER.warn("aml_case_creation_failed category={} userId={} walletId={} operation={} reason={}",
                 category, userId, walletId, operation, ex.getMessage());
         }
+    }
+
+    private ResponseEntity<FlowResultResponseDto> stepUpRequiredFailure(String operation,
+                                                                        UUID userId,
+                                                                        UUID walletId,
+                                                                        String reasonDetail) {
+        securityAlertStreamingService.stream("wallet.security.step_up.required", "MEDIUM", userId, java.util.Map.of(
+            "operation", operation,
+            "reasonCode", STEP_UP_REQUIRED_CODE,
+            "detail", String.valueOf(reasonDetail)));
+        AUDIT_LOG.warn("wallet_{}_step_up_required userId={} reasonCode={} detail={}",
+            operation, userId, STEP_UP_REQUIRED_CODE, reasonDetail);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(new FlowResultResponseDto(false, STEP_UP_REQUIRED_CODE, walletId, null, "wallet." + operation + ".failed.step_up_required"));
+    }
+
+    private ResponseEntity<FlowResultResponseDto> challengeRequiredFailure(String operation,
+                                                                           UUID userId,
+                                                                           UUID walletId,
+                                                                           String reasonDetail) {
+        securityAlertStreamingService.stream("wallet.security.challenge.required", "MEDIUM", userId, java.util.Map.of(
+            "operation", operation,
+            "reasonCode", CHALLENGE_REQUIRED_CODE,
+            "detail", String.valueOf(reasonDetail)));
+        AUDIT_LOG.warn("wallet_{}_challenge_required userId={} reasonCode={} detail={}",
+            operation, userId, CHALLENGE_REQUIRED_CODE, reasonDetail);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(new FlowResultResponseDto(false, CHALLENGE_REQUIRED_CODE, walletId, null, "wallet." + operation + ".failed.challenge_required"));
+    }
+
+    private ResponseEntity<FlowResultResponseDto> normalizeStepUpAndChallengeFailure(String operation,
+                                                                                      UUID userId,
+                                                                                      UUID walletId,
+                                                                                      String reason) {
+        if (reason == null) {
+            return null;
+        }
+        if ("Step-up authentication required".equals(reason)) {
+            return stepUpRequiredFailure(operation, userId, walletId, reason);
+        }
+        if ("Transaction challenge confirmation required".equals(reason)) {
+            return challengeRequiredFailure(operation, userId, walletId, reason);
+        }
+        return null;
     }
 
     /**
