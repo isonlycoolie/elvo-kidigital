@@ -17,6 +17,7 @@ import com.elvo.identity.dto.request.InternalVerifyEspRequest;
 import com.elvo.identity.dto.request.InternalVerifySessionRequest;
 import com.elvo.identity.dto.request.EacVerifyRequest;
 import com.elvo.identity.dto.request.EspVerifyRequest;
+import com.elvo.identity.dto.response.InternalUserStatusResponse;
 import com.elvo.identity.dto.response.ProfileResponse;
 import com.elvo.identity.entity.Session;
 import com.elvo.identity.entity.User;
@@ -66,6 +67,21 @@ public class InternalController {
                 user.isMfaEnabled(),
                 user.isEspEnabled());
         return ResponseEntity.ok(ApiResponse.ok("User loaded", response));
+    }
+
+    @GetMapping("/users/{userId}/status")
+    public ResponseEntity<ApiResponse<InternalUserStatusResponse>> getUserStatus(@PathVariable UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        InternalUserStatusResponse response = new InternalUserStatusResponse(
+                user.getId(),
+                user.getAccountStatus().name(),
+                user.getVerificationStatus().name(),
+                user.getPhone(),
+                user.isMobileVerified());
+
+        return ResponseEntity.ok(ApiResponse.ok("User status loaded", response));
     }
 
     @PostMapping("/verify-session")
