@@ -254,7 +254,12 @@ try {
 
     $walletProbeUserId = docker exec -e PGPASSWORD=$walletDbPassword wallet-db psql -U $walletDbUser -d $walletDbName -t -A -c "select user_id::text from wallets order by created_at asc limit 1;"
     if ([string]::IsNullOrWhiteSpace($walletProbeUserId)) {
-        throw 'Wallet smoke failed: no wallet records found to validate internal balance flow.'
+        $seedWalletId = [guid]::NewGuid().ToString()
+        $seedUserId = [guid]::NewGuid().ToString()
+        $seedNow = [DateTimeOffset]::UtcNow.ToString('o')
+        $seedSql = "insert into wallets (id, user_id, balance, reserved_balance, status, created_at, updated_at, version) values ('$seedWalletId', '$seedUserId', 0.0000, 0.0000, 'ACTIVE', '$seedNow', '$seedNow', 0);"
+        docker exec -e PGPASSWORD=$walletDbPassword wallet-db psql -U $walletDbUser -d $walletDbName -c $seedSql | Out-Null
+        $walletProbeUserId = $seedUserId
     }
     $walletProbeUserId = $walletProbeUserId.Trim()
 
