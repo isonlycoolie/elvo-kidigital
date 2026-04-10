@@ -39,6 +39,7 @@ import com.elvo.wallet.security.SecurityConfig;
 import com.elvo.wallet.security.UserTokenRevocationChecker;
 import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
+import com.elvo.wallet.service.DelegatedWithdrawalTokenLifecycleService;
 import com.elvo.wallet.service.WalletService;
 
 import io.jsonwebtoken.Jwts;
@@ -72,6 +73,9 @@ class InternalWalletControllerSecurityTest {
 
     @MockBean
     private WalletService walletService;
+
+    @MockBean
+    private DelegatedWithdrawalTokenLifecycleService delegatedWithdrawalTokenLifecycleService;
 
         @MockBean
         private WalletOperationRateLimitService operationRateLimitService;

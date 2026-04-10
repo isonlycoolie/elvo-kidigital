@@ -17,10 +17,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.elvo.wallet.dto.request.DelegatedWithdrawalTokenCancelRequestDto;
+import com.elvo.wallet.dto.request.DelegatedWithdrawalTokenIssueRequestDto;
 import com.elvo.wallet.dto.request.InternalReservationActionRequestDto;
 import com.elvo.wallet.dto.request.MakerCheckerDecisionRequestDto;
 import com.elvo.wallet.dto.request.ReservationRequestDto;
 import com.elvo.wallet.dto.response.BalanceResponseDto;
+import com.elvo.wallet.dto.response.DelegatedWithdrawalTokenResponseDto;
 import com.elvo.wallet.dto.response.FlowResultResponseDto;
 import com.elvo.wallet.dto.response.WalletResponseDto;
 import com.elvo.wallet.entity.Wallet;
@@ -28,6 +31,7 @@ import com.elvo.wallet.mapper.WalletMapper;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.security.MakerCheckerApprovalService;
+import com.elvo.wallet.service.DelegatedWithdrawalTokenLifecycleService;
 import com.elvo.wallet.service.WalletService;
 import com.elvo.wallet.service.model.ReservationCommand;
 import com.elvo.wallet.service.model.WalletFlowResult;
@@ -43,22 +47,25 @@ public class InternalWalletController {
 
     private static final Logger AUDIT_LOG = LoggerFactory.getLogger("audit.wallet.internal.controller");
 
-    private final WalletRepository walletRepository;
-    private final WalletService walletService;
-    private final WalletMapper walletMapper;
+        private final WalletRepository walletRepository;
+        private final WalletService walletService;
+        private final WalletMapper walletMapper;
         private final WalletOperationRateLimitService operationRateLimitService;
         private final MakerCheckerApprovalService makerCheckerApprovalService;
+        private final DelegatedWithdrawalTokenLifecycleService delegatedWithdrawalTokenLifecycleService;
 
         public InternalWalletController(WalletRepository walletRepository,
                                                                         WalletService walletService,
                                                                         WalletMapper walletMapper,
                                                                         WalletOperationRateLimitService operationRateLimitService,
-                                                                        MakerCheckerApprovalService makerCheckerApprovalService) {
+                                                                        MakerCheckerApprovalService makerCheckerApprovalService,
+                                                                        DelegatedWithdrawalTokenLifecycleService delegatedWithdrawalTokenLifecycleService) {
         this.walletRepository = walletRepository;
         this.walletService = walletService;
         this.walletMapper = walletMapper;
                 this.operationRateLimitService = operationRateLimitService;
                 this.makerCheckerApprovalService = makerCheckerApprovalService;
+                this.delegatedWithdrawalTokenLifecycleService = delegatedWithdrawalTokenLifecycleService;
     }
 
     @GetMapping("/{userId}/balance")
@@ -68,24 +75,85 @@ public class InternalWalletController {
         return ResponseEntity.ok(walletMapper.toBalanceResponseDto(wallet));
     }
 
-        @PostMapping("/{userId}")
-        public ResponseEntity<WalletResponseDto> createWallet(@PathVariable UUID userId) {
-                Wallet existing = walletRepository.findByUserId(userId).orElse(null);
-                if (existing != null) {
-                        AUDIT_LOG.info("internal_wallet_create_idempotent userId={} walletId={}", userId, existing.getId());
-                        return ResponseEntity.ok(walletMapper.toWalletResponseDto(existing));
-                }
-
-                Wallet wallet = new Wallet();
-                wallet.setUserId(userId);
-                wallet.setBalance(BigDecimal.ZERO);
-                wallet.setReservedBalance(BigDecimal.ZERO);
-                wallet.setStatus(Wallet.WalletStatus.ACTIVE);
-
-                Wallet saved = walletRepository.save(wallet);
-                AUDIT_LOG.info("internal_wallet_created userId={} walletId={}", userId, saved.getId());
-                return ResponseEntity.status(HttpStatus.CREATED).body(walletMapper.toWalletResponseDto(saved));
+    @PostMapping("/{userId}")
+    public ResponseEntity<WalletResponseDto> createWallet(@PathVariable UUID userId) {
+        Wallet existing = walletRepository.findByUserId(userId).orElse(null);
+        if (existing != null) {
+            AUDIT_LOG.info("internal_wallet_create_idempotent userId={} walletId={}", userId, existing.getId());
+            return ResponseEntity.ok(walletMapper.toWalletResponseDto(existing));
         }
+
+        Wallet wallet = new Wallet();
+        wallet.setUserId(userId);
+        wallet.setBalance(BigDecimal.ZERO);
+        wallet.setReservedBalance(BigDecimal.ZERO);
+        wallet.setStatus(Wallet.WalletStatus.ACTIVE);
+
+        Wallet saved = walletRepository.save(wallet);
+        AUDIT_LOG.info("internal_wallet_created userId={} walletId={}", userId, saved.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(walletMapper.toWalletResponseDto(saved));
+    }
+
+    @PostMapping("/{userId}/delegated-withdrawal-tokens")
+    public ResponseEntity<DelegatedWithdrawalTokenResponseDto> issueDelegatedWithdrawalToken(
+            @PathVariable UUID userId,
+            @Valid @RequestBody DelegatedWithdrawalTokenIssueRequestDto request
+    ) {
+        Wallet wallet = walletByUser(userId);
+        DelegatedWithdrawalTokenResponseDto response = delegatedWithdrawalTokenLifecycleService.issueToken(
+                userId,
+                wallet.getId(),
+                request.getAmount(),
+                request.getExpiresAt(),
+                request.getDelegateReference(),
+                request.getIdempotencyKey());
+        AUDIT_LOG.info("internal_delegated_withdrawal_token_issued userId={} walletId={} tokenId={} amount={} delegateReference={}",
+                userId,
+                wallet.getId(),
+                response.getTokenId(),
+                request.getAmount(),
+                request.getDelegateReference());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{userId}/delegated-withdrawal-tokens/{delegatedToken}")
+    public ResponseEntity<DelegatedWithdrawalTokenResponseDto> getDelegatedWithdrawalToken(
+            @PathVariable UUID userId,
+            @PathVariable String delegatedToken
+    ) {
+        Wallet wallet = walletByUser(userId);
+        DelegatedWithdrawalTokenResponseDto response = delegatedWithdrawalTokenLifecycleService.getToken(
+                userId,
+                wallet.getId(),
+                delegatedToken);
+        AUDIT_LOG.info("internal_delegated_withdrawal_token_lookup userId={} walletId={} tokenId={} status={}",
+                userId,
+                wallet.getId(),
+                response.getTokenId(),
+                response.getStatus());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{userId}/delegated-withdrawal-tokens/{delegatedToken}/cancel")
+    public ResponseEntity<DelegatedWithdrawalTokenResponseDto> cancelDelegatedWithdrawalToken(
+            @PathVariable UUID userId,
+            @PathVariable String delegatedToken,
+            @Valid @RequestBody DelegatedWithdrawalTokenCancelRequestDto request
+    ) {
+        Wallet wallet = walletByUser(userId);
+        DelegatedWithdrawalTokenResponseDto response = delegatedWithdrawalTokenLifecycleService.cancelToken(
+                userId,
+                wallet.getId(),
+                delegatedToken,
+                request.getReason());
+        AUDIT_LOG.info("internal_delegated_withdrawal_token_cancelled userId={} walletId={} tokenId={} status={} reason={}",
+                userId,
+                wallet.getId(),
+                response.getTokenId(),
+                response.getStatus(),
+                request.getReason());
+        return ResponseEntity.ok(response);
+    }
 
     @PostMapping("/{userId}/reserve")
     public ResponseEntity<FlowResultResponseDto> reserve(
@@ -168,19 +236,19 @@ public class InternalWalletController {
         return toResponse(result);
     }
 
-        @PostMapping("/approvals/{approvalId}/decision")
-        public ResponseEntity<FlowResultResponseDto> decideApproval(
-                        @PathVariable String approvalId,
-                        @Valid @RequestBody MakerCheckerDecisionRequestDto request
-        ) {
-                makerCheckerApprovalService.recordDecision(approvalId, request.isApproved(), request.getReason());
-                AUDIT_LOG.info("internal_wallet_maker_checker_decision approvalId={} approved={} reason={}",
-                                approvalId,
-                                request.isApproved(),
-                                request.getReason());
-                String message = request.isApproved() ? "Approval decision recorded" : "Rejection decision recorded";
-                return ResponseEntity.ok(new FlowResultResponseDto(true, message, null, null, "wallet.maker_checker.decision_recorded"));
-        }
+    @PostMapping("/approvals/{approvalId}/decision")
+    public ResponseEntity<FlowResultResponseDto> decideApproval(
+            @PathVariable String approvalId,
+            @Valid @RequestBody MakerCheckerDecisionRequestDto request
+    ) {
+        makerCheckerApprovalService.recordDecision(approvalId, request.isApproved(), request.getReason());
+        AUDIT_LOG.info("internal_wallet_maker_checker_decision approvalId={} approved={} reason={}",
+                approvalId,
+                request.isApproved(),
+                request.getReason());
+        String message = request.isApproved() ? "Approval decision recorded" : "Rejection decision recorded";
+        return ResponseEntity.ok(new FlowResultResponseDto(true, message, null, null, "wallet.maker_checker.decision_recorded"));
+    }
 
     private Wallet walletByUser(UUID userId) {
         return walletRepository.findByUserId(userId)
