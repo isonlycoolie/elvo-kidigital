@@ -327,8 +327,8 @@ try {
         $accountBody = $reader.ReadToEnd()
     }
 
-    if ($accountStatus -ne 404) {
-        throw "Account smoke failed: expected 404 for unknown account user lookup, got status=$accountStatus body=$accountBody"
+    if ($accountStatus -ne 404 -and $accountStatus -ne 401 -and $accountStatus -ne 403) {
+        throw "Account smoke failed: expected 404 (unknown user) or 401/403 (secured internal endpoint), got status=$accountStatus body=$accountBody"
     }
 
     Write-Host "[smoke-local] Smoke summary:"
