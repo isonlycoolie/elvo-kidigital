@@ -99,6 +99,30 @@ public final class AccountContracts {
             String sourceUserAgent) {
     }
 
+    public record PermissionChangeRequest(
+            UUID accountId,
+            Account.AccountPermissionFlag permissionFlag,
+            boolean requestedEnabled,
+            String reason,
+            String requestedBy,
+            String requestId,
+            String correlationId,
+            String sourceService,
+            String sourceIp,
+            String sourceUserAgent) {
+    }
+
+    public record PermissionChangeApprovalRequest(
+            UUID permissionChangeRequestId,
+            String approvalNote,
+            String approvedBy,
+            String requestId,
+            String correlationId,
+            String sourceService,
+            String sourceIp,
+            String sourceUserAgent) {
+    }
+
     public record RestrictionRequest(
             UUID accountId,
             Account.RestrictionType restrictionType,
@@ -138,6 +162,21 @@ public final class AccountContracts {
             String reason,
             UUID accountId,
             Account.AccountPermissionFlag permissionFlag) {
+    }
+
+    public record PermissionChangeWorkflowResponse(
+            UUID permissionChangeRequestId,
+            UUID accountId,
+            Account.AccountPermissionFlag permissionFlag,
+            boolean previousEnabled,
+            boolean requestedEnabled,
+            String status,
+            String reason,
+            String requestedBy,
+            String approvedBy,
+            String approvalNote,
+            Instant requestedAt,
+            Instant approvedAt) {
     }
 
     public record LimitResponse(

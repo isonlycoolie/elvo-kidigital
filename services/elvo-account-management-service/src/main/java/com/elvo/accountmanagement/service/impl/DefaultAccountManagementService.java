@@ -20,6 +20,9 @@ import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeWorkflowR
 import com.elvo.accountmanagement.contract.AccountContracts.LimitCheckRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionCheckRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeApprovalRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeWorkflowResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.RestrictionRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.RestrictionResponse;
@@ -30,6 +33,7 @@ import com.elvo.accountmanagement.entity.AccountAuditLog;
 import com.elvo.accountmanagement.entity.AccountLimit;
 import com.elvo.accountmanagement.entity.AccountLimitChangeRequest.Status;
 import com.elvo.accountmanagement.entity.AccountLimitChangeRequest;
+import com.elvo.accountmanagement.entity.AccountPermissionChangeRequest;
 import com.elvo.accountmanagement.entity.AccountPermission;
 import com.elvo.accountmanagement.entity.AccountRelationship;
 import com.elvo.accountmanagement.entity.AccountRestriction;
@@ -37,6 +41,7 @@ import com.elvo.accountmanagement.repository.AccountAuditLogRepository;
 import com.elvo.accountmanagement.repository.AccountLimitRepository;
 import com.elvo.accountmanagement.repository.AccountLimitChangeRequestRepository;
 import com.elvo.accountmanagement.repository.AccountPermissionRepository;
+import com.elvo.accountmanagement.repository.AccountPermissionChangeRequestRepository;
 import com.elvo.accountmanagement.repository.AccountRelationshipRepository;
 import com.elvo.accountmanagement.repository.AccountRepository;
 import com.elvo.accountmanagement.repository.AccountRestrictionRepository;
@@ -55,6 +60,7 @@ public class DefaultAccountManagementService implements AccountManagementService
     private final AccountPermissionRepository permissionRepository;
     private final AccountLimitRepository limitRepository;
     private final AccountLimitChangeRequestRepository limitChangeRequestRepository;
+    private final AccountPermissionChangeRequestRepository permissionChangeRequestRepository;
     private final AccountRestrictionRepository restrictionRepository;
     private final AccountRelationshipRepository relationshipRepository;
     private final AccountAuditLogRepository auditLogRepository;
@@ -66,6 +72,7 @@ public class DefaultAccountManagementService implements AccountManagementService
                                            AccountPermissionRepository permissionRepository,
                                            AccountLimitRepository limitRepository,
                                            AccountLimitChangeRequestRepository limitChangeRequestRepository,
+                                           AccountPermissionChangeRequestRepository permissionChangeRequestRepository,
                                            AccountRestrictionRepository restrictionRepository,
                                            AccountRelationshipRepository relationshipRepository,
                                            AccountAuditLogRepository auditLogRepository,
@@ -76,6 +83,7 @@ public class DefaultAccountManagementService implements AccountManagementService
         this.permissionRepository = permissionRepository;
         this.limitRepository = limitRepository;
         this.limitChangeRequestRepository = limitChangeRequestRepository;
+        this.permissionChangeRequestRepository = permissionChangeRequestRepository;
         this.restrictionRepository = restrictionRepository;
         this.relationshipRepository = relationshipRepository;
         this.auditLogRepository = auditLogRepository;
@@ -250,6 +258,67 @@ public class DefaultAccountManagementService implements AccountManagementService
         String reason = allowed ? "Allowed" : "Permission disabled";
         return new PermissionResponse(allowed, reason, account.getAccountId(), request.permissionFlag());
     }
+
+        @Override
+        public PermissionChangeWorkflowResponse requestPermissionChange(PermissionChangeRequest request) {
+        validateRequest(request.accountId(), "accountId");
+        validateRequest(request.permissionFlag(), "permissionFlag");
+        validateRequest(request.requestedBy(), "requestedBy");
+
+        Account account = findAccount(request.accountId());
+        AccountPermission permission = permissionRepository.findByAccountId(account.getAccountId())
+            .orElseThrow(() -> new IllegalArgumentException("Account permissions not configured"));
+        boolean previousEnabled = isPermissionEnabled(permission, request.permissionFlag());
+
+        AccountPermissionChangeRequest changeRequest = new AccountPermissionChangeRequest();
+        changeRequest.setAccountId(account.getAccountId());
+        changeRequest.setPermissionFlag(request.permissionFlag());
+        changeRequest.setPreviousEnabled(previousEnabled);
+        changeRequest.setRequestedEnabled(request.requestedEnabled());
+        changeRequest.setStatus(AccountPermissionChangeRequest.Status.PENDING_APPROVAL);
+        changeRequest.setReason(request.reason());
+        changeRequest.setRequestedBy(request.requestedBy());
+
+        AccountPermissionChangeRequest savedRequest = permissionChangeRequestRepository.save(changeRequest);
+
+        String description = "Permission change requested for " + request.permissionFlag() + ": "
+            + previousEnabled + " -> " + request.requestedEnabled();
+        audit(account.getAccountId(), "PERMISSION_CHANGE_REQUESTED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.requestedBy());
+        eventPublisher.publishPolicy(account, "PERMISSION_CHANGE_REQUESTED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.requestedBy());
+
+        return toPermissionChangeWorkflowResponse(savedRequest);
+        }
+
+        @Override
+        public PermissionChangeWorkflowResponse approvePermissionChange(PermissionChangeApprovalRequest request) {
+        validateRequest(request.permissionChangeRequestId(), "permissionChangeRequestId");
+        validateRequest(request.approvedBy(), "approvedBy");
+
+        AccountPermissionChangeRequest changeRequest = permissionChangeRequestRepository.findById(request.permissionChangeRequestId())
+            .orElseThrow(() -> new IllegalArgumentException("Permission change request not found"));
+        if (changeRequest.getStatus() != AccountPermissionChangeRequest.Status.PENDING_APPROVAL) {
+            return toPermissionChangeWorkflowResponse(changeRequest);
+        }
+
+        Account account = findAccount(changeRequest.getAccountId());
+        AccountPermission permission = permissionRepository.findByAccountId(account.getAccountId())
+            .orElseThrow(() -> new IllegalArgumentException("Account permissions not configured"));
+        applyPermissionFlag(permission, changeRequest.getPermissionFlag(), changeRequest.isRequestedEnabled());
+        permissionRepository.save(permission);
+
+        changeRequest.setStatus(AccountPermissionChangeRequest.Status.APPROVED);
+        changeRequest.setApprovedBy(request.approvedBy());
+        changeRequest.setApprovalNote(request.approvalNote());
+        changeRequest.setApprovedAt(Instant.now());
+        AccountPermissionChangeRequest savedRequest = permissionChangeRequestRepository.save(changeRequest);
+
+        String description = "Permission change approved for " + savedRequest.getPermissionFlag() + ": "
+            + savedRequest.isPreviousEnabled() + " -> " + savedRequest.isRequestedEnabled();
+        audit(account.getAccountId(), "PERMISSION_CHANGE_APPROVED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.approvedBy());
+        eventPublisher.publishPolicy(account, "PERMISSION_CHANGE_APPROVED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.approvedBy());
+
+        return toPermissionChangeWorkflowResponse(savedRequest);
+        }
 
     @Override
     public AccountResponse activateAccount(LifecycleRequest request) {
@@ -524,6 +593,22 @@ public class DefaultAccountManagementService implements AccountManagementService
         };
     }
 
+    private void applyPermissionFlag(AccountPermission permission,
+                                     Account.AccountPermissionFlag permissionFlag,
+                                     boolean enabled) {
+        switch (permissionFlag) {
+            case CAN_RECEIVE_MONEY -> permission.setCanReceiveMoney(enabled);
+            case CAN_SEND_MONEY -> permission.setCanSendMoney(enabled);
+            case CAN_WITHDRAW -> permission.setCanWithdraw(enabled);
+            case CAN_DEPOSIT -> permission.setCanDeposit(enabled);
+            case CAN_USE_DELEGATED_ACCESS -> permission.setCanUseDelegatedAccess(enabled);
+            case CAN_USE_AGENT_WITHDRAWAL -> permission.setCanUseAgentWithdrawal(enabled);
+            case CAN_PERFORM_BILL_PAYMENT -> permission.setCanPerformBillPayment(enabled);
+            case CAN_CREATE_SUB_ACCOUNTS -> permission.setCanCreateSubAccounts(enabled);
+            default -> throw new IllegalArgumentException("Unsupported permission flag");
+        }
+    }
+
     private BigDecimal resolveLimitThreshold(AccountLimit limit, Account.LimitScope scope) {
         if (scope == null) {
             return limit.getMaxSingleTransaction();
@@ -565,6 +650,22 @@ public class DefaultAccountManagementService implements AccountManagementService
                 request.getRequestedAt(),
                 request.getActivationAt(),
                 request.getActivatedAt());
+    }
+
+    private PermissionChangeWorkflowResponse toPermissionChangeWorkflowResponse(AccountPermissionChangeRequest request) {
+        return new PermissionChangeWorkflowResponse(
+                request.getPermissionChangeRequestId(),
+                request.getAccountId(),
+                request.getPermissionFlag(),
+                request.isPreviousEnabled(),
+                request.isRequestedEnabled(),
+                request.getStatus().name(),
+                request.getReason(),
+                request.getRequestedBy(),
+                request.getApprovedBy(),
+                request.getApprovalNote(),
+                request.getRequestedAt(),
+                request.getApprovedAt());
     }
 
     private Account.LimitScope resolveLimitScope(String actionType) {

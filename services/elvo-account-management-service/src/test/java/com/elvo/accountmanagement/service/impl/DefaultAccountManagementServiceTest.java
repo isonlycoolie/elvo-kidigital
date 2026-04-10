@@ -20,10 +20,13 @@ import com.elvo.accountmanagement.contract.AccountContracts.LifecycleRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeActivationRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitCheckRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeApprovalRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationRequest;
 import com.elvo.accountmanagement.entity.Account;
 import com.elvo.accountmanagement.entity.AccountLimit;
 import com.elvo.accountmanagement.entity.AccountLimitChangeRequest;
+import com.elvo.accountmanagement.entity.AccountPermissionChangeRequest;
 import com.elvo.accountmanagement.entity.AccountPermission;
 import com.elvo.accountmanagement.entity.AccountRelationship;
 import com.elvo.accountmanagement.messaging.publisher.AccountAuditEventPublisher;
@@ -32,6 +35,7 @@ import com.elvo.accountmanagement.repository.AccountAuditLogRepository;
 import com.elvo.accountmanagement.repository.AccountLimitRepository;
 import com.elvo.accountmanagement.repository.AccountLimitChangeRequestRepository;
 import com.elvo.accountmanagement.repository.AccountPermissionRepository;
+import com.elvo.accountmanagement.repository.AccountPermissionChangeRequestRepository;
 import com.elvo.accountmanagement.repository.AccountRelationshipRepository;
 import com.elvo.accountmanagement.repository.AccountRepository;
 import com.elvo.accountmanagement.repository.AccountRestrictionRepository;
@@ -45,6 +49,9 @@ class DefaultAccountManagementServiceTest {
 
     @Mock
     private AccountPermissionRepository permissionRepository;
+
+    @Mock
+    private AccountPermissionChangeRequestRepository permissionChangeRequestRepository;
 
     @Mock
     private AccountLimitRepository limitRepository;
@@ -76,6 +83,7 @@ class DefaultAccountManagementServiceTest {
                 permissionRepository,
                 limitRepository,
                 limitChangeRequestRepository,
+                permissionChangeRequestRepository,
                 restrictionRepository,
                 relationshipRepository,
                 auditLogRepository,
@@ -509,6 +517,89 @@ class DefaultAccountManagementServiceTest {
         assertThat(response.activatedAt()).isNotNull();
         }
 
+        @Test
+        void requestPermissionChangeCreatesPendingApprovalRequest() {
+        UUID accountId = UUID.randomUUID();
+        Account account = new Account();
+        account.setUserId(UUID.randomUUID());
+        account.setEan("7234567890128");
+        account.setAccountStatus(Account.AccountStatus.ACTIVE);
+        account.setKycStatus(Account.KycStatus.VERIFIED);
+        setAccountId(account, accountId);
+
+        AccountPermission permission = new AccountPermission();
+        permission.setCanUseDelegatedAccess(false);
+
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+        when(permissionRepository.findByAccountId(accountId)).thenReturn(Optional.of(permission));
+        when(permissionChangeRequestRepository.save(org.mockito.ArgumentMatchers.any(AccountPermissionChangeRequest.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.requestPermissionChange(new PermissionChangeRequest(
+            accountId,
+            Account.AccountPermissionFlag.CAN_USE_DELEGATED_ACCESS,
+            true,
+            "need delegated support",
+            "user-2",
+            "req-12",
+            "corr-12",
+            "wallet-service",
+            "127.0.0.1",
+            "wallet"));
+
+        assertThat(response.accountId()).isEqualTo(accountId);
+        assertThat(response.status()).isEqualTo("PENDING_APPROVAL");
+        assertThat(response.previousEnabled()).isFalse();
+        assertThat(response.requestedEnabled()).isTrue();
+        }
+
+        @Test
+        void approvePermissionChangeAppliesFlagAndMarksApproved() {
+        UUID accountId = UUID.randomUUID();
+        UUID permissionChangeRequestId = UUID.randomUUID();
+
+        Account account = new Account();
+        account.setUserId(UUID.randomUUID());
+        account.setEan("8234567890128");
+        account.setAccountStatus(Account.AccountStatus.ACTIVE);
+        account.setKycStatus(Account.KycStatus.VERIFIED);
+        setAccountId(account, accountId);
+
+        AccountPermission permission = new AccountPermission();
+        permission.setCanUseAgentWithdrawal(false);
+
+        AccountPermissionChangeRequest changeRequest = new AccountPermissionChangeRequest();
+        setPermissionChangeRequestId(changeRequest, permissionChangeRequestId);
+        changeRequest.setAccountId(accountId);
+        changeRequest.setPermissionFlag(Account.AccountPermissionFlag.CAN_USE_AGENT_WITHDRAWAL);
+        changeRequest.setPreviousEnabled(false);
+        changeRequest.setRequestedEnabled(true);
+        changeRequest.setStatus(AccountPermissionChangeRequest.Status.PENDING_APPROVAL);
+        changeRequest.setRequestedBy("user-3");
+
+        when(permissionChangeRequestRepository.findById(permissionChangeRequestId)).thenReturn(Optional.of(changeRequest));
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+        when(permissionRepository.findByAccountId(accountId)).thenReturn(Optional.of(permission));
+        when(permissionRepository.save(org.mockito.ArgumentMatchers.any(AccountPermission.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(permissionChangeRequestRepository.save(org.mockito.ArgumentMatchers.any(AccountPermissionChangeRequest.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.approvePermissionChange(new PermissionChangeApprovalRequest(
+            permissionChangeRequestId,
+            "approved for pilot",
+            "ops-approver",
+            "req-13",
+            "corr-13",
+            "ops-service",
+            "127.0.0.1",
+            "ops"));
+
+        assertThat(permission.isCanUseAgentWithdrawal()).isTrue();
+        assertThat(response.status()).isEqualTo("APPROVED");
+        assertThat(response.approvedBy()).isEqualTo("ops-approver");
+        assertThat(response.approvedAt()).isNotNull();
+        }
+
     private static AccountLimit createLimit() {
         AccountLimit limit = new AccountLimit();
         limit.setMaxSingleTransaction(new BigDecimal("1000.00"));
@@ -530,6 +621,16 @@ class DefaultAccountManagementServiceTest {
     private static void setLimitChangeRequestId(AccountLimitChangeRequest request, UUID requestId) {
         try {
             var field = AccountLimitChangeRequest.class.getDeclaredField("limitChangeRequestId");
+            field.setAccessible(true);
+            field.set(request, requestId);
+        } catch (ReflectiveOperationException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    private static void setPermissionChangeRequestId(AccountPermissionChangeRequest request, UUID requestId) {
+        try {
+            var field = AccountPermissionChangeRequest.class.getDeclaredField("permissionChangeRequestId");
             field.setAccessible(true);
             field.set(request, requestId);
         } catch (ReflectiveOperationException ex) {

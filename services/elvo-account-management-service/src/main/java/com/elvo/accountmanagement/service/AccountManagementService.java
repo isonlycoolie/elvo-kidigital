@@ -9,6 +9,9 @@ import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeWorkflowR
 import com.elvo.accountmanagement.contract.AccountContracts.LimitCheckRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionCheckRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeApprovalRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeWorkflowResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.RestrictionRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.RestrictionResponse;
@@ -38,6 +41,10 @@ public interface AccountManagementService {
     LimitChangeWorkflowResponse activateLimitChange(LimitChangeActivationRequest request);
 
     PermissionResponse checkPermission(PermissionCheckRequest request);
+
+    PermissionChangeWorkflowResponse requestPermissionChange(PermissionChangeRequest request);
+
+    PermissionChangeWorkflowResponse approvePermissionChange(PermissionChangeApprovalRequest request);
 
     AccountResponse activateAccount(LifecycleRequest request);
 

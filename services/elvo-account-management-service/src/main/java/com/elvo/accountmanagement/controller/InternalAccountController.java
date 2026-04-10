@@ -21,6 +21,9 @@ import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeWorkflowR
 import com.elvo.accountmanagement.contract.AccountContracts.LimitCheckRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionCheckRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeApprovalRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeWorkflowResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.RestrictionRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.RestrictionResponse;
@@ -92,6 +95,16 @@ public class InternalAccountController {
     @PostMapping("/check-permission")
     public ResponseEntity<ApiResponse<PermissionResponse>> checkPermission(@RequestBody PermissionCheckRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Permission check completed", accountManagementService.checkPermission(request)));
+    }
+
+    @PostMapping("/permission-change/request")
+    public ResponseEntity<ApiResponse<PermissionChangeWorkflowResponse>> requestPermissionChange(@RequestBody PermissionChangeRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Permission change request submitted", accountManagementService.requestPermissionChange(request)));
+    }
+
+    @PostMapping("/permission-change/approve")
+    public ResponseEntity<ApiResponse<PermissionChangeWorkflowResponse>> approvePermissionChange(@RequestBody PermissionChangeApprovalRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Permission change request approved", accountManagementService.approvePermissionChange(request)));
     }
 
     @PostMapping("/activate")
