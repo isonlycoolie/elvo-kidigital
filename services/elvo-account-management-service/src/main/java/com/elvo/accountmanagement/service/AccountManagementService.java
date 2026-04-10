@@ -3,6 +3,9 @@ package com.elvo.accountmanagement.service;
 import com.elvo.accountmanagement.contract.AccountContracts.AccountResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.CreateAccountRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LifecycleRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeActivationRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeWorkflowResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitCheckRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionCheckRequest;
@@ -29,6 +32,10 @@ public interface AccountManagementService {
     ValidationResponse validateReceive(ValidationRequest request);
 
     LimitResponse checkLimit(LimitCheckRequest request);
+
+    LimitChangeWorkflowResponse requestLimitChange(LimitChangeRequest request);
+
+    LimitChangeWorkflowResponse activateLimitChange(LimitChangeActivationRequest request);
 
     PermissionResponse checkPermission(PermissionCheckRequest request);
 

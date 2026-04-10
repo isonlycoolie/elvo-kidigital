@@ -15,6 +15,9 @@ import com.elvo.accountmanagement.contract.AccountContracts.ApiResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.AccountResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.CreateAccountRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LifecycleRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeActivationRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeWorkflowResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitCheckRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionCheckRequest;
@@ -74,6 +77,16 @@ public class InternalAccountController {
     @PostMapping("/check-limit")
     public ResponseEntity<ApiResponse<LimitResponse>> checkLimit(@RequestBody LimitCheckRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Limit check completed", accountManagementService.checkLimit(request)));
+    }
+
+    @PostMapping("/limit-change/request")
+    public ResponseEntity<ApiResponse<LimitChangeWorkflowResponse>> requestLimitChange(@RequestBody LimitChangeRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Limit change request submitted", accountManagementService.requestLimitChange(request)));
+    }
+
+    @PostMapping("/limit-change/activate")
+    public ResponseEntity<ApiResponse<LimitChangeWorkflowResponse>> activateLimitChange(@RequestBody LimitChangeActivationRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Limit change activation processed", accountManagementService.activateLimitChange(request)));
     }
 
     @PostMapping("/check-permission")

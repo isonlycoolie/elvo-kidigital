@@ -1,6 +1,7 @@
 package com.elvo.accountmanagement.service.impl;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
@@ -13,6 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.elvo.accountmanagement.contract.AccountContracts.AccountResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.CreateAccountRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LifecycleRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeActivationRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeWorkflowResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitCheckRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionCheckRequest;
@@ -24,11 +28,14 @@ import com.elvo.accountmanagement.contract.AccountContracts.ValidationResponse;
 import com.elvo.accountmanagement.entity.Account;
 import com.elvo.accountmanagement.entity.AccountAuditLog;
 import com.elvo.accountmanagement.entity.AccountLimit;
+import com.elvo.accountmanagement.entity.AccountLimitChangeRequest.Status;
+import com.elvo.accountmanagement.entity.AccountLimitChangeRequest;
 import com.elvo.accountmanagement.entity.AccountPermission;
 import com.elvo.accountmanagement.entity.AccountRelationship;
 import com.elvo.accountmanagement.entity.AccountRestriction;
 import com.elvo.accountmanagement.repository.AccountAuditLogRepository;
 import com.elvo.accountmanagement.repository.AccountLimitRepository;
+import com.elvo.accountmanagement.repository.AccountLimitChangeRequestRepository;
 import com.elvo.accountmanagement.repository.AccountPermissionRepository;
 import com.elvo.accountmanagement.repository.AccountRelationshipRepository;
 import com.elvo.accountmanagement.repository.AccountRepository;
@@ -42,9 +49,12 @@ import com.elvo.accountmanagement.util.EanGenerator;
 @Transactional
 public class DefaultAccountManagementService implements AccountManagementService {
 
+    private static final Duration LIMIT_CHANGE_COOLING_PERIOD = Duration.ofHours(24);
+
     private final AccountRepository accountRepository;
     private final AccountPermissionRepository permissionRepository;
     private final AccountLimitRepository limitRepository;
+    private final AccountLimitChangeRequestRepository limitChangeRequestRepository;
     private final AccountRestrictionRepository restrictionRepository;
     private final AccountRelationshipRepository relationshipRepository;
     private final AccountAuditLogRepository auditLogRepository;
@@ -55,6 +65,7 @@ public class DefaultAccountManagementService implements AccountManagementService
     public DefaultAccountManagementService(AccountRepository accountRepository,
                                            AccountPermissionRepository permissionRepository,
                                            AccountLimitRepository limitRepository,
+                                           AccountLimitChangeRequestRepository limitChangeRequestRepository,
                                            AccountRestrictionRepository restrictionRepository,
                                            AccountRelationshipRepository relationshipRepository,
                                            AccountAuditLogRepository auditLogRepository,
@@ -64,6 +75,7 @@ public class DefaultAccountManagementService implements AccountManagementService
         this.accountRepository = accountRepository;
         this.permissionRepository = permissionRepository;
         this.limitRepository = limitRepository;
+        this.limitChangeRequestRepository = limitChangeRequestRepository;
         this.restrictionRepository = restrictionRepository;
         this.relationshipRepository = relationshipRepository;
         this.auditLogRepository = auditLogRepository;
@@ -153,6 +165,77 @@ public class DefaultAccountManagementService implements AccountManagementService
         boolean allowed = threshold == null || request.amount().compareTo(threshold) <= 0;
         String reason = allowed ? "Allowed" : "Amount exceeds limit";
         return new LimitResponse(allowed, reason, account.getAccountId(), request.limitScope(), request.amount());
+    }
+
+    @Override
+    public LimitChangeWorkflowResponse requestLimitChange(LimitChangeRequest request) {
+        validateRequest(request.accountId(), "accountId");
+        validateRequest(request.limitScope(), "limitScope");
+        validateRequest(request.requestedBy(), "requestedBy");
+        validateAmount(request.requestedAmount());
+
+        Account account = findAccount(request.accountId());
+        AccountLimit limit = limitRepository.findByAccountId(account.getAccountId())
+                .orElseThrow(() -> new IllegalArgumentException("Account limits not configured"));
+
+        BigDecimal previousAmount = resolveLimitThreshold(limit, request.limitScope());
+        if (previousAmount == null) {
+            throw new IllegalArgumentException("Limit scope is not supported");
+        }
+
+        AccountLimitChangeRequest changeRequest = new AccountLimitChangeRequest();
+        changeRequest.setAccountId(account.getAccountId());
+        changeRequest.setLimitScope(request.limitScope());
+        changeRequest.setPreviousAmount(previousAmount);
+        changeRequest.setRequestedAmount(request.requestedAmount());
+        changeRequest.setReason(request.reason());
+        changeRequest.setRequestedBy(request.requestedBy());
+        changeRequest.setActivationAt(Instant.now().plus(LIMIT_CHANGE_COOLING_PERIOD));
+        changeRequest.setStatus(Status.PENDING);
+
+        AccountLimitChangeRequest savedRequest = limitChangeRequestRepository.save(changeRequest);
+
+        String description = "Limit change requested for " + request.limitScope() + ": "
+                + previousAmount + " -> " + request.requestedAmount()
+                + ", activation at " + savedRequest.getActivationAt();
+        audit(account.getAccountId(), "LIMIT_CHANGE_REQUESTED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.requestedBy());
+        eventPublisher.publishPolicy(account, "LIMIT_CHANGE_REQUESTED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.requestedBy());
+
+        return toLimitChangeWorkflowResponse(savedRequest);
+    }
+
+    @Override
+    public LimitChangeWorkflowResponse activateLimitChange(LimitChangeActivationRequest request) {
+        validateRequest(request.limitChangeRequestId(), "limitChangeRequestId");
+
+        AccountLimitChangeRequest changeRequest = limitChangeRequestRepository.findById(request.limitChangeRequestId())
+                .orElseThrow(() -> new IllegalArgumentException("Limit change request not found"));
+        if (changeRequest.getStatus() != Status.PENDING) {
+            return toLimitChangeWorkflowResponse(changeRequest);
+        }
+
+        Instant now = Instant.now();
+        if (now.isBefore(changeRequest.getActivationAt())) {
+            throw new IllegalStateException("Cooling period has not elapsed for limit change activation");
+        }
+
+        Account account = findAccount(changeRequest.getAccountId());
+        AccountLimit limit = limitRepository.findByAccountId(account.getAccountId())
+                .orElseThrow(() -> new IllegalArgumentException("Account limits not configured"));
+
+        applyLimitThreshold(limit, changeRequest.getLimitScope(), changeRequest.getRequestedAmount());
+        limitRepository.save(limit);
+
+        changeRequest.setStatus(Status.ACTIVATED);
+        changeRequest.setActivatedAt(now);
+        AccountLimitChangeRequest savedRequest = limitChangeRequestRepository.save(changeRequest);
+
+        String description = "Limit change activated for " + savedRequest.getLimitScope() + ": "
+                + savedRequest.getPreviousAmount() + " -> " + savedRequest.getRequestedAmount();
+        audit(account.getAccountId(), "LIMIT_CHANGE_ACTIVATED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.activatedBy());
+        eventPublisher.publishPolicy(account, "LIMIT_CHANGE_ACTIVATED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.activatedBy());
+
+        return toLimitChangeWorkflowResponse(savedRequest);
     }
 
     @Override
@@ -453,6 +536,35 @@ public class DefaultAccountManagementService implements AccountManagementService
             case BILL_PAYMENT -> limit.getBillPaymentLimit();
             case MAX_SINGLE_TRANSACTION -> limit.getMaxSingleTransaction();
         };
+    }
+
+    private void applyLimitThreshold(AccountLimit limit, Account.LimitScope scope, BigDecimal amount) {
+        if (scope == null) {
+            limit.setMaxSingleTransaction(amount);
+            return;
+        }
+        switch (scope) {
+            case DAILY_TRANSFER -> limit.setDailyTransferLimit(amount);
+            case MONTHLY_TRANSFER -> limit.setMonthlyTransferLimit(amount);
+            case WITHDRAWAL -> limit.setWithdrawalLimit(amount);
+            case DEPOSIT -> limit.setDepositLimit(amount);
+            case BILL_PAYMENT -> limit.setBillPaymentLimit(amount);
+            case MAX_SINGLE_TRANSACTION -> limit.setMaxSingleTransaction(amount);
+            default -> throw new IllegalArgumentException("Unsupported limit scope");
+        }
+    }
+
+    private LimitChangeWorkflowResponse toLimitChangeWorkflowResponse(AccountLimitChangeRequest request) {
+        return new LimitChangeWorkflowResponse(
+                request.getLimitChangeRequestId(),
+                request.getAccountId(),
+                request.getLimitScope(),
+                request.getPreviousAmount(),
+                request.getRequestedAmount(),
+                request.getStatus().name(),
+                request.getRequestedAt(),
+                request.getActivationAt(),
+                request.getActivatedAt());
     }
 
     private Account.LimitScope resolveLimitScope(String actionType) {

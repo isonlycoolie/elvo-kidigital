@@ -66,6 +66,29 @@ public final class AccountContracts {
             String sourceUserAgent) {
     }
 
+    public record LimitChangeRequest(
+            UUID accountId,
+            Account.LimitScope limitScope,
+            BigDecimal requestedAmount,
+            String reason,
+            String requestedBy,
+            String requestId,
+            String correlationId,
+            String sourceService,
+            String sourceIp,
+            String sourceUserAgent) {
+    }
+
+    public record LimitChangeActivationRequest(
+            UUID limitChangeRequestId,
+            String requestId,
+            String correlationId,
+            String sourceService,
+            String sourceIp,
+            String sourceUserAgent,
+            String activatedBy) {
+    }
+
     public record PermissionCheckRequest(
             UUID accountId,
             Account.AccountPermissionFlag permissionFlag,
@@ -123,6 +146,18 @@ public final class AccountContracts {
             UUID accountId,
             Account.LimitScope limitScope,
             BigDecimal amount) {
+    }
+
+    public record LimitChangeWorkflowResponse(
+            UUID limitChangeRequestId,
+            UUID accountId,
+            Account.LimitScope limitScope,
+            BigDecimal previousAmount,
+            BigDecimal requestedAmount,
+            String status,
+            Instant requestedAt,
+            Instant activationAt,
+            Instant activatedAt) {
     }
 
     public record RestrictionResponse(

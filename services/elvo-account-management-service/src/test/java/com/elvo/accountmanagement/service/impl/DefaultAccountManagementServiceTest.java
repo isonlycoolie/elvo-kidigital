@@ -1,6 +1,7 @@
 package com.elvo.accountmanagement.service.impl;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,16 +17,20 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.elvo.accountmanagement.contract.AccountContracts.CreateAccountRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LifecycleRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeActivationRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitCheckRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationRequest;
 import com.elvo.accountmanagement.entity.Account;
 import com.elvo.accountmanagement.entity.AccountLimit;
+import com.elvo.accountmanagement.entity.AccountLimitChangeRequest;
 import com.elvo.accountmanagement.entity.AccountPermission;
 import com.elvo.accountmanagement.entity.AccountRelationship;
 import com.elvo.accountmanagement.messaging.publisher.AccountAuditEventPublisher;
 import com.elvo.accountmanagement.messaging.publisher.AccountEventPublisher;
 import com.elvo.accountmanagement.repository.AccountAuditLogRepository;
 import com.elvo.accountmanagement.repository.AccountLimitRepository;
+import com.elvo.accountmanagement.repository.AccountLimitChangeRequestRepository;
 import com.elvo.accountmanagement.repository.AccountPermissionRepository;
 import com.elvo.accountmanagement.repository.AccountRelationshipRepository;
 import com.elvo.accountmanagement.repository.AccountRepository;
@@ -43,6 +48,9 @@ class DefaultAccountManagementServiceTest {
 
     @Mock
     private AccountLimitRepository limitRepository;
+
+    @Mock
+    private AccountLimitChangeRequestRepository limitChangeRequestRepository;
 
     @Mock
     private AccountRestrictionRepository restrictionRepository;
@@ -67,6 +75,7 @@ class DefaultAccountManagementServiceTest {
                 accountRepository,
                 permissionRepository,
                 limitRepository,
+                limitChangeRequestRepository,
                 restrictionRepository,
                 relationshipRepository,
                 auditLogRepository,
@@ -417,6 +426,89 @@ class DefaultAccountManagementServiceTest {
         assertThat(response.allowed()).isTrue();
     }
 
+        @Test
+        void requestLimitChangeCreatesPendingRequestWithCoolingPeriod() {
+        UUID accountId = UUID.randomUUID();
+        Account account = new Account();
+        account.setUserId(UUID.randomUUID());
+        account.setEan("5234567890128");
+        account.setAccountStatus(Account.AccountStatus.ACTIVE);
+        account.setKycStatus(Account.KycStatus.VERIFIED);
+        setAccountId(account, accountId);
+
+        AccountLimit limit = createLimit();
+        limit.setAccountId(accountId);
+
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+        when(limitRepository.findByAccountId(accountId)).thenReturn(Optional.of(limit));
+        when(limitChangeRequestRepository.save(org.mockito.ArgumentMatchers.any(AccountLimitChangeRequest.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.requestLimitChange(new LimitChangeRequest(
+            accountId,
+            Account.LimitScope.DAILY_TRANSFER,
+            new BigDecimal("1500.00"),
+            "temporary increase",
+            "user-1",
+            "req-10",
+            "corr-10",
+            "wallet-service",
+            "127.0.0.1",
+            "wallet"));
+
+        assertThat(response.accountId()).isEqualTo(accountId);
+        assertThat(response.status()).isEqualTo("PENDING");
+        assertThat(response.previousAmount()).isEqualByComparingTo("1000.00");
+        assertThat(response.requestedAmount()).isEqualByComparingTo("1500.00");
+        assertThat(response.activationAt()).isNotNull();
+        assertThat(response.activatedAt()).isNull();
+        }
+
+        @Test
+        void activateLimitChangeAppliesRequestedAmountAfterCoolingPeriod() {
+        UUID accountId = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+
+        Account account = new Account();
+        account.setUserId(UUID.randomUUID());
+        account.setEan("6234567890128");
+        account.setAccountStatus(Account.AccountStatus.ACTIVE);
+        account.setKycStatus(Account.KycStatus.VERIFIED);
+        setAccountId(account, accountId);
+
+        AccountLimit limit = createLimit();
+        limit.setAccountId(accountId);
+
+        AccountLimitChangeRequest changeRequest = new AccountLimitChangeRequest();
+        setLimitChangeRequestId(changeRequest, requestId);
+        changeRequest.setAccountId(accountId);
+        changeRequest.setLimitScope(Account.LimitScope.WITHDRAWAL);
+        changeRequest.setPreviousAmount(new BigDecimal("500.00"));
+        changeRequest.setRequestedAmount(new BigDecimal("800.00"));
+        changeRequest.setStatus(AccountLimitChangeRequest.Status.PENDING);
+        changeRequest.setActivationAt(Instant.now().minusSeconds(60));
+
+        when(limitChangeRequestRepository.findById(requestId)).thenReturn(Optional.of(changeRequest));
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+        when(limitRepository.findByAccountId(accountId)).thenReturn(Optional.of(limit));
+        when(limitRepository.save(org.mockito.ArgumentMatchers.any(AccountLimit.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(limitChangeRequestRepository.save(org.mockito.ArgumentMatchers.any(AccountLimitChangeRequest.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.activateLimitChange(new LimitChangeActivationRequest(
+            requestId,
+            "req-11",
+            "corr-11",
+            "wallet-service",
+            "127.0.0.1",
+            "wallet",
+            "ops-user"));
+
+        assertThat(limit.getWithdrawalLimit()).isEqualByComparingTo("800.00");
+        assertThat(response.status()).isEqualTo("ACTIVATED");
+        assertThat(response.activatedAt()).isNotNull();
+        }
+
     private static AccountLimit createLimit() {
         AccountLimit limit = new AccountLimit();
         limit.setMaxSingleTransaction(new BigDecimal("1000.00"));
@@ -430,6 +522,16 @@ class DefaultAccountManagementServiceTest {
             var field = Account.class.getDeclaredField("accountId");
             field.setAccessible(true);
             field.set(account, accountId);
+        } catch (ReflectiveOperationException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    private static void setLimitChangeRequestId(AccountLimitChangeRequest request, UUID requestId) {
+        try {
+            var field = AccountLimitChangeRequest.class.getDeclaredField("limitChangeRequestId");
+            field.setAccessible(true);
+            field.set(request, requestId);
         } catch (ReflectiveOperationException ex) {
             throw new IllegalStateException(ex);
         }
