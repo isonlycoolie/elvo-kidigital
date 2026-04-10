@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.elvo.accountmanagement.contract.AccountContracts.ApiResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.AccountResponse;
+import com.elvo.accountmanagement.contract.AccountContracts.AdminActionApprovalRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.AdminActionRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.AdminActionWorkflowResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.CreateAccountRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LifecycleRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeActivationRequest;
@@ -150,5 +153,15 @@ public class InternalAccountController {
     @PostMapping("/remove-restriction")
     public ResponseEntity<ApiResponse<AccountResponse>> removeRestriction(@RequestBody RestrictionRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Restriction removed", accountManagementService.removeRestriction(request)));
+    }
+
+    @PostMapping("/admin-actions/request")
+    public ResponseEntity<ApiResponse<AdminActionWorkflowResponse>> requestAdminAction(@RequestBody AdminActionRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Admin action request submitted", accountManagementService.requestAdminAction(request)));
+    }
+
+    @PostMapping("/admin-actions/approve")
+    public ResponseEntity<ApiResponse<AdminActionWorkflowResponse>> approveAdminAction(@RequestBody AdminActionApprovalRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Admin action approved", accountManagementService.approveAdminAction(request)));
     }
 }

@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -14,6 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.elvo.accountmanagement.contract.AccountContracts.AccountResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.CreateAccountRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LifecycleRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.AdminActionApprovalRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.AdminActionRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.AdminActionWorkflowResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeActivationRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeWorkflowResponse;
@@ -29,6 +33,7 @@ import com.elvo.accountmanagement.contract.AccountContracts.RestrictionResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationResponse;
 import com.elvo.accountmanagement.entity.Account;
+import com.elvo.accountmanagement.entity.AccountAdminActionRequest;
 import com.elvo.accountmanagement.entity.AccountAuditLog;
 import com.elvo.accountmanagement.entity.AccountLimit;
 import com.elvo.accountmanagement.entity.AccountLimitChangeRequest.Status;
@@ -38,6 +43,7 @@ import com.elvo.accountmanagement.entity.AccountPermission;
 import com.elvo.accountmanagement.entity.AccountRelationship;
 import com.elvo.accountmanagement.entity.AccountRestriction;
 import com.elvo.accountmanagement.repository.AccountAuditLogRepository;
+import com.elvo.accountmanagement.repository.AccountAdminActionRequestRepository;
 import com.elvo.accountmanagement.repository.AccountLimitRepository;
 import com.elvo.accountmanagement.repository.AccountLimitChangeRequestRepository;
 import com.elvo.accountmanagement.repository.AccountPermissionRepository;
@@ -55,6 +61,13 @@ import com.elvo.accountmanagement.util.EanGenerator;
 public class DefaultAccountManagementService implements AccountManagementService {
 
     private static final Duration LIMIT_CHANGE_COOLING_PERIOD = Duration.ofHours(24);
+        private static final Set<String> MAKER_CHECKER_ACTIONS = Set.of(
+            "FREEZE",
+            "SUSPEND",
+            "CLOSE",
+            "ARCHIVE",
+            "RESTRICT",
+            "REMOVE_RESTRICTION");
 
     private final AccountRepository accountRepository;
     private final AccountPermissionRepository permissionRepository;
@@ -64,6 +77,7 @@ public class DefaultAccountManagementService implements AccountManagementService
     private final AccountRestrictionRepository restrictionRepository;
     private final AccountRelationshipRepository relationshipRepository;
     private final AccountAuditLogRepository auditLogRepository;
+    private final AccountAdminActionRequestRepository adminActionRequestRepository;
     private final EanGenerator eanGenerator;
     private final AccountAuditEventPublisher auditEventPublisher;
     private final AccountEventPublisher eventPublisher;
@@ -76,6 +90,7 @@ public class DefaultAccountManagementService implements AccountManagementService
                                            AccountRestrictionRepository restrictionRepository,
                                            AccountRelationshipRepository relationshipRepository,
                                            AccountAuditLogRepository auditLogRepository,
+                                           AccountAdminActionRequestRepository adminActionRequestRepository,
                                            EanGenerator eanGenerator,
                                            AccountAuditEventPublisher auditEventPublisher,
                                            AccountEventPublisher eventPublisher) {
@@ -87,6 +102,7 @@ public class DefaultAccountManagementService implements AccountManagementService
         this.restrictionRepository = restrictionRepository;
         this.relationshipRepository = relationshipRepository;
         this.auditLogRepository = auditLogRepository;
+        this.adminActionRequestRepository = adminActionRequestRepository;
         this.eanGenerator = eanGenerator;
         this.auditEventPublisher = auditEventPublisher;
         this.eventPublisher = eventPublisher;
@@ -399,6 +415,69 @@ public class DefaultAccountManagementService implements AccountManagementService
         return new RestrictionResponse(saved.getRestrictionId(), saved.getAccountId(), saved.getRestrictionType(), saved.getReason(), saved.getStartDate(), saved.getEndDate());
     }
 
+    @Override
+    public AdminActionWorkflowResponse requestAdminAction(AdminActionRequest request) {
+        validateRequest(request.accountId(), "accountId");
+        validateRequest(request.actionType(), "actionType");
+        validateRequest(request.requestedBy(), "requestedBy");
+
+        String normalizedAction = normalizeAdminAction(request.actionType());
+        if (!MAKER_CHECKER_ACTIONS.contains(normalizedAction)) {
+            throw new IllegalArgumentException("Action is not configured for maker-checker control");
+        }
+        if (("RESTRICT".equals(normalizedAction) || "REMOVE_RESTRICTION".equals(normalizedAction)) && request.restrictionType() == null) {
+            throw new IllegalArgumentException("restrictionType is required for restriction actions");
+        }
+
+        Account account = findAccount(request.accountId());
+
+        AccountAdminActionRequest adminActionRequest = new AccountAdminActionRequest();
+        adminActionRequest.setAccountId(account.getAccountId());
+        adminActionRequest.setActionType(normalizedAction);
+        adminActionRequest.setRestrictionType(request.restrictionType());
+        adminActionRequest.setStatus(AccountAdminActionRequest.Status.PENDING_APPROVAL);
+        adminActionRequest.setReason(request.reason());
+        adminActionRequest.setRequestedBy(request.requestedBy());
+
+        AccountAdminActionRequest savedRequest = adminActionRequestRepository.save(adminActionRequest);
+
+        String description = "Admin action request submitted: " + normalizedAction;
+        audit(account.getAccountId(), "ADMIN_ACTION_REQUESTED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.requestedBy());
+        eventPublisher.publishPolicy(account, "ADMIN_ACTION_REQUESTED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.requestedBy());
+
+        return toAdminActionWorkflowResponse(savedRequest);
+    }
+
+    @Override
+    public AdminActionWorkflowResponse approveAdminAction(AdminActionApprovalRequest request) {
+        validateRequest(request.adminActionRequestId(), "adminActionRequestId");
+        validateRequest(request.approvedBy(), "approvedBy");
+
+        AccountAdminActionRequest adminActionRequest = adminActionRequestRepository.findById(request.adminActionRequestId())
+                .orElseThrow(() -> new IllegalArgumentException("Admin action request not found"));
+        if (adminActionRequest.getStatus() != AccountAdminActionRequest.Status.PENDING_APPROVAL) {
+            return toAdminActionWorkflowResponse(adminActionRequest);
+        }
+        if (adminActionRequest.getRequestedBy() != null && adminActionRequest.getRequestedBy().equalsIgnoreCase(request.approvedBy())) {
+            throw new IllegalStateException("Maker and checker must be different users");
+        }
+
+        executeApprovedAdminAction(adminActionRequest, request);
+
+        adminActionRequest.setStatus(AccountAdminActionRequest.Status.APPROVED);
+        adminActionRequest.setApprovedBy(request.approvedBy());
+        adminActionRequest.setApprovalNote(request.approvalNote());
+        adminActionRequest.setApprovedAt(Instant.now());
+        AccountAdminActionRequest savedRequest = adminActionRequestRepository.save(adminActionRequest);
+
+        Account account = findAccount(savedRequest.getAccountId());
+        String description = "Admin action approved and applied: " + savedRequest.getActionType();
+        audit(account.getAccountId(), "ADMIN_ACTION_APPROVED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.approvedBy());
+        eventPublisher.publishPolicy(account, "ADMIN_ACTION_APPROVED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.approvedBy());
+
+        return toAdminActionWorkflowResponse(savedRequest);
+    }
+
     private AccountResponse changeStatus(LifecycleRequest request, Account.AccountStatus targetStatus, String actionType) {
         Account account = findAccount(request.accountId());
         validateLifecycleTransition(account.getAccountStatus(), targetStatus, actionType);
@@ -494,6 +573,42 @@ public class DefaultAccountManagementService implements AccountManagementService
         }
 
         throw new IllegalStateException("Invalid lifecycle transition from " + current + " to " + target);
+    }
+
+    private void executeApprovedAdminAction(AccountAdminActionRequest adminActionRequest,
+                                            AdminActionApprovalRequest approvalRequest) {
+        UUID accountId = adminActionRequest.getAccountId();
+        String actionType = adminActionRequest.getActionType();
+        String reason = adminActionRequest.getReason();
+        if ("FREEZE".equals(actionType)) {
+            freezeAccount(new LifecycleRequest(accountId, reason, approvalRequest.requestId(), approvalRequest.correlationId(), approvalRequest.sourceService(), approvalRequest.sourceIp(), approvalRequest.sourceUserAgent()));
+            return;
+        }
+        if ("SUSPEND".equals(actionType)) {
+            suspendAccount(new LifecycleRequest(accountId, reason, approvalRequest.requestId(), approvalRequest.correlationId(), approvalRequest.sourceService(), approvalRequest.sourceIp(), approvalRequest.sourceUserAgent()));
+            return;
+        }
+        if ("CLOSE".equals(actionType)) {
+            closeAccount(new LifecycleRequest(accountId, reason, approvalRequest.requestId(), approvalRequest.correlationId(), approvalRequest.sourceService(), approvalRequest.sourceIp(), approvalRequest.sourceUserAgent()));
+            return;
+        }
+        if ("ARCHIVE".equals(actionType)) {
+            archiveAccount(new LifecycleRequest(accountId, reason, approvalRequest.requestId(), approvalRequest.correlationId(), approvalRequest.sourceService(), approvalRequest.sourceIp(), approvalRequest.sourceUserAgent()));
+            return;
+        }
+        if ("RESTRICT".equals(actionType)) {
+            restrictAccount(new RestrictionRequest(accountId, adminActionRequest.getRestrictionType(), reason, approvalRequest.approvedBy(), approvalRequest.requestId(), approvalRequest.correlationId(), approvalRequest.sourceService(), approvalRequest.sourceIp(), approvalRequest.sourceUserAgent()));
+            return;
+        }
+        if ("REMOVE_RESTRICTION".equals(actionType)) {
+            removeRestriction(new RestrictionRequest(accountId, adminActionRequest.getRestrictionType(), reason, approvalRequest.approvedBy(), approvalRequest.requestId(), approvalRequest.correlationId(), approvalRequest.sourceService(), approvalRequest.sourceIp(), approvalRequest.sourceUserAgent()));
+            return;
+        }
+        throw new IllegalArgumentException("Unsupported admin action: " + actionType);
+    }
+
+    private String normalizeAdminAction(String actionType) {
+        return actionType.trim().toUpperCase(Locale.ROOT);
     }
 
     private String validateAccountForOutbound(Account account) {
@@ -659,6 +774,20 @@ public class DefaultAccountManagementService implements AccountManagementService
                 request.getPermissionFlag(),
                 request.isPreviousEnabled(),
                 request.isRequestedEnabled(),
+                request.getStatus().name(),
+                request.getReason(),
+                request.getRequestedBy(),
+                request.getApprovedBy(),
+                request.getApprovalNote(),
+                request.getRequestedAt(),
+                request.getApprovedAt());
+    }
+
+    private AdminActionWorkflowResponse toAdminActionWorkflowResponse(AccountAdminActionRequest request) {
+        return new AdminActionWorkflowResponse(
+                request.getAdminActionRequestId(),
+                request.getAccountId(),
+                request.getActionType(),
                 request.getStatus().name(),
                 request.getReason(),
                 request.getRequestedBy(),

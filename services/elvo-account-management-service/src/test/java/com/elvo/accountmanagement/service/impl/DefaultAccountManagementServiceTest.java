@@ -17,6 +17,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.elvo.accountmanagement.contract.AccountContracts.CreateAccountRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LifecycleRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.AdminActionApprovalRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.AdminActionRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeActivationRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitCheckRequest;
@@ -24,6 +26,7 @@ import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeAppr
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationRequest;
 import com.elvo.accountmanagement.entity.Account;
+import com.elvo.accountmanagement.entity.AccountAdminActionRequest;
 import com.elvo.accountmanagement.entity.AccountLimit;
 import com.elvo.accountmanagement.entity.AccountLimitChangeRequest;
 import com.elvo.accountmanagement.entity.AccountPermissionChangeRequest;
@@ -32,6 +35,7 @@ import com.elvo.accountmanagement.entity.AccountRelationship;
 import com.elvo.accountmanagement.messaging.publisher.AccountAuditEventPublisher;
 import com.elvo.accountmanagement.messaging.publisher.AccountEventPublisher;
 import com.elvo.accountmanagement.repository.AccountAuditLogRepository;
+import com.elvo.accountmanagement.repository.AccountAdminActionRequestRepository;
 import com.elvo.accountmanagement.repository.AccountLimitRepository;
 import com.elvo.accountmanagement.repository.AccountLimitChangeRequestRepository;
 import com.elvo.accountmanagement.repository.AccountPermissionRepository;
@@ -69,6 +73,9 @@ class DefaultAccountManagementServiceTest {
     private AccountAuditLogRepository auditLogRepository;
 
     @Mock
+    private AccountAdminActionRequestRepository adminActionRequestRepository;
+
+    @Mock
     private AccountEventPublisher eventPublisher;
 
     @Mock
@@ -87,6 +94,7 @@ class DefaultAccountManagementServiceTest {
                 restrictionRepository,
                 relationshipRepository,
                 auditLogRepository,
+                adminActionRequestRepository,
                 new EanGenerator(),
                 auditEventPublisher,
                 eventPublisher);
@@ -600,6 +608,79 @@ class DefaultAccountManagementServiceTest {
         assertThat(response.approvedAt()).isNotNull();
         }
 
+        @Test
+        void requestAdminActionCreatesPendingMakerCheckerRecord() {
+        UUID accountId = UUID.randomUUID();
+
+        Account account = new Account();
+        account.setUserId(UUID.randomUUID());
+        account.setEan("9234567890128");
+        account.setAccountStatus(Account.AccountStatus.ACTIVE);
+        account.setKycStatus(Account.KycStatus.VERIFIED);
+        setAccountId(account, accountId);
+
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+        when(adminActionRequestRepository.save(org.mockito.ArgumentMatchers.any(AccountAdminActionRequest.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.requestAdminAction(new AdminActionRequest(
+            accountId,
+            "FREEZE",
+            null,
+            "risk signal",
+            "maker-user",
+            "req-14",
+            "corr-14",
+            "ops-service",
+            "127.0.0.1",
+            "ops"));
+
+        assertThat(response.accountId()).isEqualTo(accountId);
+        assertThat(response.actionType()).isEqualTo("FREEZE");
+        assertThat(response.status()).isEqualTo("PENDING_APPROVAL");
+        }
+
+        @Test
+        void approveAdminActionRequiresDifferentCheckerAndAppliesAction() {
+        UUID accountId = UUID.randomUUID();
+        UUID adminActionRequestId = UUID.randomUUID();
+
+        Account account = new Account();
+        account.setUserId(UUID.randomUUID());
+        account.setEan("1034567890128");
+        account.setAccountStatus(Account.AccountStatus.ACTIVE);
+        account.setKycStatus(Account.KycStatus.VERIFIED);
+        setAccountId(account, accountId);
+
+        AccountAdminActionRequest adminActionRequest = new AccountAdminActionRequest();
+        setAdminActionRequestId(adminActionRequest, adminActionRequestId);
+        adminActionRequest.setAccountId(accountId);
+        adminActionRequest.setActionType("FREEZE");
+        adminActionRequest.setReason("investigation");
+        adminActionRequest.setRequestedBy("maker-user");
+        adminActionRequest.setStatus(AccountAdminActionRequest.Status.PENDING_APPROVAL);
+
+        when(adminActionRequestRepository.findById(adminActionRequestId)).thenReturn(Optional.of(adminActionRequest));
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+        when(accountRepository.save(org.mockito.ArgumentMatchers.any(Account.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(adminActionRequestRepository.save(org.mockito.ArgumentMatchers.any(AccountAdminActionRequest.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.approveAdminAction(new AdminActionApprovalRequest(
+            adminActionRequestId,
+            "approved",
+            "checker-user",
+            "req-15",
+            "corr-15",
+            "ops-service",
+            "127.0.0.1",
+            "ops"));
+
+        assertThat(account.getAccountStatus()).isEqualTo(Account.AccountStatus.FROZEN);
+        assertThat(response.status()).isEqualTo("APPROVED");
+        assertThat(response.approvedBy()).isEqualTo("checker-user");
+        }
+
     private static AccountLimit createLimit() {
         AccountLimit limit = new AccountLimit();
         limit.setMaxSingleTransaction(new BigDecimal("1000.00"));
@@ -631,6 +712,16 @@ class DefaultAccountManagementServiceTest {
     private static void setPermissionChangeRequestId(AccountPermissionChangeRequest request, UUID requestId) {
         try {
             var field = AccountPermissionChangeRequest.class.getDeclaredField("permissionChangeRequestId");
+            field.setAccessible(true);
+            field.set(request, requestId);
+        } catch (ReflectiveOperationException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    private static void setAdminActionRequestId(AccountAdminActionRequest request, UUID requestId) {
+        try {
+            var field = AccountAdminActionRequest.class.getDeclaredField("adminActionRequestId");
             field.setAccessible(true);
             field.set(request, requestId);
         } catch (ReflectiveOperationException ex) {

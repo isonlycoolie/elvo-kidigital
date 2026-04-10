@@ -135,6 +135,30 @@ public final class AccountContracts {
             String sourceUserAgent) {
     }
 
+    public record AdminActionRequest(
+            UUID accountId,
+            String actionType,
+            Account.RestrictionType restrictionType,
+            String reason,
+            String requestedBy,
+            String requestId,
+            String correlationId,
+            String sourceService,
+            String sourceIp,
+            String sourceUserAgent) {
+    }
+
+    public record AdminActionApprovalRequest(
+            UUID adminActionRequestId,
+            String approvalNote,
+            String approvedBy,
+            String requestId,
+            String correlationId,
+            String sourceService,
+            String sourceIp,
+            String sourceUserAgent) {
+    }
+
     public record AccountResponse(
             UUID accountId,
             UUID userId,
@@ -206,5 +230,18 @@ public final class AccountContracts {
             String reason,
             Instant startDate,
             Instant endDate) {
+    }
+
+    public record AdminActionWorkflowResponse(
+            UUID adminActionRequestId,
+            UUID accountId,
+            String actionType,
+            String status,
+            String reason,
+            String requestedBy,
+            String approvedBy,
+            String approvalNote,
+            Instant requestedAt,
+            Instant approvedAt) {
     }
 }

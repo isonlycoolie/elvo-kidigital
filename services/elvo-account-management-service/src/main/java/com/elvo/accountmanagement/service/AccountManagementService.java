@@ -1,6 +1,9 @@
 package com.elvo.accountmanagement.service;
 
 import com.elvo.accountmanagement.contract.AccountContracts.AccountResponse;
+import com.elvo.accountmanagement.contract.AccountContracts.AdminActionApprovalRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.AdminActionRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.AdminActionWorkflowResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.CreateAccountRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LifecycleRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeActivationRequest;
@@ -65,4 +68,8 @@ public interface AccountManagementService {
     AccountResponse removeRestriction(RestrictionRequest request);
 
     RestrictionResponse createRestrictionRecord(RestrictionRequest request);
+
+    AdminActionWorkflowResponse requestAdminAction(AdminActionRequest request);
+
+    AdminActionWorkflowResponse approveAdminAction(AdminActionApprovalRequest request);
 }
