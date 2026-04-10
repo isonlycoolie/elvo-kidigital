@@ -1,5 +1,6 @@
 package com.elvo.wallet.controller;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -88,6 +89,8 @@ public class WalletController {
     private static final String FORWARDED_FOR_HEADER = "X-Forwarded-For";
     private static final String STEP_UP_REQUIRED_CODE = "STEP_UP_REQUIRED";
     private static final String CHALLENGE_REQUIRED_CODE = "TRANSACTION_CHALLENGE_REQUIRED";
+    private static final String FRAUD_BLOCKED_CODE = "FRAUD_RULE_BLOCKED";
+    private static final String FRAUD_VERIFICATION_REQUIRED_CODE = "FRAUD_RULE_VERIFICATION_REQUIRED";
 
     private final WalletService walletService;
     private final WalletRepository walletRepository;
@@ -344,20 +347,16 @@ public class WalletController {
             userId,
             request.getAmount(),
             request.getTargetNumber());
-        if (withdrawalFraudDecision.blocked()) {
-            walletMetricsRecorder.recordSecurityControl("fraud_rules", true);
-            createAmlCase("FRAUD_RULE_BLOCK", userId, wallet.getId(), "withdrawal", withdrawalFraudDecision.reason(), java.util.Map.of(
-                "targetNumber", String.valueOf(request.getTargetNumber()),
-                "amount", String.valueOf(request.getAmount())));
-            securityAlertStreamingService.stream("wallet.security.fraud.blocked", "HIGH", userId, java.util.Map.of(
-                "operation", "withdrawal",
-                "reason", withdrawalFraudDecision.reason()));
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(new FlowResultResponseDto(false, withdrawalFraudDecision.reason(), wallet.getId(), null, "wallet.withdrawal.failed"));
-        }
-        walletMetricsRecorder.recordSecurityControl("fraud_rules", false);
-        if (withdrawalFraudDecision.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
-            return stepUpRequiredFailure("withdrawal", userId, wallet.getId(), withdrawalFraudDecision.reason());
+        ResponseEntity<FlowResultResponseDto> withdrawalFraudFailure = handleFraudDecisionEnvelope(
+            "withdrawal",
+            userId,
+            wallet.getId(),
+            request.getAmount(),
+            request.getTargetNumber(),
+            withdrawalFraudDecision,
+            request.getStepUpToken());
+        if (withdrawalFraudFailure != null) {
+            return withdrawalFraudFailure;
         }
 
         MakerCheckerApprovalService.ApprovalDecision withdrawalApprovalDecision = makerCheckerApprovalService.evaluate(
@@ -529,20 +528,16 @@ public class WalletController {
             userId,
             request.getAmount(),
             request.getTargetWalletId() == null ? null : request.getTargetWalletId().toString());
-        if (transferFraudDecision.blocked()) {
-            walletMetricsRecorder.recordSecurityControl("fraud_rules", true);
-            createAmlCase("FRAUD_RULE_BLOCK", userId, sourceWallet.getId(), "transfer", transferFraudDecision.reason(), java.util.Map.of(
-                "targetWalletId", String.valueOf(request.getTargetWalletId()),
-                "amount", String.valueOf(request.getAmount())));
-            securityAlertStreamingService.stream("wallet.security.fraud.blocked", "HIGH", userId, java.util.Map.of(
-                "operation", "transfer",
-                "reason", transferFraudDecision.reason()));
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(new FlowResultResponseDto(false, transferFraudDecision.reason(), sourceWallet.getId(), null, "wallet.transfer.failed"));
-        }
-        walletMetricsRecorder.recordSecurityControl("fraud_rules", false);
-        if (transferFraudDecision.requiresVerification() && (request.getStepUpToken() == null || request.getStepUpToken().isBlank())) {
-            return stepUpRequiredFailure("transfer", userId, sourceWallet.getId(), transferFraudDecision.reason());
+        ResponseEntity<FlowResultResponseDto> transferFraudFailure = handleFraudDecisionEnvelope(
+            "transfer",
+            userId,
+            sourceWallet.getId(),
+            request.getAmount(),
+            String.valueOf(request.getTargetWalletId()),
+            transferFraudDecision,
+            request.getStepUpToken());
+        if (transferFraudFailure != null) {
+            return transferFraudFailure;
         }
 
         MakerCheckerApprovalService.ApprovalDecision transferApprovalDecision = makerCheckerApprovalService.evaluate(
@@ -1011,6 +1006,96 @@ public class WalletController {
             return challengeRequiredFailure(operation, userId, walletId, reason);
         }
         return null;
+    }
+
+    private ResponseEntity<FlowResultResponseDto> handleFraudDecisionEnvelope(String operation,
+                                                                               UUID userId,
+                                                                               UUID walletId,
+                                                                               BigDecimal amount,
+                                                                               String targetReference,
+                                                                               FraudRulesEngine.FraudDecision fraudDecision,
+                                                                               String stepUpToken) {
+        FraudDecisionEnvelope envelope = toFraudDecisionEnvelope(operation, amount, targetReference, fraudDecision);
+        if (envelope == null || envelope.allowed()) {
+            walletMetricsRecorder.recordSecurityControl("fraud_rules", false);
+            return null;
+        }
+
+        if (envelope.blocked()) {
+            walletMetricsRecorder.recordSecurityControl("fraud_rules", true);
+            createAmlCase("FRAUD_RULE_BLOCK", userId, walletId, operation, envelope.reasonDetail(), java.util.Map.of(
+                "operation", operation,
+                "decision", "BLOCK",
+                "reasonCode", envelope.reasonCode(),
+                "reasonDetail", envelope.reasonDetail(),
+                "target", envelope.targetReference(),
+                "amount", String.valueOf(envelope.amount())));
+            securityAlertStreamingService.stream("wallet.security.fraud.blocked", "HIGH", userId, java.util.Map.of(
+                "operation", operation,
+                "decision", "BLOCK",
+                "reasonCode", envelope.reasonCode(),
+                "reason", envelope.reasonDetail()));
+            AUDIT_LOG.warn("wallet_{}_fraud_blocked userId={} reasonCode={} detail={} target={} amount={}",
+                operation, userId, envelope.reasonCode(), envelope.reasonDetail(), envelope.targetReference(), envelope.amount());
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new FlowResultResponseDto(false, envelope.reasonDetail(), walletId, null, "wallet." + operation + ".failed"));
+        }
+
+        boolean hasStepUpToken = stepUpToken != null && !stepUpToken.isBlank();
+        if (envelope.requiresVerification() && !hasStepUpToken) {
+            walletMetricsRecorder.recordSecurityControl("fraud_rules", true);
+            securityAlertStreamingService.stream("wallet.security.fraud.verification_required", "MEDIUM", userId, java.util.Map.of(
+                "operation", operation,
+                "decision", "STEP_UP",
+                "reasonCode", envelope.reasonCode(),
+                "reason", envelope.reasonDetail()));
+            AUDIT_LOG.warn("wallet_{}_fraud_step_up_required userId={} reasonCode={} detail={} target={} amount={}",
+                operation, userId, envelope.reasonCode(), envelope.reasonDetail(), envelope.targetReference(), envelope.amount());
+            return stepUpRequiredFailure(operation, userId, walletId, envelope.reasonDetail());
+        }
+
+        walletMetricsRecorder.recordSecurityControl("fraud_rules", false);
+        return null;
+    }
+
+    private FraudDecisionEnvelope toFraudDecisionEnvelope(String operation,
+                                                          BigDecimal amount,
+                                                          String targetReference,
+                                                          FraudRulesEngine.FraudDecision fraudDecision) {
+        if (fraudDecision == null) {
+            return null;
+        }
+
+        String reasonDetail = fraudDecision.reason() == null ? "Fraud decision applied" : fraudDecision.reason();
+        String reasonCode;
+        if (fraudDecision.blocked()) {
+            reasonCode = FRAUD_BLOCKED_CODE;
+        } else if (fraudDecision.requiresVerification()) {
+            reasonCode = FRAUD_VERIFICATION_REQUIRED_CODE;
+        } else {
+            reasonCode = "FRAUD_ALLOWED";
+        }
+
+        return new FraudDecisionEnvelope(
+            operation,
+            amount,
+            String.valueOf(targetReference),
+            fraudDecision.blocked(),
+            fraudDecision.requiresVerification(),
+            reasonCode,
+            reasonDetail);
+    }
+
+    private record FraudDecisionEnvelope(String operation,
+                                         BigDecimal amount,
+                                         String targetReference,
+                                         boolean blocked,
+                                         boolean requiresVerification,
+                                         String reasonCode,
+                                         String reasonDetail) {
+        private boolean allowed() {
+            return !blocked && !requiresVerification;
+        }
     }
 
     /**

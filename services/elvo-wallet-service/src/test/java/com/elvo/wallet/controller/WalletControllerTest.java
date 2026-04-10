@@ -285,6 +285,69 @@ class WalletControllerTest {
     }
 
     @Test
+    void withdrawalShouldBlockWhenFraudRulesDecisionIsBlocked() throws Exception {
+        Wallet wallet = new Wallet();
+        ReflectionTestUtils.setField(wallet, "id", UUID.randomUUID());
+
+        when(walletRepository.findByUserId(AUTHENTICATED_USER_ID)).thenReturn(java.util.Optional.of(wallet));
+        when(operationRateLimitService.enforce(any(), any(), any(), any(), any()))
+            .thenReturn(WalletOperationRateLimitService.RateLimitResult.allow());
+        when(destinationRiskService.evaluate(any(), any(), any()))
+            .thenReturn(new DestinationRiskService.DestinationRiskDecision(false, false, null));
+        when(fraudRulesEngine.evaluate(any(), any(), any(), any()))
+            .thenReturn(FraudRulesEngine.FraudDecision.block("Transaction blocked by operator fraud override"));
+
+        mockMvc.perform(post("/wallets/withdrawals")
+                .with(csrf())
+                .contentType("application/json")
+                .content("""
+                    {
+                      "amount":20.00,
+                      "mode":"REGISTERED_NUMBER",
+                      "targetNumber":"+1234567890",
+                      "espCode":"esp-1234",
+                      "eacCode":"eac-1234",
+                      "idempotencyKey":"idem-withdraw-fraud-block"
+                    }
+                    """))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.message").value("Transaction blocked by operator fraud override"))
+            .andExpect(jsonPath("$.eventType").value("wallet.withdrawal.failed"));
+
+        verify(walletService, never()).processWithdrawal(any());
+    }
+
+    @Test
+    void transferShouldBlockWhenFraudRulesDecisionIsBlocked() throws Exception {
+        Wallet sourceWallet = new Wallet();
+        ReflectionTestUtils.setField(sourceWallet, "id", UUID.randomUUID());
+        Wallet targetWallet = new Wallet();
+        ReflectionTestUtils.setField(targetWallet, "id", UUID.randomUUID());
+
+        when(walletRepository.findByUserId(AUTHENTICATED_USER_ID)).thenReturn(java.util.Optional.of(sourceWallet));
+        when(operationRateLimitService.enforce(any(), any(), any(), any(), any()))
+            .thenReturn(WalletOperationRateLimitService.RateLimitResult.allow());
+        when(fraudRulesEngine.evaluate(any(), any(), any(), any()))
+            .thenReturn(FraudRulesEngine.FraudDecision.block("Transaction blocked by operator fraud override"));
+
+        String payload = String.format(
+            "{\"targetWalletId\":\"%s\",\"amount\":20.00,\"idempotencyKey\":\"idem-transfer-fraud-block\"}",
+            targetWallet.getId());
+
+        mockMvc.perform(post("/wallets/transfers")
+                .with(csrf())
+                .contentType("application/json")
+                .content(payload))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.message").value("Transaction blocked by operator fraud override"))
+            .andExpect(jsonPath("$.eventType").value("wallet.transfer.failed"));
+
+        verify(walletService, never()).processTransfer(any());
+    }
+
+    @Test
     void withdrawalShouldNormalizeChallengeFailureFromService() throws Exception {
         Wallet wallet = new Wallet();
         ReflectionTestUtils.setField(wallet, "id", UUID.randomUUID());
