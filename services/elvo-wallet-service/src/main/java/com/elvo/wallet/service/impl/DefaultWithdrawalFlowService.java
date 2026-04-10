@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.client.AccountServiceClient;
 import com.elvo.wallet.client.IdentityServiceClient;
+import com.elvo.wallet.contract.WalletExecutionPolicyContract;
 import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.messaging.producer.WalletEventPublisher;
@@ -149,20 +150,42 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Velocity risk detected");
         }
 
-        if (!validateWithdrawalAgainstAccountService(command)) {
-            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Withdrawal validation failed");
+        WalletExecutionPolicyContract withdrawalPolicy = validateWithdrawalAgainstAccountService(command);
+        if (!withdrawalPolicy.allowed()) {
+            AUDIT_LOG.warn("event=wallet.withdrawal.policy_denied source={} reasonCode={} reasonDetail={} accountStatus={} kycStatus={} identityState={}",
+                withdrawalPolicy.sourceSystem(),
+                withdrawalPolicy.reasonCode(),
+                withdrawalPolicy.reasonDetail(),
+                withdrawalPolicy.accountStatus(),
+                withdrawalPolicy.kycStatus(),
+                withdrawalPolicy.identityState());
+            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, withdrawalPolicy.toFailureMessage());
         }
 
         String sagaReference = resolveReference(command.reference(), command.idempotencyKey());
         sagaOrchestrator.begin("withdrawal", command.walletId(), command.amount(), sagaReference);
 
         if (!identityServiceClient.verifyEsp(command.userId(), command.espCode())) {
-            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "ESP/EAC verification failed");
+            WalletExecutionPolicyContract identityPolicy = WalletExecutionPolicyContract.deny(
+                "identity-service",
+                "IDENTITY_ESP_EAC_VERIFICATION_FAILED",
+                "ESP/EAC verification failed",
+                null,
+                null,
+                "ESP_FAILED");
+            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, identityPolicy.toFailureMessage());
         }
 
         if (command.mode() != WithdrawalMode.OTHER_NUMBER
                 && !identityServiceClient.verifyEac(command.userId(), command.eacCode())) {
-            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "ESP/EAC verification failed");
+            WalletExecutionPolicyContract identityPolicy = WalletExecutionPolicyContract.deny(
+                "identity-service",
+                "IDENTITY_ESP_EAC_VERIFICATION_FAILED",
+                "ESP/EAC verification failed",
+                null,
+                null,
+                "EAC_FAILED");
+            return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, identityPolicy.toFailureMessage());
         }
 
         boolean requiresStepUp = stepUpAuthenticationService.requiresStepUpForWithdrawal(command.amount(), command.mode());
@@ -243,7 +266,14 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
                     "Waiting for EAC confirmation", correlationId(), null, null);
 
             if (!identityServiceClient.verifyEac(command.userId(), command.eacCode())) {
-                return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "ESP/EAC verification failed");
+                WalletExecutionPolicyContract identityPolicy = WalletExecutionPolicyContract.deny(
+                    "identity-service",
+                    "IDENTITY_ESP_EAC_VERIFICATION_FAILED",
+                    "ESP/EAC verification failed",
+                    null,
+                    null,
+                    "EAC_FAILED");
+                return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, identityPolicy.toFailureMessage());
             }
 
             EacReplayProtectionService.EacValidationResult replayCheck = eacReplayProtectionService.validateAndConsume(
@@ -332,24 +362,53 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         }
     }
 
-    private boolean validateWithdrawalAgainstAccountService(WithdrawalCommand command) {
+    private WalletExecutionPolicyContract validateWithdrawalAgainstAccountService(WithdrawalCommand command) {
         if (accountServiceClient == null) {
-            return true;
+            return WalletExecutionPolicyContract.allow(
+                "account-service",
+                "ACCOUNT_VALIDATION_SKIPPED",
+                "Account validation is not configured",
+                null,
+                null,
+                "NOT_EVALUATED");
         }
 
         return accountServiceClient.findAccountByUserId(command.userId())
-                .map(account -> accountServiceClient.validateWithdrawal(
-                        new AccountServiceClient.AccountValidationRequest(
-                                account.accountId(),
-                                null,
-                                command.amount(),
-                                command.idempotencyKey(),
-                                correlationId(),
-                                "wallet-service",
-                                null,
-                                null))
-                        .allowed())
-                .orElse(false);
+                .map(account -> {
+                    AccountServiceClient.AccountValidationResult result = accountServiceClient.validateWithdrawal(
+                            new AccountServiceClient.AccountValidationRequest(
+                                    account.accountId(),
+                                    null,
+                                    command.amount(),
+                                    command.idempotencyKey(),
+                                    correlationId(),
+                                    "wallet-service",
+                                    null,
+                                    null));
+                    if (!result.allowed()) {
+                        return WalletExecutionPolicyContract.deny(
+                            "account-service",
+                            "ACCOUNT_POLICY_DENIED",
+                            result.reason(),
+                            result.accountStatus(),
+                            result.kycStatus(),
+                            "NOT_EVALUATED");
+                    }
+                    return WalletExecutionPolicyContract.allow(
+                        "account-service",
+                        "ACCOUNT_POLICY_ALLOW",
+                        "Withdrawal allowed by account policy",
+                        result.accountStatus(),
+                        result.kycStatus(),
+                        "NOT_EVALUATED");
+                })
+                .orElseGet(() -> WalletExecutionPolicyContract.deny(
+                    "account-service",
+                    "ACCOUNT_NOT_FOUND",
+                    "No account found for wallet owner",
+                    null,
+                    null,
+                    "NOT_EVALUATED"));
     }
 
     private WalletFlowResult failed(UUID walletId,

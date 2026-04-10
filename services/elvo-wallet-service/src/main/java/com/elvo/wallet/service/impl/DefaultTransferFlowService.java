@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.client.AccountServiceClient;
+import com.elvo.wallet.contract.WalletExecutionPolicyContract;
 import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.messaging.producer.WalletEventPublisher;
@@ -173,8 +174,16 @@ public class DefaultTransferFlowService implements TransferFlowService {
             return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Source or target wallet not found");
         }
 
-        if (!validateTransferAgainstAccountService(source, target, command)) {
-            return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, "Transfer validation failed");
+        WalletExecutionPolicyContract transferPolicy = validateTransferAgainstAccountService(source, target, command);
+        if (!transferPolicy.allowed()) {
+            AUDIT_LOG.warn("event=wallet.transfer.policy_denied source={} reasonCode={} reasonDetail={} accountStatus={} kycStatus={} identityState={}",
+                transferPolicy.sourceSystem(),
+                transferPolicy.reasonCode(),
+                transferPolicy.reasonDetail(),
+                transferPolicy.accountStatus(),
+                transferPolicy.kycStatus(),
+                transferPolicy.identityState());
+            return failed(command.sourceWalletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint, transferPolicy.toFailureMessage());
         }
 
         if (source.getStatus() == Wallet.WalletStatus.FROZEN || target.getStatus() == Wallet.WalletStatus.FROZEN) {
@@ -315,9 +324,15 @@ public class DefaultTransferFlowService implements TransferFlowService {
         return command.sourceWalletId() + ":" + command.targetWalletId() + ":" + amount;
     }
 
-    private boolean validateTransferAgainstAccountService(Wallet source, Wallet target, TransferCommand command) {
+    private WalletExecutionPolicyContract validateTransferAgainstAccountService(Wallet source, Wallet target, TransferCommand command) {
         if (accountServiceClient == null) {
-            return true;
+            return WalletExecutionPolicyContract.allow(
+                "account-service",
+                "ACCOUNT_VALIDATION_SKIPPED",
+                "Account validation is not configured",
+                null,
+                null,
+                "NOT_EVALUATED");
         }
 
         return accountServiceClient.findAccountByUserId(source.getUserId())
@@ -332,8 +347,31 @@ public class DefaultTransferFlowService implements TransferFlowService {
                                         "wallet-service",
                                         null,
                                         null))))
-                .map(AccountServiceClient.AccountValidationResult::allowed)
-                .orElse(false);
+                .map(result -> {
+                    if (!result.allowed()) {
+                        return WalletExecutionPolicyContract.deny(
+                            "account-service",
+                            "ACCOUNT_POLICY_DENIED",
+                            result.reason(),
+                            result.accountStatus(),
+                            result.kycStatus(),
+                            "NOT_EVALUATED");
+                    }
+                    return WalletExecutionPolicyContract.allow(
+                        "account-service",
+                        "ACCOUNT_POLICY_ALLOW",
+                        "Transfer allowed by account policy",
+                        result.accountStatus(),
+                        result.kycStatus(),
+                        "NOT_EVALUATED");
+                })
+                .orElseGet(() -> WalletExecutionPolicyContract.deny(
+                    "account-service",
+                    "ACCOUNT_NOT_FOUND",
+                    "Source or destination account was not found",
+                    null,
+                    null,
+                    "NOT_EVALUATED"));
     }
 
     private String correlationId() {
