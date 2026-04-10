@@ -39,6 +39,7 @@ import com.elvo.identity.entity.User;
 import com.elvo.identity.entity.VerificationOtp;
 import com.elvo.identity.exception.PendingVerificationException;
 import com.elvo.identity.exception.ApiResponse;
+import com.elvo.identity.contract.RiskDecisionContract;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
@@ -49,6 +50,7 @@ import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.service.OtpService;
 import com.elvo.identity.service.PostVerificationProvisioningService;
 import com.elvo.identity.service.RegistrationService;
+import com.elvo.identity.service.RiskScoringService;
 import com.elvo.identity.service.VerificationTokenService;
 import com.elvo.identity.util.TokenService;
 
@@ -75,6 +77,7 @@ public class AuthController {
     private final VerificationTokenService verificationTokenService;
     private final PostVerificationProvisioningService postVerificationProvisioningService;
     private final IdentityAccountReadService accountReadService;
+    private final RiskScoringService riskScoringService;
 
     public AuthController(RegistrationService registrationService,
                           LoginService loginService,
@@ -88,7 +91,8 @@ public class AuthController {
                           OtpService otpService,
                           VerificationTokenService verificationTokenService,
                           PostVerificationProvisioningService postVerificationProvisioningService,
-                          IdentityAccountReadService accountReadService) {
+                          IdentityAccountReadService accountReadService,
+                          RiskScoringService riskScoringService) {
         this.registrationService = registrationService;
         this.loginService = loginService;
         this.sessionRepository = sessionRepository;
@@ -102,11 +106,13 @@ public class AuthController {
         this.verificationTokenService = verificationTokenService;
         this.postVerificationProvisioningService = postVerificationProvisioningService;
         this.accountReadService = accountReadService;
+        this.riskScoringService = riskScoringService;
     }
 
     @PostMapping("/register")
         @Transactional
     public ResponseEntity<ApiResponse<VerificationRequiredResponse>> register(@Valid @RequestBody RegistrationRequest request) {
+        enforceOnboardingRiskPolicy(request.isEnableMfa(), request.getSourceIp(), request.getSourceUserAgent());
         RegistrationResponse response = registrationService.register(request);
         User user = userRepository.findById(response.userId())
             .orElseThrow(() -> new IllegalStateException("Registered user not found"));
@@ -147,6 +153,7 @@ public class AuthController {
         @PostMapping("/register/email")
         @Transactional
         public ResponseEntity<ApiResponse<VerificationRequiredResponse>> registerEmail(@Valid @RequestBody EmailRegistrationRequest request) {
+        enforceOnboardingRiskPolicy(request.isEnableMfa(), request.getSourceIp(), request.getSourceUserAgent());
         RegistrationResponse response = registrationService.registerEmail(request);
         User user = userRepository.findById(response.userId())
             .orElseThrow(() -> new IllegalStateException("Registered user not found"));
@@ -173,6 +180,7 @@ public class AuthController {
         @PostMapping("/register/mobile")
         @Transactional
         public ResponseEntity<ApiResponse<VerificationRequiredResponse>> registerMobile(@Valid @RequestBody MobileRegistrationRequest request) {
+        enforceOnboardingRiskPolicy(request.isEnableMfa(), request.getSourceIp(), request.getSourceUserAgent());
         RegistrationResponse response = registrationService.registerMobile(request);
         User user = userRepository.findById(response.userId())
             .orElseThrow(() -> new IllegalStateException("Registered user not found"));
@@ -502,6 +510,13 @@ public class AuthController {
         byte[] bytes = new byte[24];
         SECURE_RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private void enforceOnboardingRiskPolicy(boolean enableMfa, String sourceIp, String sourceUserAgent) {
+        RiskDecisionContract decision = riskScoringService.evaluateOnboarding(enableMfa, sourceIp, sourceUserAgent);
+        if (decision.decision() == RiskDecisionContract.Decision.BLOCK) {
+            throw new IllegalArgumentException("Registration blocked by risk policy");
+        }
     }
 
     private User findUserByIdentifier(String identifier) {

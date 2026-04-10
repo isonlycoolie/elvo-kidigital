@@ -28,8 +28,10 @@ import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.service.RecoveryCodeService;
+import com.elvo.identity.service.RiskScoringService;
 import com.elvo.identity.service.SecurityProtectionService;
 import com.elvo.identity.service.TotpManagementService;
+import com.elvo.identity.contract.RiskDecisionContract;
 import com.elvo.identity.util.TokenService;
 
 @ExtendWith(MockitoExtension.class)
@@ -68,6 +70,9 @@ class LoginServiceImplUnitTest {
     @Mock
     private RecoveryCodeService recoveryCodeService;
 
+    @Mock
+    private RiskScoringService riskScoringService;
+
     private LoginServiceImpl createLoginService() {
         return new LoginServiceImpl(
                 userRepository,
@@ -80,7 +85,8 @@ class LoginServiceImplUnitTest {
                 auditEventPublisher,
                 accountReadService,
                 totpManagementService,
-                recoveryCodeService);
+                recoveryCodeService,
+                riskScoringService);
     }
 
     @Test
@@ -178,6 +184,7 @@ class LoginServiceImplUnitTest {
 
         when(userRepository.findByEmailIgnoreCase("mfa@elvo.com")).thenReturn(Optional.of(user));
         when(hashingService.verifyPassword("Password123", "hashed-password")).thenReturn(true);
+        when(riskScoringService.evaluateLogin(any(), any(), any(Boolean.class))).thenReturn(RiskDecisionContract.allow(10, java.util.List.of()));
         when(totpManagementService.verifyActiveCode(user.getId(), "000000")).thenReturn(false);
         when(recoveryCodeService.consumeCode(user.getId(), "000000")).thenReturn(false);
         when(auditRepository.save(any(Audit.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -206,6 +213,7 @@ class LoginServiceImplUnitTest {
 
         when(userRepository.findByEmailIgnoreCase("backup@elvo.com")).thenReturn(Optional.of(user));
         when(hashingService.verifyPassword("Password123", "hashed-password")).thenReturn(true);
+        when(riskScoringService.evaluateLogin(any(), any(), any(Boolean.class))).thenReturn(RiskDecisionContract.allow(10, java.util.List.of()));
         when(totpManagementService.verifyActiveCode(user.getId(), "ABCDEF1234")).thenReturn(false);
         when(recoveryCodeService.consumeCode(user.getId(), "ABCDEF1234")).thenReturn(true);
         when(accountReadService.resolveEan(user.getId())).thenThrow(new IllegalStateException("Fallback account service is unavailable"));

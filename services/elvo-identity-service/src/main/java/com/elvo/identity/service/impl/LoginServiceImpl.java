@@ -14,6 +14,7 @@ import com.elvo.identity.entity.Device;
 import com.elvo.identity.entity.Session;
 import com.elvo.identity.entity.User;
 import com.elvo.identity.exception.PendingVerificationException;
+import com.elvo.identity.contract.RiskDecisionContract;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.DeviceRepository;
 import com.elvo.identity.repository.SessionRepository;
@@ -21,6 +22,7 @@ import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.service.LoginService;
+import com.elvo.identity.service.RiskScoringService;
 import com.elvo.identity.service.RecoveryCodeService;
 import com.elvo.identity.service.SecurityProtectionService;
 import com.elvo.identity.service.TotpManagementService;
@@ -40,6 +42,7 @@ public class LoginServiceImpl implements LoginService {
     private final IdentityAccountReadService accountReadService;
     private final TotpManagementService totpManagementService;
     private final RecoveryCodeService recoveryCodeService;
+    private final RiskScoringService riskScoringService;
 
     public LoginServiceImpl(UserRepository userRepository,
                             DeviceRepository deviceRepository,
@@ -51,7 +54,8 @@ public class LoginServiceImpl implements LoginService {
                             AuditEventPublisher auditEventPublisher,
                             IdentityAccountReadService accountReadService,
                             TotpManagementService totpManagementService,
-                            RecoveryCodeService recoveryCodeService) {
+                            RecoveryCodeService recoveryCodeService,
+                            RiskScoringService riskScoringService) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.sessionRepository = sessionRepository;
@@ -63,6 +67,7 @@ public class LoginServiceImpl implements LoginService {
         this.accountReadService = accountReadService;
         this.totpManagementService = totpManagementService;
         this.recoveryCodeService = recoveryCodeService;
+        this.riskScoringService = riskScoringService;
     }
 
     @Override
@@ -77,6 +82,7 @@ public class LoginServiceImpl implements LoginService {
             enforcePendingLifecycle(user, request.getIdentifier());
             validateUserStatus(user);
             enforceChannelVerification(user, request.getIdentifier());
+            enforceRiskPolicy(user, request);
             validateMfaIfRequired(user, request);
 
             securityProtectionService.recordSuccessfulAuthentication(
@@ -212,6 +218,18 @@ public class LoginServiceImpl implements LoginService {
         }
     }
 
+    private void enforceRiskPolicy(User user, LoginRequest request) {
+        boolean knownDevice = deviceRepository.findByUserIdAndDeviceId(user.getId(), request.getDeviceId()).isPresent();
+        RiskDecisionContract decision = riskScoringService.evaluateLogin(user, request, knownDevice);
+        if (decision.decision() == RiskDecisionContract.Decision.BLOCK) {
+            throw new IllegalStateException("Login blocked by risk policy");
+        }
+        if (decision.decision() == RiskDecisionContract.Decision.CHALLENGE
+                && (request.getMfaCode() == null || request.getMfaCode().isBlank())) {
+            throw new IllegalArgumentException("Additional verification is required");
+        }
+    }
+
     private Device upsertDevice(User user, LoginRequest request) {
         return deviceRepository.findByUserIdAndDeviceId(user.getId(), request.getDeviceId())
                 .map(existing -> {
@@ -267,6 +285,12 @@ public class LoginServiceImpl implements LoginService {
         }
         if ("Invalid MFA code".equals(message)) {
             return "MFA_INVALID";
+        }
+        if ("Login blocked by risk policy".equals(message)) {
+            return "RISK_BLOCKED";
+        }
+        if ("Additional verification is required".equals(message)) {
+            return "RISK_CHALLENGE_REQUIRED";
         }
         if ("Email verification is required".equals(message)
                 || "Mobile verification is required".equals(message)) {
