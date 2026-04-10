@@ -25,6 +25,7 @@ import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.service.EacManagementService;
 import com.elvo.identity.service.EspManagementService;
+import com.elvo.identity.service.IdentityAccountReadService;
 
 import jakarta.validation.Valid;
 
@@ -37,24 +38,28 @@ public class InternalController {
     private final SessionRepository sessionRepository;
     private final EspManagementService espManagementService;
     private final EacManagementService eacManagementService;
+    private final IdentityAccountReadService accountReadService;
 
     public InternalController(UserRepository userRepository,
                               SessionRepository sessionRepository,
                               EspManagementService espManagementService,
-                              EacManagementService eacManagementService) {
+                              EacManagementService eacManagementService,
+                              IdentityAccountReadService accountReadService) {
         this.userRepository = userRepository;
         this.sessionRepository = sessionRepository;
         this.espManagementService = espManagementService;
         this.eacManagementService = eacManagementService;
+        this.accountReadService = accountReadService;
     }
 
     @GetMapping("/users/{userId}")
     public ResponseEntity<ApiResponse<ProfileResponse>> getUser(@PathVariable UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        String resolvedEan = accountReadService.resolveEan(user.getId());
         ProfileResponse response = new ProfileResponse(
                 user.getId(),
-                user.getEan(),
+            resolvedEan,
                 user.getEmail(),
                 user.getPhone(),
                 user.getDisplayName(),

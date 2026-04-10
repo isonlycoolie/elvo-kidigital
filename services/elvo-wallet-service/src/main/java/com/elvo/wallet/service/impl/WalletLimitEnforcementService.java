@@ -13,7 +13,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.elvo.wallet.client.AccountServiceClient;
 import com.elvo.wallet.dto.response.LimitsResponseDto;
+import com.elvo.wallet.repository.WalletRepository;
 
 @Service
 public class WalletLimitEnforcementService {
@@ -33,13 +35,15 @@ public class WalletLimitEnforcementService {
     private final BigDecimal transferLimit;
     private final BigDecimal withdrawalLimit;
     private final BigDecimal depositLimit;
+    private final WalletRepository walletRepository;
+    private final AccountServiceClient accountServiceClient;
 
     private final Map<String, BigDecimal> dailyUsage = new ConcurrentHashMap<>();
     private final Map<String, BigDecimal> monthlyUsage = new ConcurrentHashMap<>();
 
     public WalletLimitEnforcementService() {
         this(new BigDecimal("5000.00"), new BigDecimal("50000.00"), new BigDecimal("2000.00"),
-            new BigDecimal("1000.00"), new BigDecimal("10000.00"));
+            new BigDecimal("1000.00"), new BigDecimal("10000.00"), null, null);
     }
 
     @Autowired
@@ -48,12 +52,16 @@ public class WalletLimitEnforcementService {
             @Value("${elvo.security.limits.monthly:50000.00}") BigDecimal monthlyLimit,
             @Value("${elvo.security.limits.transfer:2000.00}") BigDecimal transferLimit,
             @Value("${elvo.security.limits.withdrawal:1000.00}") BigDecimal withdrawalLimit,
-            @Value("${elvo.security.limits.deposit:10000.00}") BigDecimal depositLimit) {
+            @Value("${elvo.security.limits.deposit:10000.00}") BigDecimal depositLimit,
+            WalletRepository walletRepository,
+            AccountServiceClient accountServiceClient) {
         this.dailyLimit = dailyLimit;
         this.monthlyLimit = monthlyLimit;
         this.transferLimit = transferLimit;
         this.withdrawalLimit = withdrawalLimit;
         this.depositLimit = depositLimit;
+        this.walletRepository = walletRepository;
+        this.accountServiceClient = accountServiceClient;
     }
 
     public boolean validate(UUID walletId, FlowType flowType, BigDecimal amount) {
@@ -61,24 +69,41 @@ public class WalletLimitEnforcementService {
             return false;
         }
 
-        if (exceedsFlowSpecificLimit(flowType, amount)) {
-            AUDIT_LOG.warn("wallet_limit_violation type={} walletId={} amount={} reason=flow_specific", flowType, walletId, amount);
+        if (accountServiceClient == null || walletRepository == null) {
+            AUDIT_LOG.warn("wallet_limit_violation type={} walletId={} amount={} reason=account_policy_unavailable", flowType, walletId, amount);
             return false;
         }
 
-        BigDecimal currentDaily = dailyUsage.getOrDefault(dailyKey(walletId, flowType), BigDecimal.ZERO);
-        if (currentDaily.add(amount).compareTo(dailyLimit) > 0) {
-            AUDIT_LOG.warn("wallet_limit_violation type={} walletId={} amount={} reason=daily", flowType, walletId, amount);
-            return false;
+        boolean allowed = validateViaAccountService(walletId, flowType, amount);
+        if (!allowed) {
+            AUDIT_LOG.warn("wallet_limit_violation type={} walletId={} amount={} reason=account_policy", flowType, walletId, amount);
         }
+        return allowed;
+    }
 
-        BigDecimal currentMonthly = monthlyUsage.getOrDefault(monthlyKey(walletId, flowType), BigDecimal.ZERO);
-        if (currentMonthly.add(amount).compareTo(monthlyLimit) > 0) {
-            AUDIT_LOG.warn("wallet_limit_violation type={} walletId={} amount={} reason=monthly", flowType, walletId, amount);
-            return false;
-        }
+    private boolean validateViaAccountService(UUID walletId, FlowType flowType, BigDecimal amount) {
+        return walletRepository.findById(walletId)
+                .flatMap(wallet -> accountServiceClient.findAccountByUserId(wallet.getUserId()))
+                .map(account -> accountServiceClient.checkLimit(
+                        new AccountServiceClient.AccountLimitCheckRequest(
+                                account.accountId(),
+                                amount,
+                                toAccountLimitScope(flowType),
+                                "wallet-limit-" + walletId,
+                                null,
+                                "wallet-service",
+                                null,
+                                "wallet-limit-enforcement")))
+                .map(AccountServiceClient.AccountLimitCheckResult::allowed)
+                .orElse(false);
+    }
 
-        return true;
+    private AccountServiceClient.AccountLimitScope toAccountLimitScope(FlowType flowType) {
+        return switch (flowType) {
+            case WITHDRAWAL -> AccountServiceClient.AccountLimitScope.WITHDRAWAL;
+            case DEPOSIT, ETC_REDEEM -> AccountServiceClient.AccountLimitScope.DEPOSIT;
+            case TRANSFER, RESERVATION -> AccountServiceClient.AccountLimitScope.MAX_SINGLE_TRANSACTION;
+        };
     }
 
     public void record(UUID walletId, FlowType flowType, BigDecimal amount) {
@@ -102,15 +127,6 @@ public class WalletLimitEnforcementService {
             dailyUsed,
             monthlyUsed
         );
-    }
-
-    private boolean exceedsFlowSpecificLimit(FlowType flowType, BigDecimal amount) {
-        return switch (flowType) {
-            case TRANSFER -> amount.compareTo(transferLimit) > 0;
-            case WITHDRAWAL -> amount.compareTo(withdrawalLimit) > 0;
-            case DEPOSIT -> amount.compareTo(depositLimit) > 0;
-            case RESERVATION, ETC_REDEEM -> false;
-        };
     }
 
     private BigDecimal aggregateDailyUsage(UUID walletId) {

@@ -49,7 +49,8 @@ else {
 $serviceOrder = @(
     'services/elvo-identity-service',
     'services/elvo-wallet-service',
-    'services/elvo-billing-service'
+    'services/elvo-billing-service',
+    'services/elvo-account-management-service'
 )
 
 foreach ($serviceRelPath in $serviceOrder) {

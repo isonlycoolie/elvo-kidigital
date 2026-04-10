@@ -13,6 +13,7 @@ import com.elvo.identity.entity.User;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.security.SecurityHashingService;
+import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.service.ProfileManagementService;
 
 @Service
@@ -22,15 +23,18 @@ public class ProfileManagementServiceImpl implements ProfileManagementService {
     private final AuditRepository auditRepository;
     private final SecurityHashingService hashingService;
     private final AuditEventPublisher auditEventPublisher;
+    private final IdentityAccountReadService accountReadService;
 
     public ProfileManagementServiceImpl(UserRepository userRepository,
                                         AuditRepository auditRepository,
                                         SecurityHashingService hashingService,
-                                        AuditEventPublisher auditEventPublisher) {
+                                        AuditEventPublisher auditEventPublisher,
+                                        IdentityAccountReadService accountReadService) {
         this.userRepository = userRepository;
         this.auditRepository = auditRepository;
         this.hashingService = hashingService;
         this.auditEventPublisher = auditEventPublisher;
+        this.accountReadService = accountReadService;
     }
 
     @Override
@@ -83,10 +87,11 @@ public class ProfileManagementServiceImpl implements ProfileManagementService {
         audit.setUser(savedUser);
         Audit savedAudit = auditRepository.save(audit);
         auditEventPublisher.publish(savedAudit);
+        String resolvedEan = accountReadService.resolveEan(savedUser.getId());
 
         return new ProfileResponse(
                 savedUser.getId(),
-                savedUser.getEan(),
+            resolvedEan,
                 savedUser.getEmail(),
                 savedUser.getPhone(),
                 savedUser.getDisplayName(),

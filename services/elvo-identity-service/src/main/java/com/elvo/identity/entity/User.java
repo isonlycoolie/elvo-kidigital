@@ -20,7 +20,6 @@ import jakarta.persistence.UniqueConstraint;
 @Table(
         name = "users",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_users_ean", columnNames = "ean"),
                 @UniqueConstraint(name = "uk_users_email", columnNames = "email"),
                 @UniqueConstraint(name = "uk_users_phone", columnNames = "phone")
         },
@@ -35,9 +34,6 @@ public class User {
     @Id
     @GeneratedValue(strategy = jakarta.persistence.GenerationType.UUID)
     private UUID id;
-
-    @Column(name = "ean", nullable = false, length = 64)
-    private String ean;
 
     @Column(name = "email", length = 255)
     private String email;
@@ -174,14 +170,6 @@ public class User {
 
     public UUID getId() {
         return id;
-    }
-
-    public String getEan() {
-        return ean;
-    }
-
-    public void setEan(String ean) {
-        this.ean = ean;
     }
 
     public String getEmail() {

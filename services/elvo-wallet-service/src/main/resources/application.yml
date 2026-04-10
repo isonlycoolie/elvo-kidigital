@@ -82,6 +82,15 @@ elvo:
         enforce-mtls: ${ELVO_IDENTITY_TLS_ENFORCE_MTLS:true}
         fingerprint-header: ${ELVO_IDENTITY_TLS_FINGERPRINT_HEADER:X-TLS-CERT-SHA256}
         pinned-fingerprints: ${ELVO_IDENTITY_TLS_PINNED_FINGERPRINTS:}
+    account-management:
+      # SECURITY: Account management service must use HTTPS. Update ELVO_ACCOUNT_MANAGEMENT_INTERNAL_BASE_URL in production.
+      base-url: ${ELVO_ACCOUNT_MANAGEMENT_INTERNAL_BASE_URL:https://localhost:8384/api/v1/internal/accounts}
+      source-service-name: ${ELVO_ACCOUNT_MANAGEMENT_CLIENT_SOURCE_SERVICE:wallet-service}
+      client-source-ip: ${ELVO_ACCOUNT_MANAGEMENT_CLIENT_SOURCE_IP:wallet-service}
+      client-source-user-agent: ${ELVO_ACCOUNT_MANAGEMENT_CLIENT_SOURCE_USER_AGENT:wallet-service-client}
+      token-ttl-seconds: ${ELVO_ACCOUNT_MANAGEMENT_CLIENT_TOKEN_TTL_SECONDS:60}
+      connect-timeout-seconds: ${ELVO_ACCOUNT_MANAGEMENT_CLIENT_CONNECT_TIMEOUT_SECONDS:3}
+      read-timeout-seconds: ${ELVO_ACCOUNT_MANAGEMENT_CLIENT_READ_TIMEOUT_SECONDS:5}
   monitoring:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:wallet-service}

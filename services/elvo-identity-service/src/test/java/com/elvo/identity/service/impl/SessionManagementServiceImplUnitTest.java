@@ -27,6 +27,7 @@ import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.DeviceRepository;
 import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
+import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.util.TokenService;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,6 +55,9 @@ class SessionManagementServiceImplUnitTest {
     @Mock
     private AuditEventPublisher auditEventPublisher;
 
+    @Mock
+    private IdentityAccountReadService accountReadService;
+
     private SessionManagementServiceImpl sessionManagementService;
 
     @BeforeEach
@@ -64,7 +68,8 @@ class SessionManagementServiceImplUnitTest {
                 sessionRepository,
                 auditRepository,
                 tokenService,
-                auditEventPublisher);
+                auditEventPublisher,
+                accountReadService);
     }
 
     @Test
@@ -72,7 +77,6 @@ class SessionManagementServiceImplUnitTest {
         UUID userId = UUID.randomUUID();
         User user = new User();
         setId(user, userId);
-        user.setEan("ELVO-SESSION-UNIT-1");
 
         Device device = new Device();
         device.setDeviceId("device-1");
@@ -95,6 +99,7 @@ class SessionManagementServiceImplUnitTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(deviceRepository.findByUserIdAndDeviceId(userId, "device-1")).thenReturn(Optional.of(device));
         when(deviceRepository.save(any(Device.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(accountReadService.resolveEan(userId)).thenReturn("ELVO-SESSION-UNIT-1");
         when(tokenService.generateAccessToken(userId, "ELVO-SESSION-UNIT-1")).thenReturn(accessToken);
         when(tokenService.calculateSessionAbsoluteExpiry()).thenReturn(ABSOLUTE_SESSION_EXPIRY);
         when(tokenService.generateRefreshToken(userId, ABSOLUTE_SESSION_EXPIRY)).thenReturn(refreshToken);

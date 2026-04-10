@@ -19,6 +19,7 @@ import com.elvo.identity.repository.DeviceRepository;
 import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.security.SecurityHashingService;
+import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.service.LoginService;
 import com.elvo.identity.service.SecurityProtectionService;
 import com.elvo.identity.util.TokenService;
@@ -34,6 +35,7 @@ public class LoginServiceImpl implements LoginService {
     private final SecurityProtectionService securityProtectionService;
     private final SecurityHashingService hashingService;
     private final AuditEventPublisher auditEventPublisher;
+    private final IdentityAccountReadService accountReadService;
 
     public LoginServiceImpl(UserRepository userRepository,
                             DeviceRepository deviceRepository,
@@ -42,7 +44,8 @@ public class LoginServiceImpl implements LoginService {
                             TokenService tokenService,
                             SecurityProtectionService securityProtectionService,
                             SecurityHashingService hashingService,
-                            AuditEventPublisher auditEventPublisher) {
+                            AuditEventPublisher auditEventPublisher,
+                            IdentityAccountReadService accountReadService) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.sessionRepository = sessionRepository;
@@ -51,6 +54,7 @@ public class LoginServiceImpl implements LoginService {
         this.securityProtectionService = securityProtectionService;
         this.hashingService = hashingService;
         this.auditEventPublisher = auditEventPublisher;
+        this.accountReadService = accountReadService;
     }
 
     @Override
@@ -75,7 +79,8 @@ public class LoginServiceImpl implements LoginService {
 
             Device device = upsertDevice(user, request);
 
-            TokenService.TokenPayload accessToken = tokenService.generateAccessToken(user.getId(), user.getEan());
+            String resolvedEan = accountReadService.resolveEan(user.getId());
+            TokenService.TokenPayload accessToken = tokenService.generateAccessToken(user.getId(), resolvedEan);
             Instant absoluteSessionExpiresAt = tokenService.calculateSessionAbsoluteExpiry();
             TokenService.TokenPayload refreshToken = tokenService.generateRefreshToken(user.getId(), absoluteSessionExpiresAt);
 

@@ -3,8 +3,10 @@ package com.elvo.identity.service.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
@@ -13,7 +15,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -24,10 +25,10 @@ import com.elvo.identity.dto.request.EmailRegistrationRequest;
 import com.elvo.identity.dto.response.RegistrationResponse;
 import com.elvo.identity.entity.Audit;
 import com.elvo.identity.entity.User;
+import com.elvo.identity.messaging.account.AccountCreationIntentPublisher;
 import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.security.SecurityHashingService;
-import com.elvo.identity.util.EanGenerator;
 
 @ExtendWith(MockitoExtension.class)
 class RegistrationLifecycleUnitTest {
@@ -39,25 +40,22 @@ class RegistrationLifecycleUnitTest {
     private AuditRepository auditRepository;
 
     @Mock
-    private EanGenerator eanGenerator;
-
-    @Mock
     private SecurityHashingService hashingService;
 
     @Mock
     private AuditEventPublisher auditEventPublisher;
 
-    private RegistrationServiceImpl registrationService;
+    @Mock
+    private AccountCreationIntentPublisher accountCreationIntentPublisher;
 
-    @BeforeEach
-    void setUp() {
-        registrationService = new RegistrationServiceImpl(
+    private RegistrationServiceImpl createRegistrationService() {
+        return new RegistrationServiceImpl(
                 userRepository,
                 auditRepository,
-                eanGenerator,
                 hashingService,
-            auditEventPublisher,
-            24L);
+                auditEventPublisher,
+                accountCreationIntentPublisher,
+                24L);
     }
 
     @Test
@@ -71,8 +69,6 @@ class RegistrationLifecycleUnitTest {
 
         when(userRepository.findByEmailIgnoreCase("user@elvo.com")).thenReturn(Optional.empty());
         when(hashingService.hashPassword("Password123")).thenReturn("hashed");
-        when(eanGenerator.generate()).thenReturn("EAN-100");
-        when(userRepository.findByEan("EAN-100")).thenReturn(Optional.empty());
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User user = invocation.getArgument(0);
             savedRef.set(user);
@@ -81,9 +77,10 @@ class RegistrationLifecycleUnitTest {
         });
         when(auditRepository.save(any(Audit.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        RegistrationResponse response = registrationService.registerEmail(request);
+        RegistrationResponse response = createRegistrationService().registerEmail(request);
 
         assertNotNull(response.userId());
+        assertNull(response.ean());
         User saved = savedRef.get();
         assertNotNull(saved);
         assertEquals(User.AccountStatus.PENDING_VERIFICATION, saved.getAccountStatus());
@@ -91,6 +88,7 @@ class RegistrationLifecycleUnitTest {
         assertFalse(saved.isMobileVerified());
         assertFalse(saved.isDownstreamProvisioned());
         assertNotNull(saved.getVerificationDeadline());
+        verify(accountCreationIntentPublisher).publish(any(User.class), any(), any());
     }
 
     @Test
@@ -98,7 +96,6 @@ class RegistrationLifecycleUnitTest {
         UUID existingId = UUID.randomUUID();
         User existing = new User();
         setId(existing, existingId);
-        existing.setEan("EAN-EXISTING");
         existing.setAccountStatus(User.AccountStatus.PENDING_VERIFICATION);
         existing.setVerificationDeadline(Instant.now().plusSeconds(3600));
 
@@ -111,7 +108,7 @@ class RegistrationLifecycleUnitTest {
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(auditRepository.save(any(Audit.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        RegistrationResponse response = registrationService.registerEmail(request);
+        RegistrationResponse response = createRegistrationService().registerEmail(request);
 
         assertEquals(existingId, response.userId());
         assertEquals(User.AccountStatus.PENDING_VERIFICATION, existing.getAccountStatus());
@@ -131,7 +128,7 @@ class RegistrationLifecycleUnitTest {
 
         when(userRepository.findByEmailIgnoreCase("expired@elvo.com")).thenReturn(Optional.of(existing));
 
-        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> registrationService.registerEmail(request));
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> createRegistrationService().registerEmail(request));
         assertEquals("Pending registration expired. Restart registration", ex.getMessage());
     }
 

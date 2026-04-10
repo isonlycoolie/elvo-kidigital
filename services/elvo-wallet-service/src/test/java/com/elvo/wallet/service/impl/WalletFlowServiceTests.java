@@ -127,7 +127,6 @@ class WalletFlowServiceTests {
         UUID walletId = UUID.randomUUID();
         wallet.setBalance(new BigDecimal("100.00"));
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-        when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
         when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
         when(transactionRepository.existsByReference(anyString())).thenReturn(false);
@@ -185,7 +184,6 @@ class WalletFlowServiceTests {
                 UUID walletId = UUID.randomUUID();
                 wallet.setBalance(new BigDecimal("100.00"));
                 lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-                when(identityServiceClient.isUserActive(any())).thenReturn(true);
                 when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
                 when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
                 when(transactionRepository.existsByReference(anyString())).thenReturn(false);
@@ -235,7 +233,6 @@ class WalletFlowServiceTests {
     @Test
     void withdrawalShouldFailWhenEspVerificationFails() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-        when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(identityServiceClient.verifyEsp(any(), any())).thenReturn(false);
 
         DefaultWithdrawalFlowService service = new DefaultWithdrawalFlowService(
@@ -274,49 +271,8 @@ class WalletFlowServiceTests {
     }
 
     @Test
-    void withdrawalShouldFailWhenUserIsDisabled() {
-        lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-        when(identityServiceClient.isUserActive(any())).thenReturn(false);
-
-        DefaultWithdrawalFlowService service = new DefaultWithdrawalFlowService(
-                walletRepository,
-                transactionRepository,
-                identityServiceClient,
-                idempotencyService,
-                ledgerIntegrationService,
-                limitEnforcementService,
-                sagaOrchestrator,
-                eventPublisher,
-                eacReplayProtectionService,
-                stepUpAuthenticationService,
-                transactionSigningChallengeService,
-                fraudVelocityService,
-                fieldEncryptionService,
-                transactionLifecycleService);
-
-        WalletFlowResult result = service.process(new WithdrawalCommand(
-                UUID.randomUUID(),
-                wallet.getUserId(),
-                new BigDecimal("10.00"),
-                WithdrawalMode.DEVICE_FREE,
-                "0900000000",
-                "esp",
-                "eac",
-                "idem-user-disabled",
-                "ref-user-disabled",
-                null,
-                null,
-                null));
-
-        assertThat(result.success()).isFalse();
-        assertThat(result.message()).contains("User is not active");
-        verify(walletRepository, never()).findByIdForUpdate(any());
-    }
-
-    @Test
     void externalWithdrawalShouldFailWhenEacVerificationFails() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-        when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
         when(identityServiceClient.verifyEac(any(), any())).thenReturn(false);
                 when(walletRepository.findByIdForUpdate(any())).thenReturn(Optional.of(wallet));
@@ -363,7 +319,6 @@ class WalletFlowServiceTests {
                 wallet.setBalance(new BigDecimal("100.00"));
                 lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
                 when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
-                when(identityServiceClient.isUserActive(any())).thenReturn(true);
                 when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
                 when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
                 when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(false);
@@ -417,7 +372,6 @@ class WalletFlowServiceTests {
                 wallet.setBalance(new BigDecimal("100.00"));
                 lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
                 when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
-                when(identityServiceClient.isUserActive(any())).thenReturn(true);
                 when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
                 when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
                 when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(false);
@@ -472,7 +426,6 @@ class WalletFlowServiceTests {
                 wallet.setBalance(new BigDecimal("100.00"));
                 lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
                 when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
-                when(identityServiceClient.isUserActive(any())).thenReturn(true);
                 when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
                 when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
                 when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(false);
@@ -522,7 +475,6 @@ class WalletFlowServiceTests {
                 wallet.setBalance(new BigDecimal("100.00"));
                 lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
                 when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
-                when(identityServiceClient.isUserActive(any())).thenReturn(true);
                 when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
                 when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
                 when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(false);
@@ -575,7 +527,6 @@ class WalletFlowServiceTests {
                 wallet.setBalance(new BigDecimal("100.00"));
                 lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
                 when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
-                when(identityServiceClient.isUserActive(any())).thenReturn(true);
                 when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
                 when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
                 when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(false);
@@ -625,7 +576,6 @@ class WalletFlowServiceTests {
                 wallet.setBalance(new BigDecimal("100.00"));
                 lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
                 when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
-                when(identityServiceClient.isUserActive(any())).thenReturn(true);
                 when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
                 when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
                 when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(false);
@@ -677,7 +627,6 @@ class WalletFlowServiceTests {
     @Test
     void withdrawalShouldFailWhenEacReplayDetected() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-        when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
         when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
         when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(false);
@@ -725,7 +674,6 @@ class WalletFlowServiceTests {
                 wallet.setBalance(new BigDecimal("100.00"));
                 lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
                 when(fraudVelocityService.isSuspicious(any(), any(), any())).thenReturn(false);
-                when(identityServiceClient.isUserActive(any())).thenReturn(true);
                 when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
                 when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
                 when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(false);
@@ -867,7 +815,6 @@ class WalletFlowServiceTests {
     @Test
     void withdrawalShouldFailWhenStepUpConfirmationMissingForDeviceFreeFlow() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-        when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
         when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
         when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(true);
@@ -984,7 +931,6 @@ class WalletFlowServiceTests {
     @Test
     void withdrawalShouldFailWhenTransactionChallengeMissingForHighRiskFlow() {
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-        when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(identityServiceClient.verifyEsp(any(), any())).thenReturn(true);
         when(identityServiceClient.verifyEac(any(), any())).thenReturn(true);
         when(stepUpAuthenticationService.requiresStepUpForWithdrawal(any(), any())).thenReturn(true);
@@ -1332,7 +1278,6 @@ class WalletFlowServiceTests {
     void mobileDepositShouldFailWhenCallbackReferenceIsMissing() {
         UUID walletId = UUID.randomUUID();
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-        when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
         when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
         when(transactionRepository.existsByReference(anyString())).thenReturn(false);
@@ -1375,7 +1320,6 @@ class WalletFlowServiceTests {
     void mobileDepositShouldFailWhenCallbackAuthenticationFails() {
         UUID walletId = UUID.randomUUID();
         lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-        when(identityServiceClient.isUserActive(any())).thenReturn(true);
         when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
         when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
         when(transactionRepository.existsByReference(anyString())).thenReturn(false);
@@ -1418,7 +1362,6 @@ class WalletFlowServiceTests {
         void mobileDepositShouldFailWhenCallbackReplayDetected() {
                 UUID walletId = UUID.randomUUID();
                 lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-                when(identityServiceClient.isUserActive(any())).thenReturn(true);
                 when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
                 when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
                 when(transactionRepository.existsByReference(anyString())).thenReturn(false);
@@ -1463,7 +1406,6 @@ class WalletFlowServiceTests {
             void mobileDepositShouldMoveToRetryingWhenCallbackReconciliationFailsTemporarily() {
                 UUID walletId = UUID.randomUUID();
                 lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-                when(identityServiceClient.isUserActive(any())).thenReturn(true);
                 when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
                 when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
                 when(transactionRepository.existsByReference(anyString())).thenReturn(false);
@@ -1509,7 +1451,6 @@ class WalletFlowServiceTests {
         void mobileDepositShouldExpireWhenLifecycleMarksTransactionExpired() {
                 UUID walletId = UUID.randomUUID();
                 lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-                when(identityServiceClient.isUserActive(any())).thenReturn(true);
                 when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
                 when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);
                 when(transactionRepository.existsByReference(anyString())).thenReturn(false);
@@ -1558,7 +1499,6 @@ class WalletFlowServiceTests {
                 UUID walletId = UUID.randomUUID();
                 wallet.setBalance(new BigDecimal("100.00"));
                 lenient().when(idempotencyService.get(anyString())).thenReturn(Optional.empty());
-                when(identityServiceClient.isUserActive(any())).thenReturn(true);
                 when(agentServiceClient.hasAvailableFloat(any(), any())).thenReturn(true);
                 when(walletRepository.findByIdForUpdate(walletId)).thenReturn(Optional.of(wallet));
                 when(limitEnforcementService.validate(any(), any(), any())).thenReturn(true);

@@ -30,9 +30,11 @@ import com.elvo.wallet.exception.GlobalExceptionHandler;
 import com.elvo.wallet.mapper.WalletMapper;
 import com.elvo.wallet.repository.WalletRepository;
 import com.elvo.wallet.security.InternalServiceAuthorizationMatrix;
+import com.elvo.wallet.security.IdentityJwksKeyResolver;
 import com.elvo.wallet.security.MakerCheckerApprovalService;
 import com.elvo.wallet.security.SecurityConfig;
 import com.elvo.wallet.security.SecretManagerService;
+import com.elvo.wallet.security.UserTokenRevocationChecker;
 import com.elvo.wallet.security.WalletFieldEncryptionService;
 import com.elvo.wallet.security.WalletOperationRateLimitService;
 import com.elvo.wallet.service.WalletService;
@@ -45,8 +47,8 @@ import io.jsonwebtoken.security.Keys;
         SecurityConfig.class,
         WalletMapper.class,
         GlobalExceptionHandler.class,
-        InternalServiceAuthorizationMatrix.class,
-        InternalWalletControllerSecurityTest.InternalWalletControllerSecurityTestConfig.class
+    InternalServiceAuthorizationMatrix.class,
+    InternalWalletControllerSecurityTest.InternalWalletControllerSecurityTestConfig.class
 })
 @TestPropertySource(properties = {
         "elvo.security.internal-jwt.secret=test-secret-for-wallet-internal-auth-32",
@@ -77,6 +79,12 @@ class InternalWalletControllerSecurityTest {
 
     @MockBean
     private MakerCheckerApprovalService makerCheckerApprovalService;
+
+    @MockBean
+    private UserTokenRevocationChecker userTokenRevocationChecker;
+
+    @MockBean
+    private IdentityJwksKeyResolver identityJwksKeyResolver;
 
     @TestConfiguration
     static class InternalWalletControllerSecurityTestConfig {

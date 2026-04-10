@@ -9,9 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
-import java.util.UUID;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -26,6 +24,7 @@ import com.elvo.identity.repository.AuditRepository;
 import com.elvo.identity.repository.DeviceRepository;
 import com.elvo.identity.repository.SessionRepository;
 import com.elvo.identity.repository.UserRepository;
+import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.service.SecurityProtectionService;
 import com.elvo.identity.util.TokenService;
@@ -57,11 +56,11 @@ class LoginServiceImplUnitTest {
     @Mock
     private AuditEventPublisher auditEventPublisher;
 
-    private LoginServiceImpl loginService;
+    @Mock
+    private IdentityAccountReadService accountReadService;
 
-    @BeforeEach
-    void setUp() {
-        loginService = new LoginServiceImpl(
+    private LoginServiceImpl createLoginService() {
+        return new LoginServiceImpl(
                 userRepository,
                 deviceRepository,
                 sessionRepository,
@@ -69,13 +68,13 @@ class LoginServiceImplUnitTest {
                 tokenService,
                 securityProtectionService,
                 hashingService,
-                auditEventPublisher);
+                auditEventPublisher,
+                accountReadService);
     }
 
     @Test
     void disabledUserShouldEmitStructuredAuthFailureAudit() {
         User user = new User();
-        user.setEan("ELVO-LOGIN-UNIT-1");
         user.setEmail("disabled@elvo.com");
         user.setPhone("+12025550000");
         user.setHashedPassword("hashed-password");
@@ -93,7 +92,7 @@ class LoginServiceImplUnitTest {
         when(hashingService.verifyPassword("Password123", "hashed-password")).thenReturn(true);
         when(auditRepository.save(any(Audit.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> loginService.login(request));
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> createLoginService().login(request));
         assertEquals("Account is not active", ex.getMessage());
 
         verify(auditRepository).save(argThat(audit ->
@@ -121,7 +120,7 @@ class LoginServiceImplUnitTest {
         when(hashingService.verifyPassword("Password123", "hashed-password")).thenReturn(true);
         when(auditRepository.save(any(Audit.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        PendingVerificationException ex = assertThrows(PendingVerificationException.class, () -> loginService.login(request));
+        PendingVerificationException ex = assertThrows(PendingVerificationException.class, () -> createLoginService().login(request));
         assertEquals("Email verification is required", ex.getMessage());
         verify(sessionRepository, never()).save(any());
         verify(tokenService, never()).generateAccessToken(any(), any());
@@ -145,7 +144,7 @@ class LoginServiceImplUnitTest {
         when(hashingService.verifyPassword("Password123", "hashed-password")).thenReturn(true);
         when(auditRepository.save(any(Audit.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> loginService.login(request));
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> createLoginService().login(request));
         assertEquals("Pending registration expired. Restart registration", ex.getMessage());
     }
 }
