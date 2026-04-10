@@ -22,6 +22,7 @@ import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.service.LoginService;
 import com.elvo.identity.service.SecurityProtectionService;
+import com.elvo.identity.service.TotpManagementService;
 import com.elvo.identity.util.TokenService;
 
 @Service
@@ -36,6 +37,7 @@ public class LoginServiceImpl implements LoginService {
     private final SecurityHashingService hashingService;
     private final AuditEventPublisher auditEventPublisher;
     private final IdentityAccountReadService accountReadService;
+    private final TotpManagementService totpManagementService;
 
     public LoginServiceImpl(UserRepository userRepository,
                             DeviceRepository deviceRepository,
@@ -45,7 +47,8 @@ public class LoginServiceImpl implements LoginService {
                             SecurityProtectionService securityProtectionService,
                             SecurityHashingService hashingService,
                             AuditEventPublisher auditEventPublisher,
-                            IdentityAccountReadService accountReadService) {
+                            IdentityAccountReadService accountReadService,
+                            TotpManagementService totpManagementService) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.sessionRepository = sessionRepository;
@@ -55,6 +58,7 @@ public class LoginServiceImpl implements LoginService {
         this.hashingService = hashingService;
         this.auditEventPublisher = auditEventPublisher;
         this.accountReadService = accountReadService;
+        this.totpManagementService = totpManagementService;
     }
 
     @Override
@@ -188,8 +192,15 @@ public class LoginServiceImpl implements LoginService {
     }
 
     private void validateMfaIfRequired(User user, LoginRequest request) {
-        if (user.isMfaEnabled() && (request.getMfaCode() == null || request.getMfaCode().isBlank())) {
+        if (!user.isMfaEnabled()) {
+            return;
+        }
+        if (request.getMfaCode() == null || request.getMfaCode().isBlank()) {
             throw new IllegalArgumentException("MFA code is required");
+        }
+        boolean verified = totpManagementService.verifyActiveCode(user.getId(), request.getMfaCode());
+        if (!verified) {
+            throw new IllegalArgumentException("Invalid MFA code");
         }
     }
 
@@ -245,6 +256,9 @@ public class LoginServiceImpl implements LoginService {
         }
         if ("MFA code is required".equals(message)) {
             return "MFA_REQUIRED";
+        }
+        if ("Invalid MFA code".equals(message)) {
+            return "MFA_INVALID";
         }
         if ("Email verification is required".equals(message)
                 || "Mobile verification is required".equals(message)) {

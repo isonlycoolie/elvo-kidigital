@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +28,7 @@ import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.security.SecurityHashingService;
 import com.elvo.identity.service.SecurityProtectionService;
+import com.elvo.identity.service.TotpManagementService;
 import com.elvo.identity.util.TokenService;
 
 @ExtendWith(MockitoExtension.class)
@@ -59,6 +61,9 @@ class LoginServiceImplUnitTest {
     @Mock
     private IdentityAccountReadService accountReadService;
 
+    @Mock
+    private TotpManagementService totpManagementService;
+
     private LoginServiceImpl createLoginService() {
         return new LoginServiceImpl(
                 userRepository,
@@ -69,7 +74,8 @@ class LoginServiceImplUnitTest {
                 securityProtectionService,
                 hashingService,
                 auditEventPublisher,
-                accountReadService);
+                accountReadService,
+                totpManagementService);
     }
 
     @Test
@@ -146,5 +152,42 @@ class LoginServiceImplUnitTest {
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, () -> createLoginService().login(request));
         assertEquals("Pending registration expired. Restart registration", ex.getMessage());
+    }
+
+    @Test
+    void mfaEnabledUserShouldRejectInvalidTotpCode() {
+        User user = new User();
+        setId(user, UUID.randomUUID());
+        user.setEmail("mfa@elvo.com");
+        user.setHashedPassword("hashed-password");
+        user.setAccountStatus(User.AccountStatus.ACTIVE);
+        user.setEmailVerified(true);
+        user.setMfaEnabled(true);
+
+        LoginRequest request = new LoginRequest();
+        request.setIdentifier("mfa@elvo.com");
+        request.setPassword("Password123");
+        request.setMfaCode("000000");
+        request.setDeviceId("device-1");
+        request.setDeviceType("ANDROID");
+
+        when(userRepository.findByEmailIgnoreCase("mfa@elvo.com")).thenReturn(Optional.of(user));
+        when(hashingService.verifyPassword("Password123", "hashed-password")).thenReturn(true);
+        when(totpManagementService.verifyActiveCode(user.getId(), "000000")).thenReturn(false);
+        when(auditRepository.save(any(Audit.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> createLoginService().login(request));
+        assertEquals("Invalid MFA code", ex.getMessage());
+        verify(sessionRepository, never()).save(any());
+    }
+
+    private void setId(User user, UUID id) {
+        try {
+            java.lang.reflect.Field field = User.class.getDeclaredField("id");
+            field.setAccessible(true);
+            field.set(user, id);
+        } catch (NoSuchFieldException | IllegalAccessException ex) {
+            throw new IllegalStateException("Unable to set test id", ex);
+        }
     }
 }

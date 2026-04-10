@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,9 +17,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.elvo.identity.audit.AuditEventPublisher;
 import com.elvo.identity.dto.request.ProfileUpdateRequest;
+import com.elvo.identity.dto.request.TotpVerifyRequest;
 import com.elvo.identity.dto.response.DeviceInfoResponse;
 import com.elvo.identity.dto.response.ProfileResponse;
 import com.elvo.identity.dto.response.SessionInfoResponse;
+import com.elvo.identity.dto.response.TotpEnrollmentResponse;
+import com.elvo.identity.dto.response.TotpVerificationResponse;
 import com.elvo.identity.entity.Audit;
 import com.elvo.identity.entity.Device;
 import com.elvo.identity.entity.User;
@@ -30,6 +34,7 @@ import com.elvo.identity.repository.UserRepository;
 import com.elvo.identity.service.IdentityAccountReadService;
 import com.elvo.identity.service.ProfileManagementService;
 import com.elvo.identity.service.SessionManagementService;
+import com.elvo.identity.service.TotpManagementService;
 
 import jakarta.validation.Valid;
 
@@ -46,6 +51,7 @@ public class UserController {
     private final ProfileManagementService profileManagementService;
     private final SessionManagementService sessionManagementService;
     private final IdentityAccountReadService accountReadService;
+    private final TotpManagementService totpManagementService;
 
     public UserController(UserRepository userRepository,
                           DeviceRepository deviceRepository,
@@ -54,7 +60,8 @@ public class UserController {
                           AuditEventPublisher auditEventPublisher,
                           ProfileManagementService profileManagementService,
                           SessionManagementService sessionManagementService,
-                          IdentityAccountReadService accountReadService) {
+                          IdentityAccountReadService accountReadService,
+                          TotpManagementService totpManagementService) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.sessionRepository = sessionRepository;
@@ -63,6 +70,7 @@ public class UserController {
         this.profileManagementService = profileManagementService;
         this.sessionManagementService = sessionManagementService;
         this.accountReadService = accountReadService;
+        this.totpManagementService = totpManagementService;
     }
 
     @GetMapping
@@ -137,6 +145,27 @@ public class UserController {
         auditEventPublisher.publish(savedAudit);
 
         return ResponseEntity.ok(ApiResponse.ok("Device revoked", null));
+    }
+
+    @PostMapping("/mfa/totp/enroll")
+    public ResponseEntity<ApiResponse<TotpEnrollmentResponse>> enrollTotp(@RequestHeader("X-User-Id") UUID userId) {
+        TotpManagementService.Enrollment enrollment = totpManagementService.startEnrollment(userId);
+        TotpEnrollmentResponse response = new TotpEnrollmentResponse(
+                enrollment.secret(),
+                enrollment.otpauthUrl(),
+                enrollment.expiresAt());
+        return ResponseEntity.ok(ApiResponse.ok("TOTP enrollment started", response));
+    }
+
+    @PostMapping("/mfa/totp/verify")
+    public ResponseEntity<ApiResponse<TotpVerificationResponse>> verifyTotpEnrollment(
+            @RequestHeader("X-User-Id") UUID userId,
+            @Valid @RequestBody TotpVerifyRequest request) {
+        boolean verified = totpManagementService.confirmEnrollment(userId, request.getCode());
+        TotpVerificationResponse response = verified
+                ? new TotpVerificationResponse(true, "TOTP_ENROLLED", "TOTP enrollment verified")
+                : new TotpVerificationResponse(false, "TOTP_INVALID", "TOTP code is invalid or expired");
+        return ResponseEntity.ok(ApiResponse.ok("TOTP verification processed", response));
     }
 
     private ProfileResponse loadProfile(UUID userId) {

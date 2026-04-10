@@ -31,6 +31,7 @@ public class RequiredEnvironmentValidator {
             @Value("${ELVO_DB_PASSWORD:elvo}") String dbPassword,
             @Value("${ELVO_RABBITMQ_PASSWORD:guest}") String rabbitmqPassword,
             @Value("${ELVO_JWT_SECRET_REF:sm://identity-jwt-secret}") String jwtSecretRef,
+            @Value("${ELVO_TOTP_ENCRYPTION_SECRET_REF:sm://identity-totp-encryption-secret}") String totpEncryptionSecretRef,
             @Value("${ELVO_OTP_HASH_PEPPER:change-this-otp-pepper}") String otpHashPepper,
             @Value("${SMS_PROVIDER_API_KEY:replace_with_sms_api_key}") String smsApiKey,
             @Value("${EMAIL_PROVIDER_PASSWORD:replace_with_email_password}") String emailProviderPassword,
@@ -45,12 +46,14 @@ public class RequiredEnvironmentValidator {
         requiredValues.put("ELVO_DB_PASSWORD", dbPassword);
         requiredValues.put("ELVO_RABBITMQ_PASSWORD", rabbitmqPassword);
         requiredValues.put("ELVO_JWT_SECRET_REF", jwtSecretRef);
+        requiredValues.put("ELVO_TOTP_ENCRYPTION_SECRET_REF", totpEncryptionSecretRef);
         requiredValues.put("ELVO_OTP_HASH_PEPPER", otpHashPepper);
         requiredValues.put("SMS_PROVIDER_API_KEY", smsApiKey);
         requiredValues.put("EMAIL_PROVIDER_PASSWORD", emailProviderPassword);
 
         insecureDefaults.put("ELVO_DB_PASSWORD", Set.of("elvo", "password", "changeme", "change-me"));
         insecureDefaults.put("ELVO_RABBITMQ_PASSWORD", Set.of("guest"));
+        insecureDefaults.put("ELVO_TOTP_ENCRYPTION_SECRET_REF", Set.of("change-this-totp-encryption-secret", "changeme", "change-me"));
         insecureDefaults.put("ELVO_OTP_HASH_PEPPER", Set.of("change-this-otp-pepper", "changeme", "change-me"));
         insecureDefaults.put("SMS_PROVIDER_API_KEY", Set.of("replace_with_sms_api_key", "replace-with-sms-api-key"));
         insecureDefaults.put("EMAIL_PROVIDER_PASSWORD", Set.of("replace_with_email_password", "replace-with-email-password"));
