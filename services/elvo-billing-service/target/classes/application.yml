@@ -48,6 +48,11 @@ elvo:
           secret: ${ELVO_BILLING_SELCOM_SECRET:}
         mock:
           enabled: ${ELVO_BILLING_MOCK_ADAPTER_ENABLED:true}
+    wallet:
+      settlement-enabled: ${ELVO_BILLING_WALLET_SETTLEMENT_ENABLED:true}
+      base-url: ${ELVO_WALLET_BASE_URL:http://localhost:8083}
+      internal-auth-token: ${ELVO_BILLING_WALLET_INTERNAL_AUTH_TOKEN:}
+      source-service: ${ELVO_BILLING_SOURCE_SERVICE:billing-service}
     sentry:
       alerts:
         enabled: ${ELVO_BILLING_SENTRY_ALERTS_ENABLED:true}

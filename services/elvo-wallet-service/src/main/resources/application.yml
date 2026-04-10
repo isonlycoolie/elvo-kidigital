@@ -123,6 +123,7 @@ elvo:
     internal-authz:
       service-rules:
         identity-service:
+          - POST:/api/v1/internal/wallets/*
           - GET:/api/v1/internal/wallets/*/balance
         billing-service:
           - POST:/api/v1/internal/wallets/*/reserve

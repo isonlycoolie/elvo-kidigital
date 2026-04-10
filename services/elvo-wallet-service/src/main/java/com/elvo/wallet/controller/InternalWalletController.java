@@ -1,5 +1,6 @@
 package com.elvo.wallet.controller;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -21,6 +22,7 @@ import com.elvo.wallet.dto.request.MakerCheckerDecisionRequestDto;
 import com.elvo.wallet.dto.request.ReservationRequestDto;
 import com.elvo.wallet.dto.response.BalanceResponseDto;
 import com.elvo.wallet.dto.response.FlowResultResponseDto;
+import com.elvo.wallet.dto.response.WalletResponseDto;
 import com.elvo.wallet.entity.Wallet;
 import com.elvo.wallet.mapper.WalletMapper;
 import com.elvo.wallet.repository.WalletRepository;
@@ -65,6 +67,25 @@ public class InternalWalletController {
         AUDIT_LOG.info("internal_wallet_balance_lookup userId={} walletId={}", userId, wallet.getId());
         return ResponseEntity.ok(walletMapper.toBalanceResponseDto(wallet));
     }
+
+        @PostMapping("/{userId}")
+        public ResponseEntity<WalletResponseDto> createWallet(@PathVariable UUID userId) {
+                Wallet existing = walletRepository.findByUserId(userId).orElse(null);
+                if (existing != null) {
+                        AUDIT_LOG.info("internal_wallet_create_idempotent userId={} walletId={}", userId, existing.getId());
+                        return ResponseEntity.ok(walletMapper.toWalletResponseDto(existing));
+                }
+
+                Wallet wallet = new Wallet();
+                wallet.setUserId(userId);
+                wallet.setBalance(BigDecimal.ZERO);
+                wallet.setReservedBalance(BigDecimal.ZERO);
+                wallet.setStatus(Wallet.WalletStatus.ACTIVE);
+
+                Wallet saved = walletRepository.save(wallet);
+                AUDIT_LOG.info("internal_wallet_created userId={} walletId={}", userId, saved.getId());
+                return ResponseEntity.status(HttpStatus.CREATED).body(walletMapper.toWalletResponseDto(saved));
+        }
 
     @PostMapping("/{userId}/reserve")
     public ResponseEntity<FlowResultResponseDto> reserve(

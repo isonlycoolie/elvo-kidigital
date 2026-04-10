@@ -1,10 +1,9 @@
 package com.elvo.wallet.security;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
 class InternalServiceAuthorizationMatrixTest {
@@ -63,4 +62,22 @@ class InternalServiceAuthorizationMatrixTest {
 
         assertThat(allowed).isFalse();
     }
+
+        @Test
+        void shouldAllowIdentityServiceToCreateWallet() {
+                InternalServiceAuthorizationProperties properties = new InternalServiceAuthorizationProperties();
+                properties.setServiceRules(Map.of(
+                                "identity-service", List.of("POST:/api/v1/internal/wallets/*")
+                ));
+
+                InternalServiceAuthorizationMatrix matrix = new InternalServiceAuthorizationMatrix(properties);
+
+                boolean allowed = matrix.isAllowed(
+                                "identity-service",
+                                "POST",
+                                "/api/v1/internal/wallets/11111111-1111-1111-1111-111111111111"
+                );
+
+                assertThat(allowed).isTrue();
+        }
 }

@@ -2,6 +2,9 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\m
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\audit\DefaultAuditEventPublisher.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\audit\package-info.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\cache\package-info.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\client\AccountReadClient.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\client\AccountReadClientProperties.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\client\DefaultAccountReadClient.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\client\DefaultProfileProvisioningClient.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\client\DefaultWalletProvisioningClient.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\client\HttpSmsProvider.java
@@ -11,6 +14,9 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\m
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\client\ProvisioningRetryExecutor.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\client\SmsProvider.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\client\WalletProvisioningClient.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\config\AccountIntentMessagingConfig.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\config\AccountIntentMessagingProperties.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\config\AccountReadClientConfig.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\config\AuditMessagingConfig.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\config\AuditMessagingProperties.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\config\CorrelationIdFilter.java
@@ -25,9 +31,11 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\m
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\controller\FastLoginController.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\controller\HealthController.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\controller\InternalController.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\controller\InternalDiagnosticsController.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\controller\JwksController.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\controller\package-info.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\controller\UserController.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\dto\event\AccountCreationIntentEvent.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\dto\event\AuditEvent.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\dto\event\package-info.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\dto\package-info.java
@@ -84,6 +92,8 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\m
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\exception\VerificationRequiredException.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\idempotency\package-info.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\mapper\package-info.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\messaging\account\AccountCreationIntentPublisher.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\messaging\account\DefaultAccountCreationIntentPublisher.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\messaging\consumer\package-info.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\messaging\package-info.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\messaging\producer\package-info.java
@@ -109,6 +119,7 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\m
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\service\EmailSenderService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\service\EspManagementService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\service\FastLoginService.java
+C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\service\IdentityAccountReadService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\service\impl\DefaultPostVerificationProvisioningService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\service\impl\DefaultSmsSenderService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\service\impl\EacManagementServiceImpl.java
@@ -141,7 +152,6 @@ C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\m
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\service\SmsSenderService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\service\VerificationPolicyService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\service\VerificationTokenService.java
-C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\util\EanGenerator.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\util\package-info.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\util\TokenService.java
 C:\Users\isonl\Desktop\PROJECT\elvo-digital\services\elvo-identity-service\src\main\java\com\elvo\identity\validation\ActionName.java
