@@ -266,7 +266,7 @@ public class DefaultAccountManagementService implements AccountManagementService
         Account destination = recipientRequired ? findAccount(request.destinationAccountId()) : null;
 
         if (source != null) {
-            String blocked = validateAccountForOutbound(source);
+            String blocked = validateAccountForOutbound(source, actionType);
             if (blocked != null) {
                 return new ValidationResponse(false, blocked, source.getAccountId(), source.getEan(), source.getAccountStatus(), source.getKycStatus());
             }
@@ -345,6 +345,10 @@ public class DefaultAccountManagementService implements AccountManagementService
     }
 
     private String validateAccountForOutbound(Account account) {
+        return validateAccountForOutbound(account, "TRANSFER");
+    }
+
+    private String validateAccountForOutbound(Account account, String actionType) {
         if (account.getKycStatus() == Account.KycStatus.BLOCKED) {
             return "Account is KYC blocked";
         }
@@ -354,6 +358,10 @@ public class DefaultAccountManagementService implements AccountManagementService
         }
         if (hasActiveRestriction(account.getAccountId(), Account.RestrictionType.SEND_BLOCKED) || hasActiveRestriction(account.getAccountId(), Account.RestrictionType.WITHDRAWAL_BLOCKED)) {
             return "Account is restricted from sending funds";
+        }
+        String kycBlockReason = validateKycCapability(account, actionType);
+        if (kycBlockReason != null) {
+            return kycBlockReason;
         }
         return null;
     }
@@ -369,7 +377,50 @@ public class DefaultAccountManagementService implements AccountManagementService
         if (hasActiveRestriction(account.getAccountId(), Account.RestrictionType.RECEIVE_BLOCKED)) {
             return "Account is restricted from receiving funds";
         }
+        String kycBlockReason = validateKycCapability(account, "RECEIVE");
+        if (kycBlockReason != null) {
+            return kycBlockReason;
+        }
         return null;
+    }
+
+    private String validateKycCapability(Account account, String actionType) {
+        int current = kycLevel(account.getKycStatus());
+        int required = requiredKycLevel(actionType, account.getAccountType());
+        if (current < required) {
+            return "KYC level does not permit " + actionType;
+        }
+        return null;
+    }
+
+    private int kycLevel(Account.KycStatus status) {
+        if (status == null) {
+            return 0;
+        }
+        return switch (status) {
+            case UNVERIFIED -> 0;
+            case PARTIAL -> 1;
+            case VERIFIED -> 2;
+            case ENHANCED -> 3;
+            case BLOCKED -> -1;
+        };
+    }
+
+    private int requiredKycLevel(String actionType, Account.AccountType accountType) {
+        if (actionType == null) {
+            return 2;
+        }
+        String normalized = actionType.toUpperCase(Locale.ROOT);
+        if (normalized.contains("RECEIVE") || normalized.contains("DEPOSIT")) {
+            return 1;
+        }
+        if (normalized.contains("WITHDRAW") && (accountType == Account.AccountType.AGENT || accountType == Account.AccountType.MERCHANT)) {
+            return 3;
+        }
+        if (normalized.contains("WITHDRAW") || normalized.contains("TRANSFER") || normalized.contains("BILL")) {
+            return 2;
+        }
+        return 2;
     }
 
     private boolean hasActiveRestriction(UUID accountId, Account.RestrictionType restrictionType) {

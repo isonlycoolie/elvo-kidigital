@@ -354,6 +354,69 @@ class DefaultAccountManagementServiceTest {
                 .hasMessageContaining("Invalid lifecycle transition");
     }
 
+    @Test
+    void validateTransferRejectsUnverifiedKycForOutbound() {
+        UUID sourceAccountId = UUID.randomUUID();
+        UUID destinationAccountId = UUID.randomUUID();
+        Account source = new Account();
+        source.setUserId(UUID.randomUUID());
+        source.setEan("2234567890128");
+        source.setAccountStatus(Account.AccountStatus.ACTIVE);
+        source.setKycStatus(Account.KycStatus.UNVERIFIED);
+        Account destination = new Account();
+        destination.setUserId(UUID.randomUUID());
+        destination.setEan("3234567890128");
+        destination.setAccountStatus(Account.AccountStatus.ACTIVE);
+        destination.setKycStatus(Account.KycStatus.VERIFIED);
+        setAccountId(source, sourceAccountId);
+        setAccountId(destination, destinationAccountId);
+
+        when(accountRepository.findById(sourceAccountId)).thenReturn(Optional.of(source));
+        when(accountRepository.findById(destinationAccountId)).thenReturn(Optional.of(destination));
+
+        var response = service.validateTransfer(new ValidationRequest(
+                sourceAccountId,
+                destinationAccountId,
+                new BigDecimal("10.00"),
+                "req-8",
+                "corr-8",
+                "wallet-service",
+                "127.0.0.1",
+                "wallet"));
+
+        assertThat(response.allowed()).isFalse();
+        assertThat(response.reason()).contains("KYC level does not permit TRANSFER");
+    }
+
+    @Test
+    void validateReceiveAllowsPartialKycForInbound() {
+        UUID destinationAccountId = UUID.randomUUID();
+        Account destination = new Account();
+        destination.setUserId(UUID.randomUUID());
+        destination.setEan("4234567890128");
+        destination.setAccountStatus(Account.AccountStatus.ACTIVE);
+        destination.setKycStatus(Account.KycStatus.PARTIAL);
+        setAccountId(destination, destinationAccountId);
+
+        AccountPermission destinationPermission = new AccountPermission();
+        destinationPermission.setCanReceiveMoney(true);
+
+        when(accountRepository.findById(destinationAccountId)).thenReturn(Optional.of(destination));
+        when(permissionRepository.findByAccountId(destinationAccountId)).thenReturn(Optional.of(destinationPermission));
+
+        var response = service.validateReceive(new ValidationRequest(
+                null,
+                destinationAccountId,
+                new BigDecimal("5.00"),
+                "req-9",
+                "corr-9",
+                "wallet-service",
+                "127.0.0.1",
+                "wallet"));
+
+        assertThat(response.allowed()).isTrue();
+    }
+
     private static AccountLimit createLimit() {
         AccountLimit limit = new AccountLimit();
         limit.setMaxSingleTransaction(new BigDecimal("1000.00"));
