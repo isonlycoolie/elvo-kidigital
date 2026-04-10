@@ -27,6 +27,12 @@ public class ProfileUpdateRequest {
     @Size(min = 8, max = 128)
     private String newPassword;
 
+    private String mfaCode;
+
+    private String emailVerificationCode;
+
+    private String mobileVerificationCode;
+
     private String sourceIp;
 
     private String sourceUserAgent;
@@ -93,5 +99,29 @@ public class ProfileUpdateRequest {
 
     public void setSourceUserAgent(String sourceUserAgent) {
         this.sourceUserAgent = sourceUserAgent;
+    }
+
+    public String getMfaCode() {
+        return mfaCode;
+    }
+
+    public void setMfaCode(String mfaCode) {
+        this.mfaCode = mfaCode;
+    }
+
+    public String getEmailVerificationCode() {
+        return emailVerificationCode;
+    }
+
+    public void setEmailVerificationCode(String emailVerificationCode) {
+        this.emailVerificationCode = emailVerificationCode;
+    }
+
+    public String getMobileVerificationCode() {
+        return mobileVerificationCode;
+    }
+
+    public void setMobileVerificationCode(String mobileVerificationCode) {
+        this.mobileVerificationCode = mobileVerificationCode;
     }
 }
