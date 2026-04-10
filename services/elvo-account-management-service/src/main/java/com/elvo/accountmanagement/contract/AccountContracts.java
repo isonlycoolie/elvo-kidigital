@@ -232,6 +232,26 @@ public final class AccountContracts {
             Instant endDate) {
     }
 
+    public record RelationshipUnlinkRequest(
+            UUID childAccountId,
+            String reason,
+            String requestedBy,
+            String requestId,
+            String correlationId,
+            String sourceService,
+            String sourceIp,
+            String sourceUserAgent) {
+    }
+
+    public record RelationshipUnlinkResponse(
+            UUID relationshipId,
+            UUID parentAccountId,
+            UUID childAccountId,
+            Account.RelationshipStatus relationshipStatus,
+            Instant unlinkedAt,
+            Account.AccountStatus childAccountStatus) {
+    }
+
     public record AdminActionWorkflowResponse(
             UUID adminActionRequestId,
             UUID accountId,

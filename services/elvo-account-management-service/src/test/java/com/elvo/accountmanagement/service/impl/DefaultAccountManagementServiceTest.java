@@ -24,6 +24,7 @@ import com.elvo.accountmanagement.contract.AccountContracts.LimitChangeRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.LimitCheckRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeApprovalRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.RelationshipUnlinkRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationRequest;
 import com.elvo.accountmanagement.entity.Account;
 import com.elvo.accountmanagement.entity.AccountAdminActionRequest;
@@ -679,6 +680,57 @@ class DefaultAccountManagementServiceTest {
         assertThat(account.getAccountStatus()).isEqualTo(Account.AccountStatus.FROZEN);
         assertThat(response.status()).isEqualTo("APPROVED");
         assertThat(response.approvedBy()).isEqualTo("checker-user");
+        }
+
+        @Test
+        void unlinkRelationshipTerminatesActiveLinkAndSuspendsChildAccount() {
+        UUID parentAccountId = UUID.randomUUID();
+        UUID childAccountId = UUID.randomUUID();
+
+        Account parent = new Account();
+        parent.setUserId(UUID.randomUUID());
+        parent.setEan("1134567890128");
+        parent.setAccountType(Account.AccountType.BUSINESS);
+        parent.setAccountStatus(Account.AccountStatus.ACTIVE);
+        parent.setKycStatus(Account.KycStatus.VERIFIED);
+        setAccountId(parent, parentAccountId);
+
+        Account child = new Account();
+        child.setUserId(UUID.randomUUID());
+        child.setEan("1234567890128");
+        child.setAccountType(Account.AccountType.EMPLOYEE);
+        child.setAccountStatus(Account.AccountStatus.ACTIVE);
+        child.setKycStatus(Account.KycStatus.VERIFIED);
+        child.setParentAccountId(parentAccountId);
+        setAccountId(child, childAccountId);
+
+        AccountRelationship relationship = new AccountRelationship();
+        relationship.setParentAccountId(parentAccountId);
+        relationship.setChildAccountId(childAccountId);
+        relationship.setRelationshipType(Account.RelationshipType.EMPLOYER_EMPLOYEE);
+        relationship.setStatus(Account.RelationshipStatus.ACTIVE);
+
+        when(accountRepository.findById(childAccountId)).thenReturn(Optional.of(child));
+        when(accountRepository.findById(parentAccountId)).thenReturn(Optional.of(parent));
+        when(relationshipRepository.findByParentAccountIdAndChildAccountIdAndStatus(parentAccountId, childAccountId, Account.RelationshipStatus.ACTIVE))
+            .thenReturn(Optional.of(relationship));
+        when(relationshipRepository.save(org.mockito.ArgumentMatchers.any(AccountRelationship.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(accountRepository.save(org.mockito.ArgumentMatchers.any(Account.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.unlinkRelationship(new RelationshipUnlinkRequest(
+            childAccountId,
+            "employment ended",
+            "ops-user",
+            "req-16",
+            "corr-16",
+            "ops-service",
+            "127.0.0.1",
+            "ops"));
+
+        assertThat(response.relationshipStatus()).isEqualTo(Account.RelationshipStatus.TERMINATED);
+        assertThat(response.childAccountStatus()).isEqualTo(Account.AccountStatus.SUSPENDED);
+        assertThat(child.getParentAccountId()).isNull();
         }
 
     private static AccountLimit createLimit() {

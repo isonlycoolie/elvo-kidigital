@@ -30,6 +30,8 @@ import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeWork
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.RestrictionRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.RestrictionResponse;
+import com.elvo.accountmanagement.contract.AccountContracts.RelationshipUnlinkRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.RelationshipUnlinkResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationResponse;
 import com.elvo.accountmanagement.entity.Account;
@@ -413,6 +415,45 @@ public class DefaultAccountManagementService implements AccountManagementService
         Account account = findAccount(request.accountId());
         eventPublisher.publishPolicy(account, "ACCOUNT_RESTRICTION_CREATED", request.reason(), request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.createdBy());
         return new RestrictionResponse(saved.getRestrictionId(), saved.getAccountId(), saved.getRestrictionType(), saved.getReason(), saved.getStartDate(), saved.getEndDate());
+    }
+
+    @Override
+    public RelationshipUnlinkResponse unlinkRelationship(RelationshipUnlinkRequest request) {
+        validateRequest(request.childAccountId(), "childAccountId");
+        validateRequest(request.reason(), "reason");
+        validateRequest(request.requestedBy(), "requestedBy");
+
+        Account child = findAccount(request.childAccountId());
+        if (child.getParentAccountId() == null) {
+            throw new IllegalStateException("Child account is not linked to a parent");
+        }
+        Account parent = findAccount(child.getParentAccountId());
+        AccountRelationship relationship = relationshipRepository
+                .findByParentAccountIdAndChildAccountIdAndStatus(parent.getAccountId(), child.getAccountId(), Account.RelationshipStatus.ACTIVE)
+                .orElseThrow(() -> new IllegalStateException("Active relationship not found"));
+
+        Instant now = Instant.now();
+        relationship.setStatus(Account.RelationshipStatus.TERMINATED);
+        relationship.setEndDate(now);
+        relationshipRepository.save(relationship);
+
+        child.setParentAccountId(null);
+        if (child.getAccountType() == Account.AccountType.CHILD || child.getAccountType() == Account.AccountType.EMPLOYEE) {
+            child.setAccountStatus(Account.AccountStatus.SUSPENDED);
+        }
+        Account savedChild = accountRepository.save(child);
+
+        String description = "Relationship unlinked for child account " + child.getAccountId();
+        audit(savedChild.getAccountId(), "RELATIONSHIP_UNLINKED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.requestedBy());
+        eventPublisher.publishPolicy(savedChild, "RELATIONSHIP_UNLINKED", description, request.requestId(), request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), request.requestedBy());
+
+        return new RelationshipUnlinkResponse(
+                relationship.getRelationshipId(),
+                parent.getAccountId(),
+                savedChild.getAccountId(),
+                relationship.getStatus(),
+                now,
+                savedChild.getAccountStatus());
     }
 
     @Override

@@ -18,6 +18,8 @@ import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeWork
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.RestrictionRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.RestrictionResponse;
+import com.elvo.accountmanagement.contract.AccountContracts.RelationshipUnlinkRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.RelationshipUnlinkResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationResponse;
 
@@ -68,6 +70,8 @@ public interface AccountManagementService {
     AccountResponse removeRestriction(RestrictionRequest request);
 
     RestrictionResponse createRestrictionRecord(RestrictionRequest request);
+
+    RelationshipUnlinkResponse unlinkRelationship(RelationshipUnlinkRequest request);
 
     AdminActionWorkflowResponse requestAdminAction(AdminActionRequest request);
 

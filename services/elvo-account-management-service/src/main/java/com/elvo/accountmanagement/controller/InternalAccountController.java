@@ -30,6 +30,8 @@ import com.elvo.accountmanagement.contract.AccountContracts.PermissionChangeWork
 import com.elvo.accountmanagement.contract.AccountContracts.PermissionResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.RestrictionRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.RestrictionResponse;
+import com.elvo.accountmanagement.contract.AccountContracts.RelationshipUnlinkRequest;
+import com.elvo.accountmanagement.contract.AccountContracts.RelationshipUnlinkResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationResponse;
 import com.elvo.accountmanagement.service.AccountManagementService;
@@ -163,5 +165,10 @@ public class InternalAccountController {
     @PostMapping("/admin-actions/approve")
     public ResponseEntity<ApiResponse<AdminActionWorkflowResponse>> approveAdminAction(@RequestBody AdminActionApprovalRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Admin action approved", accountManagementService.approveAdminAction(request)));
+    }
+
+    @PostMapping("/relationships/unlink")
+    public ResponseEntity<ApiResponse<RelationshipUnlinkResponse>> unlinkRelationship(@RequestBody RelationshipUnlinkRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Relationship unlinked", accountManagementService.unlinkRelationship(request)));
     }
 }
