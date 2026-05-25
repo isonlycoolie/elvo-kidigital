@@ -3,6 +3,9 @@ package com.elvo.wallet.entity;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -48,10 +51,94 @@ public class ChallengeCode {
     @Column(name = "status", nullable = false, length = 32)
     private ChallengeCodeStatus status = ChallengeCodeStatus.ACTIVE;
 
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
     public enum ChallengeCodeStatus {
         ACTIVE,
         LOCKED,
         CONSUMED,
         EXPIRED
+    }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public Wallet getWallet() {
+        return wallet;
+    }
+
+    public void setWallet(Wallet wallet) {
+        this.wallet = wallet;
+    }
+
+    public String getCodeHash() {
+        return codeHash;
+    }
+
+    public void setCodeHash(String codeHash) {
+        this.codeHash = codeHash;
+    }
+
+    public int getFailedAttemptCount() {
+        return failedAttemptCount;
+    }
+
+    public void setFailedAttemptCount(int failedAttemptCount) {
+        this.failedAttemptCount = failedAttemptCount;
+    }
+
+    public int getUsageCount() {
+        return usageCount;
+    }
+
+    public void setUsageCount(int usageCount) {
+        this.usageCount = usageCount;
+    }
+
+    public int getMaxUsageCount() {
+        return maxUsageCount;
+    }
+
+    public void setMaxUsageCount(int maxUsageCount) {
+        this.maxUsageCount = maxUsageCount;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(Instant expiresAt) {
+        this.expiresAt = expiresAt;
+    }
+
+    public Instant getLockedUntil() {
+        return lockedUntil;
+    }
+
+    public void setLockedUntil(Instant lockedUntil) {
+        this.lockedUntil = lockedUntil;
+    }
+
+    public ChallengeCodeStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(ChallengeCodeStatus status) {
+        this.status = status;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
     }
 }
