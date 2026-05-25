@@ -65,17 +65,11 @@ public class ConcurrencySecurityTest {
     @Test
     @DisplayName("Should handle optimistic locking conflicts correctly")
     void testOptimisticLockingConflict() {
-        // This test verifies that the system detects and properly handles
-        // version conflicts in optimistic locking scenarios
-        int version1 = 1;
-        int version2 = 1;
+        OptimisticVersionStore store = new OptimisticVersionStore(1);
 
-        // Simulate two concurrent updates to same record
-        boolean update1Success = updateWithVersionCheck(version1, 1);
-        boolean update2Success = updateWithVersionCheck(version2, 2);
-
-        assertTrue(update1Success, "First update should succeed");
-        assertFalse(update2Success, "Second update should fail due to version mismatch");
+        assertTrue(store.updateWithVersionCheck(1, 2), "First update should succeed");
+        assertFalse(store.updateWithVersionCheck(1, 3), "Stale version update should fail");
+        assertTrue(store.updateWithVersionCheck(2, 3), "Update with current version should succeed");
     }
 
     @Test
@@ -119,8 +113,19 @@ public class ConcurrencySecurityTest {
         assertTrue(successCount.get() <= 1, "Only one state transition should succeed");
     }
 
-    private boolean updateWithVersionCheck(int expectedVersion, int newVersion) {
-        // Simulate version check in optimistic locking
-        return expectedVersion == 1; // Only first update passes version check
+    private static final class OptimisticVersionStore {
+        private int currentVersion;
+
+        private OptimisticVersionStore(int initialVersion) {
+            this.currentVersion = initialVersion;
+        }
+
+        private boolean updateWithVersionCheck(int expectedVersion, int newVersion) {
+            if (currentVersion != expectedVersion) {
+                return false;
+            }
+            currentVersion = newVersion;
+            return true;
+        }
     }
 }
