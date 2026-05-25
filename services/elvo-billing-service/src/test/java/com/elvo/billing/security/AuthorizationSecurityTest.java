@@ -10,6 +10,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 /**
  * Security tests for authorization and access control.
@@ -17,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  */
 @DisplayName("Authorization and Access Control Security Tests")
 @SpringBootTest
+@ActiveProfiles("test")
 public class AuthorizationSecurityTest {
 
     @Autowired

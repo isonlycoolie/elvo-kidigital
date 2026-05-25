@@ -25,9 +25,10 @@ public class SensitiveDataMaskingSecurityTest {
     void testMaskSensitiveFields(String sensitiveText) {
         String masked = SensitiveDataMasker.maskText(sensitiveText);
         assertNotNull(masked, "Masked text should not be null");
-        assertFalse(masked.contains("password"), "Should not contain 'password' value");
+        assertTrue(masked.contains("***"), "Sensitive values should be redacted");
         assertFalse(masked.contains("secretp@ss"), "Should not contain actual password");
         assertFalse(masked.contains("Bearer abc123xyz"), "Should not contain actual token");
+        assertFalse(masked.contains("eyJhbGciOiJIUzI1NiIs"), "Should not contain actual token payload");
     }
 
     @ParameterizedTest

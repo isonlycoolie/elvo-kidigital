@@ -3,6 +3,7 @@ package com.elvo.billing;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import com.elvo.billing.client.MockAdapter;
 import com.elvo.billing.client.ProviderResolver;
@@ -51,11 +52,13 @@ class BillingFlowIntegrationTest {
 
     @Test
     void executePaymentShouldPersistPaymentAndHistory() {
+        UUID userId = UUID.randomUUID();
+        UUID walletId = UUID.randomUUID();
         UtilityPaymentRequestDto request = new UtilityPaymentRequestDto();
         request.setReferenceNumber("INT-PAY-001");
         request.setAmount(new BigDecimal("1550.00"));
         request.setCustomerName("Integration Customer");
-        request.setMetadata("{\"meterType\":\"PREPAID\"}");
+        request.setMetadata("{\"userId\":\"" + userId + "\",\"walletId\":\"" + walletId + "\",\"meterType\":\"PREPAID\"}");
 
         PaymentResponseDto response = billingService.executePayment(request);
 
