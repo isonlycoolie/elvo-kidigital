@@ -67,4 +67,78 @@ public class DefaultChallengeCodeService implements ChallengeCodeService {
         ChallengeCode saved = challengeCodeRepository.save(challengeCode);
         return new IssueResult(saved.getId(), plainCode, saved.getExpiresAt());
     }
+
+    @Override
+    @Transactional
+    public ValidationResult validateCode(UUID walletId, String rawCode) {
+        if (walletId == null || !challengeCodeSecurityService.isValidFormat(rawCode)) {
+            return ValidationResult.fail("INVALID_CODE_FORMAT");
+        }
+
+        String codeHash = challengeCodeSecurityService.hashCode(rawCode);
+        ChallengeCode challengeCode = challengeCodeRepository
+                .findByCodeHashAndWalletIdForUpdate(codeHash, walletId)
+                .orElse(null);
+
+        if (challengeCode == null) {
+            return ValidationResult.fail("CODE_NOT_FOUND");
+        }
+
+        Instant now = Instant.now();
+        if (challengeCode.getExpiresAt() != null && challengeCode.getExpiresAt().isBefore(now)) {
+            challengeCode.setStatus(ChallengeCode.ChallengeCodeStatus.EXPIRED);
+            challengeCodeRepository.save(challengeCode);
+            return ValidationResult.fail("CODE_EXPIRED");
+        }
+
+        if (challengeCode.getLockedUntil() != null && challengeCode.getLockedUntil().isAfter(now)) {
+            challengeCode.setStatus(ChallengeCode.ChallengeCodeStatus.LOCKED);
+            challengeCodeRepository.save(challengeCode);
+            return ValidationResult.fail("CODE_LOCKED");
+        }
+
+        if (challengeCode.getUsageCount() >= challengeCode.getMaxUsageCount()) {
+            challengeCode.setStatus(ChallengeCode.ChallengeCodeStatus.CONSUMED);
+            challengeCodeRepository.save(challengeCode);
+            return ValidationResult.fail("CODE_CONSUMED");
+        }
+
+        challengeCode.setUsageCount(challengeCode.getUsageCount() + 1);
+        if (challengeCode.getUsageCount() >= challengeCode.getMaxUsageCount()) {
+            challengeCode.setStatus(ChallengeCode.ChallengeCodeStatus.CONSUMED);
+        }
+        challengeCodeRepository.save(challengeCode);
+        return ValidationResult.ok();
+    }
+
+    @Override
+    @Transactional
+    public int expireCodes(Instant now) {
+        Instant effectiveNow = now == null ? Instant.now() : now;
+        return challengeCodeRepository.expireActiveCodes(effectiveNow);
+    }
+
+    @Transactional
+    public ValidationResult registerFailedAttempt(UUID walletId, String rawCode) {
+        if (walletId == null || !challengeCodeSecurityService.isValidFormat(rawCode)) {
+            return ValidationResult.fail("INVALID_CODE_FORMAT");
+        }
+
+        String codeHash = challengeCodeSecurityService.hashCode(rawCode);
+        ChallengeCode challengeCode = challengeCodeRepository
+                .findByCodeHashAndWalletIdForUpdate(codeHash, walletId)
+                .orElse(null);
+        if (challengeCode == null) {
+            return ValidationResult.fail("CODE_NOT_FOUND");
+        }
+
+        int attempts = challengeCode.getFailedAttemptCount() + 1;
+        challengeCode.setFailedAttemptCount(attempts);
+        if (attempts >= maxFailedAttempts) {
+            challengeCode.setStatus(ChallengeCode.ChallengeCodeStatus.LOCKED);
+            challengeCode.setLockedUntil(Instant.now().plusSeconds(lockMinutes * 60));
+        }
+        challengeCodeRepository.save(challengeCode);
+        return ValidationResult.fail(attempts >= maxFailedAttempts ? "CODE_LOCKED" : "INVALID_CODE");
+    }
 }
