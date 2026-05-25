@@ -142,6 +142,9 @@ public class PaymentFlow {
         history.setResponseMessage(adapterResponse.getMessage());
         history.setMetadata(adapterResponse.getMetadata() == null ? "{}" : adapterResponse.getMetadata());
         ISpan historyDbSpan = transaction.startChild("db.query", "save payment history");
+        if (history.getHistoryId() == null) {
+            history.setHistoryId(UUID.randomUUID());
+        }
         paymentHistoryRepository.save(history);
         historyDbSpan.setStatus(SpanStatus.OK);
         historyDbSpan.finish();

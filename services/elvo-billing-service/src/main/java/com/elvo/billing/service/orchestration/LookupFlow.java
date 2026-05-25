@@ -127,6 +127,9 @@ public class LookupFlow {
         history.setResponseMessage(adapterResponse.getDescription());
         history.setMetadata(lookupRequest.getMetadata() == null ? "{}" : lookupRequest.getMetadata());
         ISpan historyDbSpan = transaction.startChild("db.query", "save lookup history");
+        if (history.getHistoryId() == null) {
+            history.setHistoryId(UUID.randomUUID());
+        }
         paymentHistoryRepository.save(history);
         historyDbSpan.setStatus(SpanStatus.OK);
         historyDbSpan.finish();

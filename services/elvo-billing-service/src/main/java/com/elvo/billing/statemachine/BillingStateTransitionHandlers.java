@@ -1,5 +1,7 @@
 package com.elvo.billing.statemachine;
 
+import java.util.UUID;
+
 import com.elvo.billing.client.BillingAdapter;
 import com.elvo.billing.client.ProviderResolver;
 import com.elvo.billing.dto.request.UtilityPaymentRequestDto;
@@ -61,6 +63,9 @@ public class BillingStateTransitionHandlers {
         history.setResponseCode(toStatus == null ? null : toStatus.name());
         history.setResponseMessage(responseMessage);
         history.setMetadata(metadata == null ? "{}" : metadata);
+        if (history.getHistoryId() == null) {
+            history.setHistoryId(UUID.randomUUID());
+        }
         paymentHistoryRepository.save(history);
     }
 }
