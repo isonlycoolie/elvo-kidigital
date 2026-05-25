@@ -2,7 +2,10 @@ package com.elvo.billing.security;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -112,15 +115,22 @@ public class InputValidationSecurityTest {
     @Test
     @DisplayName("Should accept valid well-formed event")
     void testAcceptValidEvent() {
-        Map<String, Object> event = Map.of(
-                "eventType", "wallet.transaction.completed",
-                "messageId", "550e8400-e29b-41d4-a716-446655440000",
-                "payload", Map.of(
-                        "paymentId", "550e8400-e29b-41d4-a716-446655440001",
-                        "amount", 100.00,
-                        "currency", "USD"
-                )
-        );
+        Instant now = Instant.now();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("paymentId", "550e8400-e29b-41d4-a716-446655440001");
+        payload.put("idempotencyKey", UUID.randomUUID().toString());
+
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("eventType", "wallet.transaction.completed");
+        event.put("requestId", UUID.randomUUID().toString());
+        event.put(InternalServiceMessageAuthenticator.MESSAGE_ID_FIELD, "550e8400-e29b-41d4-a716-446655440000");
+        event.put(InternalServiceMessageAuthenticator.NONCE_FIELD, UUID.randomUUID().toString());
+        event.put(InternalServiceMessageAuthenticator.EXPIRES_AT_FIELD, now.plusSeconds(300).toString());
+        event.put("occurredAt", now.toString());
+        event.put(InternalServiceMessageAuthenticator.SOURCE_SERVICE_FIELD, "wallet-service");
+        event.put(InternalServiceMessageAuthenticator.SERVICE_TOKEN_FIELD, "test-token");
+        event.put("payload", payload);
+
         boolean isValid = validator.isValidWalletCompletedEvent(event);
         assertTrue(isValid, "Valid event should be accepted");
     }
