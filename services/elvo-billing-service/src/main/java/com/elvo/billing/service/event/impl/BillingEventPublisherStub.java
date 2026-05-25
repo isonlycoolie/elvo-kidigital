@@ -28,26 +28,29 @@ public class BillingEventPublisherStub implements BillingEventPublisher {
     private static final String SOURCE_SERVICE = "elvo-billing-service";
     private final RabbitTemplate rabbitTemplate;
     private final String exchange;
+    private final boolean publishEnabled;
     private final BillingServiceAuthorizationMatrix authorizationMatrix;
     private final ImmutableAuditStorageService immutableAuditStorageService;
 
     public BillingEventPublisherStub(
             RabbitTemplate rabbitTemplate,
             BillingServiceAuthorizationMatrix authorizationMatrix,
-            @Value("${elvo.messaging.billing.exchange:elvo.billing.exchange}") String exchange) {
-        this(rabbitTemplate, authorizationMatrix, exchange, null);
+            String exchange) {
+        this(rabbitTemplate, authorizationMatrix, exchange, null, true);
     }
 
     @Autowired
-    public BillingEventPublisherStub(
+    BillingEventPublisherStub(
             RabbitTemplate rabbitTemplate,
             BillingServiceAuthorizationMatrix authorizationMatrix,
             @Value("${elvo.messaging.billing.exchange:elvo.billing.exchange}") String exchange,
-            @Nullable ImmutableAuditStorageService immutableAuditStorageService) {
+            @Nullable ImmutableAuditStorageService immutableAuditStorageService,
+            @Value("${elvo.messaging.publish-enabled:true}") boolean publishEnabled) {
         this.rabbitTemplate = rabbitTemplate;
         this.authorizationMatrix = authorizationMatrix;
         this.exchange = exchange;
         this.immutableAuditStorageService = immutableAuditStorageService;
+        this.publishEnabled = publishEnabled;
     }
 
     @Override
@@ -75,7 +78,9 @@ public class BillingEventPublisherStub implements BillingEventPublisher {
 
         Map<String, Object> signedEvent = InternalServiceMessageAuthenticator.signEvent(SOURCE_SERVICE, event);
 
-        rabbitTemplate.convertAndSend(exchange, eventType, signedEvent);
+        if (publishEnabled) {
+            rabbitTemplate.convertAndSend(exchange, eventType, signedEvent);
+        }
         appendImmutable(
                 "billing.event.published",
                 String.valueOf(signedEvent.get("requestId")),
