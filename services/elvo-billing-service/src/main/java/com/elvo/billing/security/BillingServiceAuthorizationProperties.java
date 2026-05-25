@@ -18,7 +18,8 @@ public class BillingServiceAuthorizationProperties {
                 "PUBLISH:billing.transaction.completed",
                 "PUBLISH:billing.payment.completed",
                 "PUBLISH:billing.payment.callback.received",
-                "PUBLISH:billing.payment.reversed"));
+                "PUBLISH:billing.payment.reversed",
+                "PUBLISH:billing.lookup.completed"));
         serviceRules.put("wallet-service", List.of(
                 "CONSUME:wallet.transaction.completed.queue",
                 "CONSUME:wallet.transaction.failed.queue"));
