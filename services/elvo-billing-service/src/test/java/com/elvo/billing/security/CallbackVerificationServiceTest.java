@@ -22,6 +22,8 @@ class CallbackVerificationServiceTest {
         verificationService = new CallbackVerificationService();
         verificationService.setProviderSecret(PROVIDER_ID, PROVIDER_SECRET);
         verificationService.initializeAllowlist(java.util.List.of("127.0.0.1"));
+        verificationService.resetNonceCacheForTests();
+        InternalServiceMessageAuthenticator.resetReplayCachesForTests();
     }
 
     @Test

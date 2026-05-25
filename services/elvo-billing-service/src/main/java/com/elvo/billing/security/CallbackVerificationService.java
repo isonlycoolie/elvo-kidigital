@@ -23,7 +23,7 @@ public class CallbackVerificationService {
     private static final String HMAC_ALGORITHM = "HmacSHA256";
 
     @Value("${elvo.billing.callback.timestamp-threshold-seconds:300}")
-    private long timestampThresholdSeconds;
+    private long timestampThresholdSeconds = 300L;
 
     @Value("${elvo.billing.callback.allowed-sources:}")
     private String allowedSources;
@@ -230,6 +230,10 @@ public class CallbackVerificationService {
      * Initialize allowlist from configuration.
      * Can be called at startup to load allowed IPs.
      */
+    void resetNonceCacheForTests() {
+        nonceCache.clear();
+    }
+
     public void initializeAllowlist(List<String> ips) {
         if (ips != null) {
             sourceAllowlist.addAll(ips);
