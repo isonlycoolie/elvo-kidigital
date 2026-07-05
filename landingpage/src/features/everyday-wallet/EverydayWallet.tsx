@@ -54,3 +54,59 @@ export function EverydayWallet() {
                 />
               </div>
               <h3 className={s.cardTitle}>{ew.bills.title}</h3>
+              <p className={s.cardDescription}>
+                {ew.bills.description}
+              </p>
+            </RevealItem>
+          </RevealGroup>
+
+          {/* Center phone */}
+          <div className={s.phoneColumn}>
+            <div className={s.phoneFrame}>
+              <Image
+                src="/images/everyday-wallet/phone-mockup.svg"
+                alt="ELVO app overview screen"
+                fill
+                className="object-contain"
+                sizes="(max-width: 1024px) 58vw, 22rem"
+                priority
+              />
+            </div>
+          </div>
+
+          {/* Right column */}
+          <RevealGroup className={`${s.cardColumn} ${s.cardColumnRight}`}>
+            <RevealItem as="article" className={`interact-lift ${s.card} items-center text-center`}>
+              <BentoChip icon={Globe} label={ew.multiUse.chip} />
+              <h3 className={`${s.cardTitle} mt-4`}>
+                {ew.multiUse.title}
+              </h3>
+              <p className={s.cardDescription}>
+                {ew.multiUse.description}
+              </p>
+              <div className={s.visualMultiIcons}>
+                <Image
+                  src="/images/everyday-wallet/multi-icons.svg"
+                  alt="Wallet use cases for personal, family, education, and business"
+                  fill
+                  className={s.visualImage}
+                  sizes="(max-width: 1024px) 90vw, 28rem"
+                />
+              </div>
+            </RevealItem>
+
+            <RevealItem as="article" className={`interact-lift ${s.card} items-center justify-between text-center lg:min-h-[14.5rem]`}>
+              <BentoChip icon={Ban} label={ew.noSurprise.chip} />
+              <h3 className={`${s.cardTitle} mt-4`}>
+                {ew.noSurprise.title}
+              </h3>
+              <p className={s.cardDescription}>
+                {ew.noSurprise.description}
+              </p>
+            </RevealItem>
+          </RevealGroup>
+        </div>
+      </div>
+    </section>
+  );
+}
