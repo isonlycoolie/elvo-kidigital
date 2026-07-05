@@ -67,3 +67,29 @@ export const siteCopy = normalizeCopyTree({
       },
     ] satisfies FeatureCard[],
   },
+
+  cards: {
+    headline: "There is an",
+    headlineAccent: "elvo",
+    headlineEnd: "for every need",
+    description:
+      "Every ELVO card is a controlled window into your wallet. Nothing is stored on the card itself. Everything is governed by the same rules that protect your balance. Join the waitlist for early access.",
+    types: [
+      {
+        title: "ELVO Card",
+        description: "Everyday spending, waitlist-first, with the same wallet rules and simpler checkout.",
+        iconColor: "text-[#CC1E1E]",
+      },
+      {
+        title: "ELVO Team Card",
+        description: "Shared spending with permissions and approvals, built for teams on the way.",
+        iconColor: "text-[#C29B42]",
+      },
+      {
+        title: "ELVO Shield Card",
+        description: "Fresh virtual numbers per purchase, freeze anytime, designed for safer online spend.",
+        iconColor: "text-[#162A2C]",
+      },
+    ] satisfies CardType[],
+    imageAlt: "ELVO card concepts: Standard, Team, and Shield",
+  },
