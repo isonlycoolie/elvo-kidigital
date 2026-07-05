@@ -37,8 +37,9 @@ export function Features() {
                   <Image 
                     src={feature.image} 
                     alt={feature.alt} 
-                    fill 
-                    className="object-contain"
+                    fill
+                    unoptimized
+                    className="svg-crisp object-contain"
                   />
                 </div>
               </div>

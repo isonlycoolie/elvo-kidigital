@@ -15,6 +15,8 @@ function GithubIcon({ className }: { className?: string }) {
     <svg
       viewBox="0 0 24 24"
       fill="currentColor"
+      shape-rendering="geometricPrecision"
+      text-rendering="geometricPrecision"
       className={className}
       aria-hidden
     >
@@ -80,7 +82,8 @@ export function Contribution() {
                         src="/images/contribution/qr-code.svg"
                         alt="QR code to ELVO Github repository"
                         fill
-                        className="object-contain"
+                        unoptimized
+                        className="svg-crisp object-contain"
                         sizes="112px"
                       />
                     </div>

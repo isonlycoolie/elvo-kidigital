@@ -58,7 +58,8 @@ export function TrustedAdvantage() {
                     src="/images/trusted-advantage/stacked-cards.svg"
                     alt="ELVO stacked cards: Standard, Team, and Shield"
                     fill
-                    className="card-asset-hover origin-center object-contain object-center lg:origin-right lg:object-right"
+                    unoptimized
+                    className="svg-crisp card-asset-hover origin-center object-contain object-center lg:origin-right lg:object-right"
                     sizes="(max-width: 1024px) 70vw, 38rem"
                   />
                 </div>
@@ -146,7 +147,8 @@ export function TrustedAdvantage() {
                 src="/images/trusted-advantage/gold-card.svg"
                 alt=""
                 fill
-                className="card-asset-hover origin-bottom-right object-contain object-right object-bottom drop-shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
+                unoptimized
+                className="svg-crisp card-asset-hover origin-bottom-right object-contain object-right object-bottom drop-shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
                 sizes="23.2rem"
                 aria-hidden
               />

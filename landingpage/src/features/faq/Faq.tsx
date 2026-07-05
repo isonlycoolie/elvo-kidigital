@@ -45,7 +45,8 @@ export function Faq() {
                   src="/images/faq/faq-icons.svg"
                   alt="Support icons"
                   fill
-                  className="object-contain object-center"
+                  unoptimized
+                  className="svg-crisp object-contain object-center"
                   sizes="(max-width: 1024px) 90vw, 30rem"
                 />
               </div>
