@@ -91,6 +91,10 @@ elvo:
       token-ttl-seconds: ${ELVO_ACCOUNT_MANAGEMENT_CLIENT_TOKEN_TTL_SECONDS:60}
       connect-timeout-seconds: ${ELVO_ACCOUNT_MANAGEMENT_CLIENT_CONNECT_TIMEOUT_SECONDS:3}
       read-timeout-seconds: ${ELVO_ACCOUNT_MANAGEMENT_CLIENT_READ_TIMEOUT_SECONDS:5}
+    agent:
+      base-url: ${ELVO_AGENT_BASE_URL:}
+    mobile-money:
+      base-url: ${ELVO_MOBILE_MONEY_BASE_URL:}
   monitoring:
     sentry:
       service-tag: ${ELVO_SERVICE_TAG:wallet-service}
@@ -123,8 +127,8 @@ elvo:
     internal-authz:
       service-rules:
         identity-service:
-          - POST:/api/v1/internal/wallets/*
-          - GET:/api/v1/internal/wallets/*/balance
+          - POST:/api/v1/internal/wallets/**
+          - GET:/api/v1/internal/wallets/**
         billing-service:
           - POST:/api/v1/internal/wallets/*/reserve
           - POST:/api/v1/internal/wallets/*/release
