@@ -7,10 +7,12 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "elvo.clients.provisioning")
 public class ProvisioningClientProperties {
 
-    private String walletBaseUrl = "http://localhost:8082/internal";
-    private String profileBaseUrl = "http://localhost:8083/internal";
+    private String walletBaseUrl = "http://localhost:8082";
+    private String profileBaseUrl = "http://localhost:8086";
+    private String accountLifecycleBaseUrl = "http://localhost:8084";
     private String sourceServiceName = "identity-service";
     private String internalAuthToken = "";
+    private boolean profileProvisioningEnabled = false;
     private int connectTimeoutMs = 3000;
     private int readTimeoutMs = 5000;
     private int maxAttempts = 3;
@@ -32,6 +34,22 @@ public class ProvisioningClientProperties {
 
     public void setProfileBaseUrl(String profileBaseUrl) {
         this.profileBaseUrl = profileBaseUrl;
+    }
+
+    public String getAccountLifecycleBaseUrl() {
+        return accountLifecycleBaseUrl;
+    }
+
+    public void setAccountLifecycleBaseUrl(String accountLifecycleBaseUrl) {
+        this.accountLifecycleBaseUrl = accountLifecycleBaseUrl;
+    }
+
+    public boolean isProfileProvisioningEnabled() {
+        return profileProvisioningEnabled;
+    }
+
+    public void setProfileProvisioningEnabled(boolean profileProvisioningEnabled) {
+        this.profileProvisioningEnabled = profileProvisioningEnabled;
     }
 
     public String getSourceServiceName() {
