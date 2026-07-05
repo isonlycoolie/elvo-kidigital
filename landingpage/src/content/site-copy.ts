@@ -1,0 +1,264 @@
+﻿/**
+ * Centralized landing page copy aligned with ELVO-PRODUCT-DESIGN-BRIEF v2.0.
+ * Edit strings here. Components import from this module only.
+ * Do not use em dashes (—) or en dashes (–); use commas, periods, colons, or semicolons.
+ */
+
+import { normalizeCopyTree } from "./normalize-copy";
+
+export type FaqItem = {
+  question: string;
+  answer: string;
+};
+
+export type FeatureCard = {
+  title: string;
+  description: string;
+  image: string;
+  alt: string;
+};
+
+export type CardType = {
+  title: string;
+  description: string;
+  iconColor: string;
+};
+
+export const siteCopy = normalizeCopyTree({
+  hero: {
+    badgeLabel: "Trusted everyday wallet",
+    badgeStarCount: 5,
+    headlineLines: ["Send, pay, and", "stay in control"],
+    subheadlineLines: [
+      "One wallet for everyday money. Send to friends,",
+      "pay your bills, and manage it all with security built",
+      "in from day one.",
+    ],
+    cta: "Github Repository",
+    socialProof: "Built for East Africa",
+  },
+
+  features: {
+    headline: "Tired of juggling five apps to",
+    headlineAccent: "pay your bills?",
+    description:
+      "ELVO brings everyday money into one place. Check your balance, send to family, and pay LUKU, water, TV, or airtime without switching apps or memorizing USSD codes.",
+    cards: [
+      {
+        title: "Pay bills in one place",
+        description:
+          "Electricity, water, TV, airtime, internet, government, hospital, and airline. Eight categories, one wallet.",
+        image: "/images/features/payb-bills.svg",
+        alt: "Pay bills interface",
+      },
+      {
+        title: "Look up before you pay",
+        description:
+          "Check the bill first, confirm the amount and details, then pay, so every payment starts clear and ends tracked.",
+        image: "/images/features/track-bills.svg",
+        alt: "Bill lookup and confirmation flow",
+      },
+      {
+        title: "Security built in",
+        description:
+          "Verification-first signup, step-up protection on sensitive moves, and limits you can see before money moves.",
+        image: "/images/features/secure-payment.svg",
+        alt: "Security and verification icons",
+      },
+    ] satisfies FeatureCard[],
+  },
+
+  cards: {
+    headline: "There is an",
+    headlineAccent: "elvo",
+    headlineEnd: "for every need",
+    description:
+      "Every ELVO card is a controlled window into your wallet. Nothing is stored on the card itself. Everything is governed by the same rules that protect your balance. Join the waitlist for early access.",
+    types: [
+      {
+        title: "ELVO Card",
+        description: "Everyday spending, waitlist-first, with the same wallet rules and simpler checkout.",
+        iconColor: "text-[#CC1E1E]",
+      },
+      {
+        title: "ELVO Team Card",
+        description: "Shared spending with permissions and approvals, built for teams on the way.",
+        iconColor: "text-[#C29B42]",
+      },
+      {
+        title: "ELVO Shield Card",
+        description: "Fresh virtual numbers per purchase, freeze anytime, designed for safer online spend.",
+        iconColor: "text-[#162A2C]",
+      },
+    ] satisfies CardType[],
+    imageAlt: "ELVO card concepts: Standard, Team, and Shield",
+  },
+
+  transfer: {
+    title: "Send money, easier than ever.",
+    description:
+      "Send to anyone on ELVO in seconds. Every transfer is checked against your limits and account rules first, so it either goes through cleanly or doesn't go at all.",
+    features: [
+      "Checked Before It Moves",
+      "Limit Checks Included",
+      "Full Transaction History",
+    ],
+    ctaLabel: "Send money",
+  },
+
+  bills: {
+    title: "Check the bill before you pay it.",
+    description:
+      "Look up your LUKU, water, or DSTV account first, confirm the exact amount and details, then pay directly from your wallet.",
+    features: [
+      "8+ Bill Categories",
+      "Lookup Before You Pay",
+      "Status Tracked to Completion",
+    ],
+    ctaLabel: "Pay a bill",
+  },
+
+  everydayWallet: {
+    sectionTitle: "Meet Your",
+    sectionTitleAccent: "Everyday",
+    sectionTitleEnd: "Wallet",
+    sectionDescription:
+      "From daily spending to what's coming next, your wallet is designed to grow with you, with sending, bills, and security tools built in.",
+    sendReceive: {
+      title: "Send and receive from contacts",
+      description:
+        "Send, receive, and track transfers with real-time status. Limits are checked before every move, and history is always within reach.",
+    },
+    bills: {
+      title: "Pay bills instantly, all in one wallet",
+      description:
+        "Look up, confirm, and pay LUKU, water, TV, and more in one tap from lookup to receipt.",
+    },
+    multiUse: {
+      chip: "Built for daylife",
+      title: "One wallet built for every part of life",
+      description:
+        "Your money today, with family accounts and team tools on the way, all on the same trusted foundation.",
+    },
+    noSurprise: {
+      chip: "No surprise charges",
+      title: "Say goodbye to surprise charges",
+      description:
+        "You'll only pay what's shown upfront, with no hidden fees and a clear, reliable payment experience.",
+    },
+  },
+
+  trustedAdvantage: {
+    sectionTitle: "Discover the",
+    sectionTitleAccent: "trusted",
+    sectionTitleEnd: "advantage",
+    sectionDescription:
+      "ELVO puts you in control with wallet checks that protect every balance: clear limits, transparent rules, zero guesswork.",
+    elvoCard: {
+      chip: "Elvo Card",
+      title: "Spend smart, stay in control",
+      description:
+        "Three card concepts built for how you spend, from everyday use to team accounts. Join the waitlist; cards launch when the wallet is ready.",
+      cta: "Join the waitlist",
+    },
+    sendMoney: {
+      chip: "Send Money",
+      title: "Send money, stay confident",
+      description:
+        "Secure wallet-to-wallet payments within ELVO, checked against your limits before they move.",
+    },
+    balance: {
+      chip: "Balance",
+      title: "See exactly where you stand",
+      description: "Stay in control of your balance, anywhere",
+    },
+    shieldCard: {
+      chip: "Elvo shield Card",
+      title: "Explore the ELVO Shield Card.",
+      description:
+        "A fresh virtual card number for every online purchase, plus freeze-instantly control. On the waitlist; built on the same wallet rules.",
+      cta: "Notify",
+    },
+    promise: {
+      title: "Our",
+      titleAccent: "promise",
+      titleEnd: "in every payment.",
+      description:
+        "Verified accounts, tracked payments, and structure you can see, from signup to settlement, with clarity at every step.",
+    },
+    promiseStats: [
+      { value: "8+", label: "Bill Categories" },
+      { value: "TZS", label: "Native from day one" },
+      { value: "100%", label: "Payments tracked to status" },
+    ],
+  },
+
+  securedVc: {
+    chip: "Security Layer",
+    headlineAccent: "Protection",
+    headline: "that moves with your money.",
+    description:
+      "From everyday transfers to larger payments, layered security puts you in control: verification codes, device management, and wallet freeze, with no confusion or guesswork.",
+    imageAlt: "ELVO security and wallet protection",
+  },
+
+  founderQuote: {
+    quote:
+      "We built ELVO because one digital identity should work everywhere, through an app, an agent, or a simple code, not five separate systems.",
+    name: "IsOnlyCoolie",
+    role: "Founder & Engineer",
+  },
+
+  faq: {
+    chip: "FAQs",
+    headline: "Got questions?",
+    headlineAccent: "We're here to help!",
+    description:
+      "Clear answers on your wallet, bills, security, and account limits. Can't find what you need? Our support team is ready to help.",
+    support: {
+      chip: "Support",
+      title: "Can't find what you're looking for?",
+      description: "Reach out anytime. We're here to help.",
+      cta: "Contact us",
+    },
+    items: [
+      {
+        question: "Is ELVO a bank, or something else?",
+        answer:
+          "ELVO is a digital wallet and payments platform built for everyday money in East Africa. Store value, send to people on ELVO, and pay bills from one place, with security and limits you can actually see. ELVO is not a bank; it is financial infrastructure designed to feel simple on the surface and serious underneath.",
+      },
+      {
+        question: "How does ELVO protect my money?",
+        answer:
+          "Trust is layered, not luck. Verify your identity at signup, add two-step protection when you want it, and get an extra security checkpoint on sensitive moves. Review every device logged in, freeze your wallet in one tap if something feels off, and know every important action leaves a trail, not a mystery.",
+      },
+      {
+        question: "Which bills can I pay from my wallet?",
+        answer:
+          "Electricity (including LUKU), water, TV, airtime, internet, government fees, hospital bills, and airline bookings. Eight categories, one wallet. Look up the bill first, confirm the amount, then pay. Status stays visible until the payment lands where it should.",
+      },
+      {
+        question: "What if I lose my phone?",
+        answer:
+          "You're still in control. Revoke active sessions, log out everywhere, or freeze your wallet in one tap, with no support queue required. Sensitive actions always ask for a verification or confirmation code, so your money stays protected even when your device isn't.",
+      },
+      {
+        question: "How do I send money to someone on ELVO?",
+        answer:
+          "Tap Send, pick your recipient, enter the amount. ELVO checks your limits and account rules before anything moves. Larger transfers ask for an extra security step. Both of you see the update in your transaction history, clear and traceable.",
+      },
+      {
+        question: "Can I deposit, withdraw, or use agents yet?",
+        answer:
+          "The wallet engine is built and getting sharper every release. Real mobile-money deposit, cash-out, and agent networks are on the way. Join the waitlist for closed beta access and launch updates as cash rails go live.",
+      },
+    ] satisfies FaqItem[],
+  },
+
+  footer: {
+    tagline:
+      "One wallet for everyday money. Send, pay bills, and stay in control, with security built in from day one.",
+    cta: "Contact us",
+    copyright: "ELVO Digital. All rights reserved.",
+  },
+});
