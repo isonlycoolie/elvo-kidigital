@@ -127,3 +127,23 @@ landingpage/
 ```
 
 Import aliases use `@/*` mapped to `./src/*` (e.g. `@/features`, `@/shared/feature-banner`).
+
+---
+
+## Editing copy
+
+All user-facing text lives in [`src/content/site-copy.ts`](./src/content/site-copy.ts). Update strings there rather than hardcoding copy in components.
+
+---
+
+## Related documentation
+
+- [Documentation index](../docs/README.md)
+- [API integration contract](../docs/INTEGRATION-CONTRACTS.md)
+- [Main ELVO Digital repository](https://github.com/isonlycoolie/elvo-kidigital)
+
+---
+
+## License
+
+Private project. All rights reserved unless otherwise stated by the repository owner.
