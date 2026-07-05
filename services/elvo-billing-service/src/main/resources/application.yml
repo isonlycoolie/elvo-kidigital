@@ -50,7 +50,7 @@ elvo:
           enabled: ${ELVO_BILLING_MOCK_ADAPTER_ENABLED:true}
     wallet:
       settlement-enabled: ${ELVO_BILLING_WALLET_SETTLEMENT_ENABLED:true}
-      base-url: ${ELVO_WALLET_BASE_URL:http://localhost:8083}
+      base-url: ${ELVO_WALLET_BASE_URL:http://localhost:8082}
       internal-auth-token: ${ELVO_BILLING_WALLET_INTERNAL_AUTH_TOKEN:}
       source-service: ${ELVO_BILLING_SOURCE_SERVICE:billing-service}
     sentry:
@@ -60,6 +60,12 @@ elvo:
         adapter-failure-threshold: ${ELVO_BILLING_SENTRY_ADAPTER_FAILURE_THRESHOLD:3}
         anomaly-latency-threshold-ms: ${ELVO_BILLING_SENTRY_ANOMALY_LATENCY_MS:2000}
   security:
+    internal-jwt:
+      secret: ${ELVO_INTERNAL_JWT_SECRET:}
+      issuer: ${ELVO_INTERNAL_JWT_ISSUER:elvo-wallet-service-internal-dev}
+      audience: ${ELVO_INTERNAL_JWT_AUDIENCE:elvo-wallet-service-internal-dev}
+      required-role: ${ELVO_INTERNAL_JWT_REQUIRED_ROLE:INTERNAL_SERVICE}
+      token-ttl-seconds: ${ELVO_INTERNAL_JWT_TOKEN_TTL_SECONDS:60}
     internal-service-secret: ${ELVO_INTERNAL_SERVICE_SECRET:sm://elvo-internal-service-secret}
   monitoring:
     sentry:

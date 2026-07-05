@@ -18,16 +18,20 @@ class SelcomAdapterTest {
     private final SelcomAdapter adapter = new SelcomAdapter(
             new GenericRequestMapper(),
             new GenericResponseMapper(),
+            new SelcomHttpClient(),
             "https://api.sandbox.selcom.example",
             "test-key",
-            "test-secret");
+            "test-secret",
+            false);
 
         private final SelcomAdapter adapterWithoutCredentials = new SelcomAdapter(
             new GenericRequestMapper(),
             new GenericResponseMapper(),
+            new SelcomHttpClient(),
             "https://api.sandbox.selcom.example",
             "",
-            "");
+            "",
+            false);
 
     @Test
     void shouldProduceDeterministicLookupResponse() {
