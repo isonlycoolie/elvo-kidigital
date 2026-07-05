@@ -73,3 +73,9 @@ elvo:
       dead-letter-exchange: ${ELVO_IDENTITY_ACCOUNT_INTENT_DLX:elvo.account.identity-registration.dlx}
       dead-letter-routing-key: ${ELVO_IDENTITY_ACCOUNT_INTENT_DLQ_ROUTING_KEY:elvo.account.identity-registration.dead}
       dead-letter-queue: ${ELVO_IDENTITY_ACCOUNT_INTENT_DLQ:elvo.account.identity-registration.dlq}
+  security:
+    internal-jwt:
+      secret: ${ELVO_INTERNAL_JWT_SECRET:}
+      issuer: ${ELVO_INTERNAL_JWT_ISSUER:elvo-wallet-service-internal-dev}
+      audience: ${ELVO_INTERNAL_JWT_AUDIENCE:elvo-wallet-service-internal-dev}
+      required-role: ${ELVO_INTERNAL_JWT_REQUIRED_ROLE:INTERNAL_SERVICE}
