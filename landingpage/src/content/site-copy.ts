@@ -117,3 +117,33 @@ export const siteCopy = normalizeCopyTree({
     ],
     ctaLabel: "Pay a bill",
   },
+
+  everydayWallet: {
+    sectionTitle: "Meet Your",
+    sectionTitleAccent: "Everyday",
+    sectionTitleEnd: "Wallet",
+    sectionDescription:
+      "From daily spending to what's coming next, your wallet is designed to grow with you, with sending, bills, and security tools built in.",
+    sendReceive: {
+      title: "Send and receive from contacts",
+      description:
+        "Send, receive, and track transfers with real-time status. Limits are checked before every move, and history is always within reach.",
+    },
+    bills: {
+      title: "Pay bills instantly, all in one wallet",
+      description:
+        "Look up, confirm, and pay LUKU, water, TV, and more in one tap from lookup to receipt.",
+    },
+    multiUse: {
+      chip: "Built for daylife",
+      title: "One wallet built for every part of life",
+      description:
+        "Your money today, with family accounts and team tools on the way, all on the same trusted foundation.",
+    },
+    noSurprise: {
+      chip: "No surprise charges",
+      title: "Say goodbye to surprise charges",
+      description:
+        "You'll only pay what's shown upfront, with no hidden fees and a clear, reliable payment experience.",
+    },
+  },
