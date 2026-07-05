@@ -1,18 +1,30 @@
-# Audit landingpage commits for insertion limit violations.
+# Audit landingpage commits for insertion limits and message quality.
+param(
+    [string]$Branch = "landingpage-v2",
+    [string]$Base = "2be42d3"
+)
+
 $ErrorActionPreference = "Stop"
 Set-Location (git rev-parse --show-toplevel)
 
-$base = git merge-base landingpage-replay 2be42d3 2>$null
-if (-not $base) { $base = "2be42d3" }
-$commits = git log --reverse --format=%H "$base..landingpage-replay" -- landingpage/
+$mergeBase = git merge-base $Branch $Base 2>$null
+if (-not $mergeBase) { $mergeBase = $Base }
+
+$commits = git log --reverse --format=%H "$mergeBase..$Branch" -- landingpage/
 if (-not $commits) {
-    $commits = git log --reverse --format=%H "$base..HEAD" -- landingpage/
+    $commits = git log --reverse --format=%H "$mergeBase..HEAD" -- landingpage/
 }
+
 $violations = @()
+$partMsgs = @()
 $lockfileMsg = "chore: add npm lockfile"
 
 foreach ($hash in $commits) {
     $msg = git log -1 --format=%s $hash
+    if ($msg -match '\bpart\s+\d+\b') {
+        $partMsgs += [PSCustomObject]@{ Hash = $hash.Substring(0,7); Message = $msg }
+    }
+
     $numstat = git show --numstat --format="" $hash -- landingpage/
     $ins = 0
     foreach ($line in $numstat) {
@@ -24,17 +36,26 @@ foreach ($hash in $commits) {
 }
 
 Write-Host "Total landingpage commits: $($commits.Count)"
-if ($violations.Count -eq 0) {
-    Write-Host "OK: all commits <= 100 insertions (lockfile excepted)"
-} else {
-    Write-Host "VIOLATIONS:"
+
+if ($partMsgs.Count -gt 0) {
+    Write-Host "FAIL: messages contain 'part N':"
+    $partMsgs | Format-Table -AutoSize
+    exit 1
+}
+
+if ($violations.Count -gt 0) {
+    Write-Host "FAIL: insertion limit violations:"
     $violations | Format-Table -AutoSize
     exit 1
 }
 
-$badMsgs = git log --format=%s "$base..landingpage-replay" -- landingpage/ 2>$null | Select-String -Pattern "add landingpage|landingpage "
+Write-Host "OK: all commits <= 100 insertions (lockfile excepted)"
+Write-Host "OK: no opaque part N messages"
+
+$badMsgs = git log --format=%s "$mergeBase..$Branch" -- landingpage/ 2>$null |
+    Select-String -Pattern "add landingpage|landingpage "
 if ($badMsgs) {
-    Write-Host "Old-style messages:"
+    Write-Host "FAIL: old-style landingpage prefix messages:"
     $badMsgs
     exit 1
 }

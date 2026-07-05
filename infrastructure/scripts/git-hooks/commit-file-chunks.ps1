@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$RelativePath,
     [Parameter(Mandatory = $true)]
-    [string]$MessagePrefix,
+    [string[]]$Messages,
     [int]$ChunkLines = 90,
     [int]$MaxInsertions = 100
 )
@@ -22,10 +22,15 @@ if (-not (Test-Path $TargetDir)) {
 
 $lines = Get-Content -Path $SourceFile -Encoding UTF8
 $total = $lines.Count
-$part = 0
+$chunkCount = [Math]::Ceiling($total / [double]$ChunkLines)
 
+if ($chunkCount -gt $Messages.Count) {
+    Write-Error "Need $($chunkCount) messages for $RelativePath but got $($Messages.Count)"
+    exit 1
+}
+
+$part = 0
 for ($start = 0; $start -lt $total; $start += $ChunkLines) {
-    $part++
     $end = [Math]::Min($start + $ChunkLines, $total) - 1
     if ($end -ge ($total - 1)) {
         Copy-Item -Path $SourceFile -Destination $TargetFile -Force
@@ -34,14 +39,13 @@ for ($start = 0; $start -lt $total; $start += $ChunkLines) {
         Set-Content -Path $TargetFile -Value $chunk -Encoding UTF8
     }
 
-    $msg = if ($part -eq 1 -and $total -le $ChunkLines) {
-        $MessagePrefix
-    } elseif ($total -le $ChunkLines) {
-        $MessagePrefix
-    } else {
-        "$MessagePrefix part $part"
+    $msg = $Messages[$part]
+    if ($msg -match '\bpart\s+\d+\b') {
+        Write-Error "Message must not contain 'part N': $msg"
+        exit 1
     }
 
     & "$RepoRoot/infrastructure/scripts/git-hooks/commit-batch.ps1" -Paths @("landingpage/$($RelativePath.Replace('\','/'))") -Message $msg -MaxInsertions $MaxInsertions
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $part++
 }
