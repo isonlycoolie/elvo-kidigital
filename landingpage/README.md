@@ -39,3 +39,46 @@ Platform docs live in the monorepo [`docs/`](../docs/) folder:
 | **FAQ** | Honest answers on wallet, bills, security, and roadmap |
 | **Open source** | Link to the platform repository for contributors |
 
+---
+
+## Tech stack
+
+- **[Next.js 16](https://nextjs.org/)** (App Router)
+- **[React 19](https://react.dev/)** + **TypeScript**
+- **[Tailwind CSS 4](https://tailwindcss.com/)**
+- **[Framer Motion](https://www.framer.com/motion/)** for scroll and entrance animations
+- **[Lucide React](https://lucide.dev/)** icons
+- Centralized copy in [`src/content/site-copy.ts`](./src/content/site-copy.ts)
+
+---
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 20+
+- npm, yarn, pnpm, or bun
+
+### Install and run
+
+```bash
+cd landingpage
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Production build
+
+```bash
+npm run build
+npm start
+```
+
+### Lint
+
+```bash
+npm run lint
+```
+
