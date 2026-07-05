@@ -93,3 +93,15 @@ export const siteCopy = normalizeCopyTree({
     ] satisfies CardType[],
     imageAlt: "ELVO card concepts: Standard, Team, and Shield",
   },
+
+  transfer: {
+    title: "Send money, easier than ever.",
+    description:
+      "Send to anyone on ELVO in seconds. Every transfer is checked against your limits and account rules first, so it either goes through cleanly or doesn't go at all.",
+    features: [
+      "Checked Before It Moves",
+      "Limit Checks Included",
+      "Full Transaction History",
+    ],
+    ctaLabel: "Send money",
+  },
