@@ -1,64 +1,33 @@
+
 # ELVO Account Management Service
 
 ## Purpose
 
-The ELVO Account Management Service is the system of record for account structures, lifecycle state, permissions, limits, relationships, and restrictions.
+System of record for account structures, lifecycle state, permissions, limits, relationships, and restrictions.
 
-This initial branch-only implementation introduces the service boundary, schema, and internal contract surface without changing the stable identity or wallet runtime behavior yet.
+## Scope
 
-## Initial Scope
+- Account creation and lookup (by ID, user, EAN)
+- Pre-flight validation for transfer, withdrawal, and receive
+- Limit and permission checks; maker-checker workflows
+- Account lifecycle: activate, freeze, suspend, close, reopen, archive
+- **Post-verification sync** from identity (`POST /api/v1/internal/accounts/sync-verification`)
+- Identity registration event consumer (RabbitMQ)
 
-- Account creation and lookup
-- EAN generation
-- Account lifecycle transitions
-- Permission and limit checks
-- Restriction records
-- Audit log persistence
-- Internal REST contract for wallet and identity integration
+## Integration
 
-## Tech Stack
+| Caller | Flow |
+|--------|------|
+| Identity (event) | Registration → create account (PENDING, UNVERIFIED) |
+| Identity (HTTP) | Post-verification → sync KYC + ACTIVE |
+| Wallet (HTTP) | validate-transfer, validate-withdrawal, check-limit |
 
-- Java 17
-- Spring Boot 3.3.4
-- Spring Security
-- Spring Data JPA
-- Spring AMQP
-- PostgreSQL
-- Sentry SDK
+Internal APIs require shared **internal JWT**. See [INTEGRATION-CONTRACTS.md](../../INTEGRATION-CONTRACTS.md).
 
-## Folder Structure
+## Internal API base path
 
-```text
-services/elvo-account-management-service/
-  src/
-    main/
-      java/com/elvo/accountmanagement/
-      resources/
-        db/migration/
-    test/
-```
+`/api/v1/internal/accounts`
 
-## Internal API Surface
+## Tech stack
 
-- `POST /api/v1/internal/accounts`
-- `GET /api/v1/internal/accounts/{accountId}`
-- `GET /api/v1/internal/accounts/user/{userId}`
-- `GET /api/v1/internal/accounts/ean/{ean}`
-- `POST /api/v1/internal/accounts/validate-transfer`
-- `POST /api/v1/internal/accounts/validate-withdrawal`
-- `POST /api/v1/internal/accounts/validate-receive`
-- `POST /api/v1/internal/accounts/check-limit`
-- `POST /api/v1/internal/accounts/check-permission`
-- `POST /api/v1/internal/accounts/freeze`
-- `POST /api/v1/internal/accounts/unfreeze`
-- `POST /api/v1/internal/accounts/suspend`
-- `POST /api/v1/internal/accounts/close`
-- `POST /api/v1/internal/accounts/reopen`
-- `POST /api/v1/internal/accounts/archive`
-- `POST /api/v1/internal/accounts/restrict`
-- `POST /api/v1/internal/accounts/remove-restriction`
-
-## Notes
-
-- Identity and wallet remain unchanged in this slice.
-- The next phase will wire the identity registration event and wallet validation calls to this service.
+Java 17, Spring Boot 3.3.4, PostgreSQL, RabbitMQ, Flyway.
