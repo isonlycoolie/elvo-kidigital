@@ -90,10 +90,17 @@ elvo:
       from: ${EMAIL_PROVIDER_FROM:no-reply@elvo.local}
     sms:
       retry-max-attempts: ${ELVO_SMS_RETRY_MAX_ATTEMPTS:3}
+    notification:
+      enabled: ${ELVO_NOTIFICATION_ENABLED:false}
+      base-url: ${ELVO_NOTIFICATION_BASE_URL:http://localhost:8085}
+      username: ${ELVO_NOTIFICATION_BASIC_USER:user}
+      password: ${ELVO_NOTIFICATION_BASIC_PASSWORD:}
   clients:
     provisioning:
-      wallet-base-url: ${ELVO_WALLET_PROVISIONING_BASE_URL:http://localhost:8082/internal}
-      profile-base-url: ${ELVO_PROFILE_PROVISIONING_BASE_URL:http://localhost:8083/internal}
+      wallet-base-url: ${ELVO_WALLET_PROVISIONING_BASE_URL:http://localhost:8082}
+      profile-base-url: ${ELVO_PROFILE_PROVISIONING_BASE_URL:http://localhost:8086}
+      account-lifecycle-base-url: ${ELVO_ACCOUNT_LIFECYCLE_BASE_URL:http://localhost:8084}
+      profile-provisioning-enabled: ${ELVO_PROFILE_PROVISIONING_ENABLED:false}
       source-service-name: ${ELVO_PROVISIONING_SOURCE_SERVICE:identity-service}
       internal-auth-token: ${ELVO_PROVISIONING_INTERNAL_AUTH_TOKEN:}
       connect-timeout-ms: ${ELVO_PROVISIONING_CONNECT_TIMEOUT_MS:2000}
@@ -115,6 +122,12 @@ elvo:
         enabled: ${ELVO_SENTRY_PROBE_ENABLED:false}
         token: ${ELVO_SENTRY_PROBE_TOKEN:}
   security:
+    internal-jwt:
+      secret: ${ELVO_INTERNAL_JWT_SECRET:}
+      issuer: ${ELVO_INTERNAL_JWT_ISSUER:elvo-wallet-service-internal-dev}
+      audience: ${ELVO_INTERNAL_JWT_AUDIENCE:elvo-wallet-service-internal-dev}
+      required-role: ${ELVO_INTERNAL_JWT_REQUIRED_ROLE:INTERNAL_SERVICE}
+      token-ttl-seconds: ${ELVO_INTERNAL_JWT_TOKEN_TTL_SECONDS:60}
     otp:
       hash-pepper: ${ELVO_OTP_HASH_PEPPER:change-this-otp-pepper}
       ttl-minutes: ${ELVO_OTP_TTL_MINUTES:5}
