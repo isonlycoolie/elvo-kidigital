@@ -88,3 +88,92 @@ export function Header() {
   }, [mobileOpen]);
 
   useEffect(() => {
+    if (!mobileOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMobile();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobileOpen, closeMobile]);
+
+  const handleNavClick = useCallback(
+    (href: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
+      if (!href.startsWith("#")) return;
+      event.preventDefault();
+      setVisible(true);
+      closeMobile();
+      requestAnimationFrame(() => scrollToSection(href));
+    },
+    [closeMobile]
+  );
+
+  const toggleMobile = () => {
+    setMobileOpen((open) => {
+      if (!open) setVisible(true);
+      return !open;
+    });
+  };
+
+  return (
+    <header
+      className={cn(
+        "pointer-events-none fixed inset-x-0 top-0 z-50 pt-3 transition-transform duration-300 ease-in-out md:pt-4",
+        !visible && "-translate-y-[calc(100%+0.75rem)]"
+      )}
+    >
+      <div className="container mx-auto max-w-7xl px-4 md:px-6 lg:px-8">
+        <div
+          className={cn(
+            "pointer-events-auto w-full border border-slate-200/80 bg-white transition-[border-radius,box-shadow] duration-300",
+            mobileOpen ? "overflow-visible rounded-[1.5rem]" : "overflow-hidden rounded-full",
+            scrolled
+              ? "shadow-[0_2px_8px_rgba(22,42,44,0.06)]"
+              : "shadow-[0_1px_2px_rgba(22,42,44,0.04)]"
+          )}
+        >
+          <div className="flex h-16 items-center justify-between px-4 md:h-[4.5rem] md:px-6 lg:px-8">
+            <Link
+              href="/"
+              className="text-[1.125rem] font-semibold tracking-tight text-[#162A2C] md:text-[1.2rem]"
+              onClick={closeMobile}
+            >
+              <span className="text-[#CC1E1E]">elvo</span>
+              digital
+            </Link>
+
+            <nav className="hidden items-center gap-7 lg:flex" aria-label="Main">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="interact-link text-[14px] font-medium text-slate-600"
+                  onClick={handleNavClick(link.href)}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+
+            <div className="hidden items-center gap-3 lg:flex">
+              <Button href={GITHUB_REPO} external>
+                Github Repository
+              </Button>
+            </div>
+
+            <button
+              type="button"
+              className="interact-static inline-flex h-10 w-10 items-center justify-center rounded-full text-[#162A2C] transition-colors hover:bg-slate-100 lg:hidden"
+              aria-expanded={mobileOpen}
+              aria-controls="mobile-nav"
+              aria-label={mobileOpen ? "Close menu" : "Open menu"}
+              onClick={toggleMobile}
+            >
+              {mobileOpen ? (
+                <X className="h-5 w-5" strokeWidth={2.25} />
+              ) : (
+                <Menu className="h-5 w-5" strokeWidth={2.25} />
+              )}
+            </button>
+          </div>
