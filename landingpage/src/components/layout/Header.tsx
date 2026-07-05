@@ -177,3 +177,46 @@ export function Header() {
               )}
             </button>
           </div>
+
+          <div
+            id="mobile-nav"
+            className={cn(
+              "grid transition-[grid-template-rows] duration-300 ease-out lg:hidden",
+              mobileOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+            )}
+            aria-hidden={!mobileOpen}
+          >
+            <div className="overflow-hidden">
+              <div className="border-t border-slate-100 bg-white">
+                <nav
+                  className="flex flex-col gap-1 px-4 py-4 md:px-6 lg:px-8"
+                  aria-label="Mobile"
+                >
+                  {navLinks.map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className="interact-link rounded-xl px-3 py-3 text-[15px] font-medium text-slate-700 hover:bg-slate-50"
+                      onClick={handleNavClick(link.href)}
+                      tabIndex={mobileOpen ? 0 : -1}
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                  <Button
+                    href={GITHUB_REPO}
+                    external
+                    className="mt-2 w-full"
+                    onClick={closeMobile}
+                  >
+                    Github Repository
+                  </Button>
+                </nav>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
