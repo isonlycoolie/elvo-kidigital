@@ -34,6 +34,7 @@ import com.elvo.accountmanagement.contract.AccountContracts.RelationshipUnlinkRe
 import com.elvo.accountmanagement.contract.AccountContracts.RelationshipUnlinkResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationResponse;
+import com.elvo.accountmanagement.contract.AccountContracts.VerificationSyncRequest;
 import com.elvo.accountmanagement.entity.Account;
 import com.elvo.accountmanagement.entity.AccountAdminActionRequest;
 import com.elvo.accountmanagement.entity.AccountAuditLog;
@@ -341,6 +342,27 @@ public class DefaultAccountManagementService implements AccountManagementService
     @Override
     public AccountResponse activateAccount(LifecycleRequest request) {
         return changeStatus(request, Account.AccountStatus.ACTIVE, "ACCOUNT_ACTIVATED");
+    }
+
+    @Override
+    public AccountResponse syncPostVerification(VerificationSyncRequest request) {
+        Account account = accountRepository.findByUserId(request.userId())
+                .orElseThrow(() -> new IllegalArgumentException("Account not found for user " + request.userId()));
+
+        Account.KycStatus kycStatus = request.kycStatus() == null ? Account.KycStatus.UNVERIFIED : request.kycStatus();
+        account.setKycStatus(kycStatus);
+
+        if (account.getAccountStatus() == Account.AccountStatus.PENDING) {
+            account.setAccountStatus(Account.AccountStatus.ACTIVE);
+        }
+
+        Account saved = accountRepository.save(account);
+        String description = request.reason() == null ? "Post-verification sync" : request.reason();
+        audit(saved.getAccountId(), "ACCOUNT_VERIFICATION_SYNC", description, request.requestId(), request.correlationId(),
+                request.sourceService(), request.sourceIp(), request.sourceUserAgent(), null);
+        eventPublisher.publishLifecycle(saved, "ACCOUNT_VERIFICATION_SYNC", description, request.requestId(),
+                request.correlationId(), request.sourceService(), request.sourceIp(), request.sourceUserAgent(), null);
+        return toResponse(saved);
     }
 
     @Override

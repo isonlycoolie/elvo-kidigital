@@ -53,6 +53,8 @@ public interface AccountManagementService {
 
     AccountResponse activateAccount(LifecycleRequest request);
 
+    AccountResponse syncPostVerification(com.elvo.accountmanagement.contract.AccountContracts.VerificationSyncRequest request);
+
     AccountResponse freezeAccount(LifecycleRequest request);
 
     AccountResponse unfreezeAccount(LifecycleRequest request);
