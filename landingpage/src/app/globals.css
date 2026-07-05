@@ -118,3 +118,92 @@ img, picture, video, canvas, svg {
   max-width: 100%;
   height: auto;
 }
+
+@utility interact-lift {
+  @apply transition-[transform,box-shadow] duration-200 ease-out;
+  @apply hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(22,42,44,0.06)];
+}
+
+/* Press interaction: scale + color only (no border-radius; shape is Tailwind on each control) */
+.interact-press {
+  transform: scale(1) translateZ(0);
+  transform-origin: center;
+  backface-visibility: hidden;
+  transition:
+    transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.interact-press:hover {
+  transform: scale(1.018) translateZ(0);
+  transition-duration: 0.44s;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.interact-press:active {
+  transform: scale(0.985) translateZ(0);
+  transition-duration: 0.22s;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Native buttons: press only; corner radius from Tailwind classes on the element */
+button:not(:disabled):not(.interact-static) {
+  transform: scale(1) translateZ(0);
+  transform-origin: center;
+  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+button:not(:disabled):not(.interact-static):hover {
+  transform: scale(1.018) translateZ(0);
+  transition-duration: 0.44s;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+button:not(:disabled):not(.interact-static):active {
+  transform: scale(0.985) translateZ(0);
+  transition-duration: 0.22s;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@utility interact-link {
+  @apply transition-colors duration-200 hover:text-[#162A2C];
+}
+
+/* Card visuals: scale only, no translate/filter drift */
+.card-asset-hover {
+  transform: scale(1) translateZ(0);
+  transform-origin: center center;
+  backface-visibility: hidden;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.group:hover .card-asset-hover {
+  transform: scale(1.03) translateZ(0);
+  transition-duration: 0.38s;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interact-lift:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .interact-press:hover,
+  .interact-press:active {
+    transform: none;
+  }
+
+  button:not(:disabled):not(.interact-static):hover,
+  button:not(:disabled):not(.interact-static):active {
+    transform: none;
+  }
+
+  .card-asset-hover,
+  .group:hover .card-asset-hover {
+    transform: none !important;
+    transition: none !important;
+  }
+}
