@@ -33,8 +33,7 @@ export function EverydayWallet() {
                   src="/images/everyday-wallet/send-receive.svg"
                   alt="Send to Coolie and receive from Jane"
                   fill
-                  unoptimized
-                  className={`svg-crisp ${s.visualImage}`}
+                  className={s.visualImage}
                   sizes="(max-width: 1024px) 90vw, 28rem"
                 />
               </div>
@@ -50,8 +49,7 @@ export function EverydayWallet() {
                   src="/images/everyday-wallet/bills.svg"
                   alt="Electricity and water bill payments"
                   fill
-                  unoptimized
-                  className={`svg-crisp ${s.visualImage}`}
+                  className={s.visualImage}
                   sizes="(max-width: 1024px) 90vw, 28rem"
                 />
               </div>
@@ -69,8 +67,7 @@ export function EverydayWallet() {
                 src="/images/everyday-wallet/phone-mockup.svg"
                 alt="ELVO app overview screen"
                 fill
-                unoptimized
-                className="svg-crisp object-contain"
+                className="object-contain"
                 sizes="(max-width: 1024px) 58vw, 22rem"
                 priority
               />
@@ -92,8 +89,7 @@ export function EverydayWallet() {
                   src="/images/everyday-wallet/multi-icons.svg"
                   alt="Wallet use cases for personal, family, education, and business"
                   fill
-                  unoptimized
-                  className={`svg-crisp ${s.visualImage}`}
+                  className={s.visualImage}
                   sizes="(max-width: 1024px) 90vw, 28rem"
                 />
               </div>

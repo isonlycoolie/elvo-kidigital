@@ -96,9 +96,8 @@ export function Hero() {
                 src="/images/hero/Home-mobile-mock.svg" 
                 alt="Elvo App Interface" 
                 fill
-                unoptimized
                 priority
-                className="svg-crisp object-contain object-top"
+                className="object-contain object-top"
                 sizes="(max-width: 768px) 100vw, 50vw"
               />
             </div>

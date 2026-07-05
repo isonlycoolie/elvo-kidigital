@@ -119,12 +119,6 @@ img, picture, video, canvas, svg {
   height: auto;
 }
 
-@utility svg-crisp {
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  image-rendering: -webkit-optimize-contrast;
-}
-
 @utility interact-lift {
   @apply transition-[transform,box-shadow] duration-200 ease-out;
   @apply hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(22,42,44,0.06)];

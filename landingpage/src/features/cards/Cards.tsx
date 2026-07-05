@@ -18,8 +18,7 @@ export function Cards() {
                 src="/images/cards/Stacking-cards.svg" 
                 alt={cards.imageAlt}
                 fill
-                unoptimized
-                className="svg-crisp card-asset-hover origin-center object-contain"
+                className="card-asset-hover origin-center object-contain"
                 sizes="(max-width: 1024px) 100vw, 50vw"
               />
             </div>

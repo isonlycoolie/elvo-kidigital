@@ -29,9 +29,8 @@ export function FeatureBannerPhone({
             src={src}
             alt={alt}
             fill
-            unoptimized
             priority={priority}
-            className="svg-crisp object-contain object-bottom"
+            className="object-contain object-bottom"
             sizes="(max-width: 1024px) 55vw, 27rem"
           />
           <div

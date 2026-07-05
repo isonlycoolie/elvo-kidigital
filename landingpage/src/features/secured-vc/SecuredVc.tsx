@@ -33,8 +33,7 @@ export function SecuredVc() {
                 src="/images/secured-vc/red-card.svg"
                 alt={securedVc.imageAlt}
                 fill
-                unoptimized
-                className="svg-crisp object-contain object-center lg:object-right"
+                className="object-contain object-center lg:object-right"
                 sizes="(max-width: 1024px) 90vw, 28rem"
               />
             </div>
