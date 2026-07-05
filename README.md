@@ -1,6 +1,6 @@
 # ELVO Digital
 
-ELVO Digital is the **backend monorepo** for the ELVO financial platform—a set of Spring Boot microservices that handle who users are, how their accounts are governed, how money moves in wallets, and how bill payments are collected and settled.
+ELVO Digital is the **backend monorepo** for the ELVO financial platform, a set of Spring Boot microservices that handle who users are, how their accounts are governed, how money moves in wallets, and how bill payments are collected and settled.
 
 The codebase is organized for **production-grade money flows**: strong authentication, explicit account rules before transfers, state-machine-driven payments with compensations, and full-stack observability (metrics, dashboards, error tracking) from day one of local development.
 
@@ -33,10 +33,10 @@ The identity service is the **authentication and trust layer** for the whole pla
 
 **Public API areas**
 
-- `/auth/**` — register, login, OTP, tokens, password flows
-- `/esp/**`, `/eac/**`, `/fast-login/**` — step-up and device trust
-- `/users/me/**` — authenticated profile and security settings
-- `/internal/**` — service-to-service identity checks
+- `/auth/**`: register, login, OTP, tokens, password flows
+- `/esp/**`, `/eac/**`, `/fast-login/**`: step-up and device trust
+- `/users/me/**`: authenticated profile and security settings
+- `/internal/**`: service-to-service identity checks
 
 **Integrates with:** account-management (account reads during provisioning), wallet (post-verification provisioning), Redis (rate limits/cache), RabbitMQ (audit and async intents).
 
@@ -67,9 +67,9 @@ The wallet service is the **ledger and money-movement engine**. It holds balance
 
 **Public API areas**
 
-- `/wallets/**` — customer wallet operations
-- `/api/v1/internal/wallets/**` — internal settlement and orchestration
-- `/api/v1/admin/**` — operations and fraud (protected)
+- `/wallets/**`: customer wallet operations
+- `/api/v1/internal/wallets/**`: internal settlement and orchestration
+- `/api/v1/admin/**`: operations and fraud (protected)
 
 **Integrates with:** identity (auth), account-management (transfer/withdrawal/receive validation, limits, permissions), billing (wallet debit/credit for bill pay), RabbitMQ (domain events), Prometheus/Sentry.
 
@@ -79,7 +79,7 @@ The wallet service is the **ledger and money-movement engine**. It holds balance
 
 ### elvo-billing-service
 
-The billing service handles **bill and utility payments**—lookup, initiation, status tracking, provider callbacks, and settlement against the user’s wallet through a formal payment state machine.
+The billing service handles **bill and utility payments**: lookup, initiation, status tracking, provider callbacks, and settlement against the user's wallet through a formal payment state machine.
 
 **Local runtime:** port `8083` · database `billing_db` (PostgreSQL) · Redis · RabbitMQ
 
@@ -88,7 +88,7 @@ The billing service handles **bill and utility payments**—lookup, initiation, 
 - Bill payment **lookup** and **initiation** (`POST /api/v1/bill-payments`, `/lookup`)
 - Payment status by ID or external reference
 - **Provider integration** (e.g. Selcom adapter) with callback handling at `/api/v1/internal/bill-payments/provider-callback`
-- **Billing transaction state machine**—retries, compensations, and wallet settlement steps
+- **Billing transaction state machine**: retries, compensations, and wallet settlement steps
 - Consumption of **wallet completion/failure events** from dedicated queues
 - Rate limiting on billing operations and internal event ingestion
 - Immutable audit storage for payment and lookup activity
@@ -96,9 +96,9 @@ The billing service handles **bill and utility payments**—lookup, initiation, 
 
 **Public API areas**
 
-- `/api/v1/bill-payments/**` — customer-facing payment API
-- `/api/v1/internal/bill-payments/**` — provider callbacks and internal hooks
-- `/internal/**` — health and diagnostics
+- `/api/v1/bill-payments/**`: customer-facing payment API
+- `/api/v1/internal/bill-payments/**`: provider callbacks and internal hooks
+- `/internal/**`: health and diagnostics
 
 **Integrates with:** wallet (fund movement), RabbitMQ (wallet event consumers), Redis, Sentry (optional per-environment).
 
@@ -108,7 +108,7 @@ The billing service handles **bill and utility payments**—lookup, initiation, 
 
 ### elvo-account-management-service
 
-Account management is the **system of record for account structure and policy**—not for moving money, but for deciding whether an account may receive, send, or withdraw under current limits, permissions, and restrictions.
+Account management is the **system of record for account structure and policy**, not for moving money, but for deciding whether an account may receive, send, or withdraw under current limits, permissions, and restrictions.
 
 **Local runtime:** port `8084` · database `account_db` (PostgreSQL) · Redis · RabbitMQ
 
@@ -138,13 +138,13 @@ Account management is the **system of record for account structure and policy**�
 
 These modules share the same **Spring Boot + layered package layout** as production services (controller, service, messaging, security, audit) but are **not started** by `start-local.ps1` today. They expose health placeholders and are ready for feature work.
 
-**elvo-notification-service** — Planned channel for SMS, email, and push delivery driven by domain events from identity, wallet, and billing. Will decouple “something happened” from “tell the user.”
+**elvo-notification-service**: Planned channel for SMS, email, and push delivery driven by domain events from identity, wallet, and billing. Will decouple "something happened" from "tell the user."
 
-**elvo-agent-service** — Planned surface for agent and branch-channel operations (cash-in/cash-out style flows, agent balances, and channel-specific limits).
+**elvo-agent-service**: Planned surface for agent and branch-channel operations (cash-in/cash-out style flows, agent balances, and channel-specific limits).
 
-**elvo-delegated-access-service** — Planned service for delegated access grants—who may act on whose wallet or account, with time bounds and approval rules.
+**elvo-delegated-access-service**: Planned service for delegated access grants, who may act on whose wallet or account, with time bounds and approval rules.
 
-**elvo-web-dashboard-service** — Planned BFF/API layer for an internal admin or operations dashboard (aggregated views, maker-checker UI backing APIs).
+**elvo-web-dashboard-service**: Planned BFF/API layer for an internal admin or operations dashboard (aggregated views, maker-checker UI backing APIs).
 
 ---
 
@@ -235,7 +235,7 @@ Runtime secrets are **never** committed. On first setup:
 2. For each running service, copy `services/<name>/.env.example` → `services/<name>/.env`.
 3. Fill in passwords, JWT keys, and provider credentials locally only.
 
-Git ignores `.env`, `.env.shared`, `services/*/.env`, `docs/`, and `.github/`.
+Git ignores `.env`, `.env.shared`, and `services/*/.env`.
 
 ### Start, stop, and reset
 
@@ -285,17 +285,18 @@ Wallet publishes rich custom metrics (`wallet_transactions_total`, reservation a
 
 ## Design principles
 
-- **Bounded contexts** — Each service owns its PostgreSQL schema; no shared tables across domains.
-- **Internal vs public APIs** — Customer flows use authenticated public routes; policy and settlement use explicit internal paths.
-- **Fail closed** — Unknown auth state, failed limit checks, or missing permissions block the operation.
-- **Auditability** — Security and money events produce structured audit records and often RabbitMQ events.
-- **Correlation** — Request and correlation IDs propagate across HTTP and messaging for traceable incidents.
-- **Resilience** — Wallet and billing flows use state machines, idempotency keys, retries, and compensations instead of fire-and-forget updates.
+- **Bounded contexts**: Each service owns its PostgreSQL schema; no shared tables across domains.
+- **Internal vs public APIs**: Customer flows use authenticated public routes; policy and settlement use explicit internal paths.
+- **Fail closed**: Unknown auth state, failed limit checks, or missing permissions block the operation.
+- **Auditability**: Security and money events produce structured audit records and often RabbitMQ events.
+- **Correlation**: Request and correlation IDs propagate across HTTP and messaging for traceable incidents.
+- **Resilience**: Wallet and billing flows use state machines, idempotency keys, retries, and compensations instead of fire-and-forget updates.
 
 ---
 
 ## Further reading
 
+- [Documentation index](docs/README.md) (landing preview and API contract)
 - Identity: [services/elvo-identity-service/README.md](services/elvo-identity-service/README.md)
 - Wallet: [services/elvo-wallet-service/README.md](services/elvo-wallet-service/README.md)
 - Account management: [services/elvo-account-management-service/README.md](services/elvo-account-management-service/README.md)
@@ -305,4 +306,4 @@ Wallet publishes rich custom metrics (`wallet_transactions_total`, reservation a
 
 ## License
 
-Proprietary — ELVO platform. All rights reserved unless otherwise stated by the repository owner.
+Proprietary. ELVO platform. All rights reserved unless otherwise stated by the repository owner.

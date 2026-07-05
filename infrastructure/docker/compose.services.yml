@@ -13,6 +13,15 @@ services:
       ELVO_DB_NAME: identity_db
       ELVO_DB_USER: identity_user
       ELVO_ACCOUNT_READ_BASE_URL: http://elvo-account-management-service:8084
+      ELVO_WALLET_PROVISIONING_BASE_URL: http://elvo-wallet-service:8082
+      ELVO_ACCOUNT_LIFECYCLE_BASE_URL: http://elvo-account-management-service:8084
+      ELVO_INTERNAL_JWT_SECRET: ${ELVO_INTERNAL_JWT_SECRET:-wallet-internal-jwt-secret-local-at-least-32-chars}
+      ELVO_INTERNAL_JWT_ISSUER: ${ELVO_INTERNAL_JWT_ISSUER:-elvo-wallet-service-internal-dev}
+      ELVO_INTERNAL_JWT_AUDIENCE: ${ELVO_INTERNAL_JWT_AUDIENCE:-elvo-wallet-service-internal-dev}
+      ELVO_PROFILE_PROVISIONING_ENABLED: "false"
+      ELVO_DB_SSL_ENABLED: "false"
+      ELVO_REDIS_SSL_ENABLED: "false"
+      ELVO_RABBITMQ_SSL_ENABLED: "false"
       SENTRY_DSN: ${ELVO_RUNTIME_SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: ${ELVO_RUNTIME_SENTRY_ENVIRONMENT:-local}
       SENTRY_RELEASE: ${ELVO_RUNTIME_SENTRY_RELEASE_IDENTITY:-elvo-identity-service@local}
@@ -65,7 +74,13 @@ services:
       ELVO_DB_PORT: 5432
       ELVO_DB_NAME: wallet_db
       ELVO_DB_USER: wallet_user
-      ELVO_ACCOUNT_MANAGEMENT_INTERNAL_BASE_URL: https://elvo-account-management-service:8084/api/v1/internal/accounts
+      ELVO_ACCOUNT_MANAGEMENT_INTERNAL_BASE_URL: http://elvo-account-management-service:8084/api/v1/internal/accounts
+      ELVO_INTERNAL_JWT_SECRET: ${ELVO_INTERNAL_JWT_SECRET:-wallet-internal-jwt-secret-local-at-least-32-chars}
+      ELVO_IDENTITY_TLS_ENFORCE_HTTPS: "false"
+      ELVO_IDENTITY_TLS_ENFORCE_MTLS: "false"
+      ELVO_DB_SSL_ENABLED: "false"
+      ELVO_REDIS_SSL_ENABLED: "false"
+      ELVO_RABBITMQ_SSL_ENABLED: "false"
       SENTRY_DSN: ${ELVO_RUNTIME_SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: ${ELVO_RUNTIME_SENTRY_ENVIRONMENT:-local}
       SENTRY_RELEASE: ${ELVO_RUNTIME_SENTRY_RELEASE_WALLET:-elvo-wallet-service@local}
@@ -135,9 +150,13 @@ services:
       SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_INITIAL_INTERVAL: "2000"
       SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MAX_ATTEMPTS: "30"
       SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MULTIPLIER: "1.5"
-      ELVO_REDIS_HOST: redis
-      ELVO_REDIS_PORT: 6379
-      SERVER_PORT: 8083
+      ELVO_WALLET_BASE_URL: http://elvo-wallet-service:8082
+      ELVO_INTERNAL_JWT_SECRET: ${ELVO_INTERNAL_JWT_SECRET:-wallet-internal-jwt-secret-local-at-least-32-chars}
+      ELVO_INTERNAL_JWT_ISSUER: ${ELVO_INTERNAL_JWT_ISSUER:-elvo-wallet-service-internal-dev}
+      ELVO_INTERNAL_JWT_AUDIENCE: ${ELVO_INTERNAL_JWT_AUDIENCE:-elvo-wallet-service-internal-dev}
+      ELVO_DB_SSL_ENABLED: "false"
+      ELVO_REDIS_SSL_ENABLED: "false"
+      ELVO_RABBITMQ_SSL_ENABLED: "false"
     ports:
       - "8083:8083"
     restart: always
@@ -189,6 +208,12 @@ services:
       SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_DEFAULT_VHOST:-/}
       ELVO_REDIS_HOST: redis
       ELVO_REDIS_PORT: 6379
+      ELVO_INTERNAL_JWT_SECRET: ${ELVO_INTERNAL_JWT_SECRET:-wallet-internal-jwt-secret-local-at-least-32-chars}
+      ELVO_INTERNAL_JWT_ISSUER: ${ELVO_INTERNAL_JWT_ISSUER:-elvo-wallet-service-internal-dev}
+      ELVO_INTERNAL_JWT_AUDIENCE: ${ELVO_INTERNAL_JWT_AUDIENCE:-elvo-wallet-service-internal-dev}
+      ELVO_DB_SSL_ENABLED: "false"
+      ELVO_REDIS_SSL_ENABLED: "false"
+      ELVO_RABBITMQ_SSL_ENABLED: "false"
     ports:
       - "8084:8084"
     restart: always
@@ -200,6 +225,47 @@ services:
       start_period: 30s
     depends_on:
       account-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - frontend-network
+      - backend-network
+
+  elvo-notification-service:
+    build:
+      context: ../../services/elvo-notification-service
+      dockerfile: Dockerfile
+    container_name: elvo-notification-service
+    env_file:
+      - ../../.env.shared
+      - ../../services/elvo-notification-service/.env
+    environment:
+      ELVO_DB_HOST: notification-db
+      ELVO_DB_PORT: 5432
+      ELVO_DB_NAME: notification_db
+      ELVO_DB_USER: notification_user
+      ELVO_DB_SSL_ENABLED: "false"
+      ELVO_REDIS_SSL_ENABLED: "false"
+      ELVO_RABBITMQ_SSL_ENABLED: "false"
+      ELVO_RABBITMQ_HOST: rabbitmq
+      ELVO_RABBITMQ_PORT: 5672
+      ELVO_REDIS_HOST: redis
+      ELVO_REDIS_PORT: 6379
+      SERVER_PORT: 8085
+    ports:
+      - "8085:8085"
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8085/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    depends_on:
+      notification-db:
         condition: service_healthy
       redis:
         condition: service_healthy

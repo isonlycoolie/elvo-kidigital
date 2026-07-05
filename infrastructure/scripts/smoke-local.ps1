@@ -1,5 +1,6 @@
 param(
-    [switch]$SkipIdentitySmtpShim
+    [switch]$SkipIdentitySmtpShim,
+    [switch]$FullE2e
 )
 
 Set-StrictMode -Version Latest
@@ -88,6 +89,50 @@ function Remove-ContainerIfExists {
     }
 }
 
+function New-InternalServiceJwt {
+    param(
+        [Parameter(Mandatory = $true)][string]$Secret,
+        [Parameter(Mandatory = $true)][string]$SourceService,
+        [Parameter(Mandatory = $true)][string]$Issuer,
+        [Parameter(Mandatory = $true)][string]$Audience
+    )
+
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    return New-Hs256Jwt -Secret $Secret -Payload @{
+        iss = $Issuer
+        aud = $Audience
+        iat = $now
+        exp = ($now + 300)
+        sourceService = $SourceService
+        serviceIdentity = $SourceService
+        roles = @('INTERNAL_SERVICE')
+    }
+}
+
+function Get-GreenMailOtp {
+    param(
+        [Parameter(Mandatory = $true)][string]$ContainerName,
+        [Parameter(Mandatory = $true)][string]$RecipientEmail
+    )
+
+    $raw = docker exec $ContainerName wget -qO- "http://localhost:8080/api/user/local-email-user/email" 2>$null
+    if (-not $raw) {
+        throw 'Unable to fetch messages from GreenMail.'
+    }
+
+    $messages = $raw | ConvertFrom-Json
+    foreach ($message in $messages) {
+        if ($message.to -match [Regex]::Escape($RecipientEmail)) {
+            $body = $message.body
+            if ($body -match '(\d{6})') {
+                return $Matches[1]
+            }
+        }
+    }
+
+    throw "No OTP found in GreenMail for $RecipientEmail"
+}
+
 function Invoke-IdentityRegisterWithRetry {
     param(
         [Parameter(Mandatory = $true)][string]$Body,
@@ -128,6 +173,25 @@ function Wait-GreenMailReady {
     }
 
     throw "Timed out waiting for GreenMail readiness ($ContainerName)."
+}
+
+function Get-BillingAuthHeaders {
+    $billingPassword = $env:ELVO_BILLING_BASIC_PASSWORD
+    if (-not $billingPassword) {
+        $billingLogs = docker logs elvo-billing-service 2>&1
+        $match = ($billingLogs | Select-String -Pattern 'Using generated security password:\s*([A-Za-z0-9\-]+)' | Select-Object -Last 1)
+        if ($match) {
+            $billingPassword = $match.Matches[0].Groups[1].Value
+        }
+    }
+
+    if (-not $billingPassword) {
+        throw 'Billing smoke failed: unable to resolve basic auth password. Set ELVO_BILLING_BASIC_PASSWORD and retry.'
+    }
+
+    $billingPair = "user:$billingPassword"
+    $billingAuth = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($billingPair))
+    return @{ Authorization = $billingAuth }
 }
 
 Write-Host "[smoke-local] Root path: $rootPath"
@@ -213,24 +277,100 @@ try {
         }
 
         $identitySummary = "identity register/email: PASS ($email)"
+
+        if ($FullE2e) {
+            Write-Host "[smoke-local] Running full E2E verify + wallet + account sync..."
+            $verificationToken = $identityResponse.data.verificationToken
+            Start-Sleep -Seconds 2
+            $otp = Get-GreenMailOtp -ContainerName $greenmailName -RecipientEmail $email
+
+            $verifyBody = @{
+                identifier = $email
+                verificationToken = $verificationToken
+                otpCode = $otp
+                sourceIp = '10.24.0.10'
+                sourceUserAgent = 'task24-smoke'
+            } | ConvertTo-Json
+
+            $verifyResponse = Invoke-RestMethod -Method Post -Uri 'http://localhost:8081/auth/verify-email-otp' -ContentType 'application/json' -Body $verifyBody
+            if (-not $verifyResponse.data.verified) {
+                throw "E2E verify failed: $($verifyResponse | ConvertTo-Json -Compress)"
+            }
+
+            $e2eWalletSecret = Get-ContainerEnvValue -ContainerName 'elvo-wallet-service' -Key 'ELVO_INTERNAL_JWT_SECRET'
+            if (-not $e2eWalletSecret) {
+                $e2eWalletSecret = 'wallet-internal-jwt-secret-local-at-least-32-chars'
+            }
+
+            $jwtIssuer = Get-ContainerEnvValue -ContainerName 'elvo-wallet-service' -Key 'ELVO_INTERNAL_JWT_ISSUER'
+            if (-not $jwtIssuer) { $jwtIssuer = 'elvo-wallet-service-internal-dev' }
+            $jwtAudience = Get-ContainerEnvValue -ContainerName 'elvo-wallet-service' -Key 'ELVO_INTERNAL_JWT_AUDIENCE'
+            if (-not $jwtAudience) { $jwtAudience = $jwtIssuer }
+
+            $serviceJwt = New-InternalServiceJwt -Secret $e2eWalletSecret -SourceService 'identity-service' -Issuer $jwtIssuer -Audience $jwtAudience
+            $serviceHeaders = @{
+                Authorization = "Bearer $serviceJwt"
+                'X-Source-Service' = 'identity-service'
+            }
+
+            $registeredUserId = docker exec -e PGPASSWORD=(Get-ContainerEnvValue -ContainerName 'identity-db' -Key 'POSTGRES_PASSWORD') identity-db psql -U (Get-ContainerEnvValue -ContainerName 'identity-db' -Key 'POSTGRES_USER') -d identity_db -t -A -c "select id::text from users where email = '$email' limit 1;"
+            $registeredUserId = $registeredUserId.Trim()
+            if ([string]::IsNullOrWhiteSpace($registeredUserId)) {
+                throw 'E2E failed: registered user not found in identity_db.'
+            }
+
+            $walletCheck = Invoke-RestMethod -Method Get -Uri "http://localhost:8082/api/v1/internal/wallets/$registeredUserId/balance" -Headers $serviceHeaders
+            if ($null -eq $walletCheck.balance) {
+                throw 'E2E failed: wallet not provisioned after verification.'
+            }
+
+            $creditBody = @{
+                amount = 1000.00
+                idempotencyKey = "smoke-credit-$ts"
+                reason = 'smoke-local-e2e'
+            } | ConvertTo-Json
+            $creditResponse = Invoke-RestMethod -Method Post -Uri "http://localhost:8082/api/v1/internal/wallets/$registeredUserId/credit" -Headers $serviceHeaders -ContentType 'application/json' -Body $creditBody
+            if (-not $creditResponse.success) {
+                throw "E2E wallet credit failed: $($creditResponse | ConvertTo-Json -Compress)"
+            }
+
+            $e2eBillingHeaders = Get-BillingAuthHeaders
+            $lookupBody = @{
+                referenceNumber = "SMOKE-LUKU-$ts"
+                lookupRequired = $true
+                metadata = '{"meterType":"PREPAID","providerCode":"LUKU"}'
+            } | ConvertTo-Json
+            $lookupResponse = Invoke-RestMethod -Method Post -Uri 'http://localhost:8083/api/v1/bill-payments/lookup' -Headers $e2eBillingHeaders -ContentType 'application/json' -Body $lookupBody
+            if (-not $lookupResponse.referenceNumber) {
+                throw "E2E bill pay lookup failed: $($lookupResponse | ConvertTo-Json -Compress)"
+            }
+
+            $accountJwt = New-InternalServiceJwt -Secret $e2eWalletSecret -SourceService 'identity-service' -Issuer $jwtIssuer -Audience $jwtAudience
+            $accountHeaders = @{
+                Authorization = "Bearer $accountJwt"
+                'X-Source-Service' = 'identity-service'
+            }
+            $accountResponse = Invoke-RestMethod -Method Get -Uri "http://localhost:8084/api/v1/internal/accounts/user/$registeredUserId" -Headers $accountHeaders
+            if ($accountResponse.data.accountStatus -ne 'ACTIVE') {
+                throw "E2E account sync failed: expected ACTIVE, got $($accountResponse | ConvertTo-Json -Compress)"
+            }
+
+            $identitySummary = "$identitySummary; full E2E verify/wallet/credit/bill-lookup/account-active: PASS"
+        }
     }
 
     Write-Host "[smoke-local] Running wallet balance smoke..."
     $walletSecret = Get-ContainerEnvValue -ContainerName 'elvo-wallet-service' -Key 'ELVO_INTERNAL_JWT_SECRET'
     if (-not $walletSecret) {
-        $walletSecret = 'wallet-internal-jwt-secret-local'
+        $walletSecret = 'wallet-internal-jwt-secret-local-at-least-32-chars'
     }
 
-    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-    $walletJwt = New-Hs256Jwt -Secret $walletSecret -Payload @{
-        iss = 'elvo-wallet-service-internal-local'
-        aud = 'elvo-wallet-service-internal-local'
-        iat = $now
-        exp = ($now + 300)
-        sourceService = 'identity-service'
-        serviceIdentity = 'identity-service'
-        roles = @('INTERNAL_SERVICE')
-    }
+    $jwtIssuer = Get-ContainerEnvValue -ContainerName 'elvo-wallet-service' -Key 'ELVO_INTERNAL_JWT_ISSUER'
+    if (-not $jwtIssuer) { $jwtIssuer = 'elvo-wallet-service-internal-dev' }
+    $jwtAudience = Get-ContainerEnvValue -ContainerName 'elvo-wallet-service' -Key 'ELVO_INTERNAL_JWT_AUDIENCE'
+    if (-not $jwtAudience) { $jwtAudience = $jwtIssuer }
+
+    $walletJwt = New-InternalServiceJwt -Secret $walletSecret -SourceService 'identity-service' -Issuer $jwtIssuer -Audience $jwtAudience
 
     $walletHeaders = @{
         Authorization = "Bearer $walletJwt"
@@ -269,24 +409,9 @@ try {
     }
 
     Write-Host "[smoke-local] Running billing lookup smoke..."
-    $billingPassword = $env:ELVO_BILLING_BASIC_PASSWORD
-    if (-not $billingPassword) {
-        $billingLogs = docker logs elvo-billing-service 2>&1
-        $match = ($billingLogs | Select-String -Pattern 'Using generated security password:\s*([A-Za-z0-9\-]+)' | Select-Object -Last 1)
-        if ($match) {
-            $billingPassword = $match.Matches[0].Groups[1].Value
-        }
-    }
-
-    if (-not $billingPassword) {
-        throw 'Billing smoke failed: unable to resolve basic auth password. Set ELVO_BILLING_BASIC_PASSWORD and retry.'
-    }
+    $billingHeaders = Get-BillingAuthHeaders
 
     $paymentId = [guid]::NewGuid().ToString()
-    $billingPair = "user:$billingPassword"
-    $billingAuth = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($billingPair))
-    $billingHeaders = @{ Authorization = $billingAuth }
-
     $billingStatus = 0
     $billingBody = ''
 
