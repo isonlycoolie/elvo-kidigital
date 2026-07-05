@@ -105,3 +105,15 @@ export const siteCopy = normalizeCopyTree({
     ],
     ctaLabel: "Send money",
   },
+
+  bills: {
+    title: "Check the bill before you pay it.",
+    description:
+      "Look up your LUKU, water, or DSTV account first, confirm the exact amount and details, then pay directly from your wallet.",
+    features: [
+      "8+ Bill Categories",
+      "Lookup Before You Pay",
+      "Status Tracked to Completion",
+    ],
+    ctaLabel: "Pay a bill",
+  },
