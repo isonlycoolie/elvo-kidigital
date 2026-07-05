@@ -44,6 +44,17 @@ public final class AccountContracts {
             String sourceUserAgent) {
     }
 
+    public record VerificationSyncRequest(
+            UUID userId,
+            Account.KycStatus kycStatus,
+            String reason,
+            String requestId,
+            String correlationId,
+            String sourceService,
+            String sourceIp,
+            String sourceUserAgent) {
+    }
+
     public record ValidationRequest(
             UUID sourceAccountId,
             UUID destinationAccountId,

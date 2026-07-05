@@ -34,6 +34,7 @@ import com.elvo.accountmanagement.contract.AccountContracts.RelationshipUnlinkRe
 import com.elvo.accountmanagement.contract.AccountContracts.RelationshipUnlinkResponse;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationRequest;
 import com.elvo.accountmanagement.contract.AccountContracts.ValidationResponse;
+import com.elvo.accountmanagement.contract.AccountContracts.VerificationSyncRequest;
 import com.elvo.accountmanagement.service.AccountManagementService;
 
 @RestController
@@ -115,6 +116,11 @@ public class InternalAccountController {
     @PostMapping("/activate")
     public ResponseEntity<ApiResponse<AccountResponse>> activate(@RequestBody LifecycleRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Account activated", accountManagementService.activateAccount(request)));
+    }
+
+    @PostMapping("/sync-verification")
+    public ResponseEntity<ApiResponse<AccountResponse>> syncVerification(@RequestBody VerificationSyncRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Account verification synced", accountManagementService.syncPostVerification(request)));
     }
 
     @PostMapping("/freeze")
