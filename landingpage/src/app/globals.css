@@ -55,3 +55,66 @@
     --header-offset: 6.5rem;
   }
 }
+
+.dark {
+  --background: #09090b;
+  --foreground: #fafafa;
+  
+  --primary: #fafafa;
+  --primary-foreground: #18181b;
+  
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  
+  --border: #27272a;
+}
+
+/* CSS Reset & Defaults */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 90%; /* Scales 1rem to 14.4px for a 90% zoom effect */
+  scroll-behavior: smooth;
+  scroll-padding-top: var(--header-offset);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-synthesis: none;
+  line-height: 1.5;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: clip;
+}
+
+/* Consistent Selection Colors */
+::selection {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* Base Typography */
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.2;
+}
+
+/* Responsive Defaults */
+img, picture, video, canvas, svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
