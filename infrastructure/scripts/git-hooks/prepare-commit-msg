@@ -1,0 +1,15 @@
+#!/bin/sh
+# Strip Cursor trailers if the IDE injects them automatically.
+
+MSG_FILE="$1"
+
+if [ ! -f "$MSG_FILE" ]; then
+  exit 0
+fi
+
+sed -i.bak '/^Co-authored-by:.*Cursor/d; /^Made-with:.*Cursor/d; /cursor\.com/d' "$MSG_FILE" 2>/dev/null || \
+  sed -i '' '/^Co-authored-by:.*Cursor/d; /^Made-with:.*Cursor/d; /cursor\.com/d' "$MSG_FILE" 2>/dev/null
+
+rm -f "${MSG_FILE}.bak" 2>/dev/null
+
+exit 0

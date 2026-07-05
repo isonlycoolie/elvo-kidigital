@@ -12,8 +12,10 @@
 !.env.shared.example
 !**/.env.example
 
-# Documentation artifacts
-docs/
-
 # Maven build output
 **/target/
+
+# Node.js
+**/node_modules/
+**/.next/
+**/out/
