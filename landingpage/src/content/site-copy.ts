@@ -254,3 +254,11 @@ export const siteCopy = normalizeCopyTree({
       },
     ] satisfies FaqItem[],
   },
+
+  footer: {
+    tagline:
+      "One wallet for everyday money. Send, pay bills, and stay in control, with security built in from day one.",
+    cta: "Contact us",
+    copyright: "ELVO Digital. All rights reserved.",
+  },
+});
