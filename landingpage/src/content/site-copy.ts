@@ -208,3 +208,49 @@ export const siteCopy = normalizeCopyTree({
     name: "IsOnlyCoolie",
     role: "Founder & Engineer",
   },
+
+  faq: {
+    chip: "FAQs",
+    headline: "Got questions?",
+    headlineAccent: "We're here to help!",
+    description:
+      "Clear answers on your wallet, bills, security, and account limits. Can't find what you need? Our support team is ready to help.",
+    support: {
+      chip: "Support",
+      title: "Can't find what you're looking for?",
+      description: "Reach out anytime. We're here to help.",
+      cta: "Contact us",
+    },
+    items: [
+      {
+        question: "Is ELVO a bank, or something else?",
+        answer:
+          "ELVO is a digital wallet and payments platform built for everyday money in East Africa. Store value, send to people on ELVO, and pay bills from one place, with security and limits you can actually see. ELVO is not a bank; it is financial infrastructure designed to feel simple on the surface and serious underneath.",
+      },
+      {
+        question: "How does ELVO protect my money?",
+        answer:
+          "Trust is layered, not luck. Verify your identity at signup, add two-step protection when you want it, and get an extra security checkpoint on sensitive moves. Review every device logged in, freeze your wallet in one tap if something feels off, and know every important action leaves a trail, not a mystery.",
+      },
+      {
+        question: "Which bills can I pay from my wallet?",
+        answer:
+          "Electricity (including LUKU), water, TV, airtime, internet, government fees, hospital bills, and airline bookings. Eight categories, one wallet. Look up the bill first, confirm the amount, then pay. Status stays visible until the payment lands where it should.",
+      },
+      {
+        question: "What if I lose my phone?",
+        answer:
+          "You're still in control. Revoke active sessions, log out everywhere, or freeze your wallet in one tap, with no support queue required. Sensitive actions always ask for a verification or confirmation code, so your money stays protected even when your device isn't.",
+      },
+      {
+        question: "How do I send money to someone on ELVO?",
+        answer:
+          "Tap Send, pick your recipient, enter the amount. ELVO checks your limits and account rules before anything moves. Larger transfers ask for an extra security step. Both of you see the update in your transaction history, clear and traceable.",
+      },
+      {
+        question: "Can I deposit, withdraw, or use agents yet?",
+        answer:
+          "The wallet engine is built and getting sharper every release. Real mobile-money deposit, cash-out, and agent networks are on the way. Join the waitlist for closed beta access and launch updates as cash rails go live.",
+      },
+    ] satisfies FaqItem[],
+  },
