@@ -5,6 +5,7 @@ import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import com.elvo.identity.service.EmailSenderService;
 
 @Service
+@ConditionalOnProperty(name = "elvo.communication.notification.enabled", havingValue = "false", matchIfMissing = true)
 public class SmtpEmailSenderService implements EmailSenderService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SmtpEmailSenderService.class);

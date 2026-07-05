@@ -48,22 +48,28 @@ class DefaultWalletProvisioningClientUnitTest {
         ProvisioningClientProperties properties = new ProvisioningClientProperties();
         properties.setWalletBaseUrl("http://localhost:" + server.getAddress().getPort());
         properties.setSourceServiceName("identity-service");
-        properties.setInternalAuthToken("internal-token-value");
         properties.setMaxAttempts(1);
         properties.setRetryBackoffMs(1);
         properties.setRetryBackoffMultiplier(1.0);
         properties.setRetryMaxBackoffMs(1);
 
+        InternalServiceJwtProperties jwtProperties = new InternalServiceJwtProperties();
+        jwtProperties.setSecret("test-internal-jwt-secret-at-least-32-bytes-long");
+        jwtProperties.setIssuer("elvo-wallet-service-internal-test");
+        jwtProperties.setAudience("elvo-wallet-service-internal-test");
+        InternalServiceJwtTokenGenerator tokenGenerator = new InternalServiceJwtTokenGenerator(jwtProperties);
+
         DefaultWalletProvisioningClient client = new DefaultWalletProvisioningClient(
                 properties,
-                new ProvisioningRetryExecutor(properties));
+                new ProvisioningRetryExecutor(properties),
+                tokenGenerator);
 
         UUID userId = UUID.randomUUID();
         client.createWallet(userId, "idem-wallet-create-001");
 
         assertEquals("POST", method.get());
         assertEquals("/api/v1/internal/wallets/" + userId, path.get());
-        assertEquals("Bearer internal-token-value", authHeader.get());
+        assertTrue(authHeader.get().startsWith("Bearer "));
         assertEquals("identity-service", sourceHeader.get());
         assertTrue(body.get().contains("{}") || body.get().isBlank());
     }

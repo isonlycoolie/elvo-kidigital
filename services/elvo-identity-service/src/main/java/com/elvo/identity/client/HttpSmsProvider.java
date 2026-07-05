@@ -5,11 +5,13 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 @Component
+@ConditionalOnProperty(name = "elvo.communication.notification.enabled", havingValue = "false", matchIfMissing = true)
 public class HttpSmsProvider implements SmsProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpSmsProvider.class);
