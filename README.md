@@ -4,6 +4,12 @@ ELVO Digital is the **backend monorepo** for the ELVO financial platform, a set 
 
 The codebase is organized for **production-grade money flows**: strong authentication, explicit account rules before transfers, state-machine-driven payments with compensations, and full-stack observability (metrics, dashboards, error tracking) from day one of local development.
 
+<p align="center">
+  <img src="docs/landing-hero.png" alt="ELVO Digital landing page hero: send, pay, and stay in control" width="100%" />
+</p>
+
+Marketing site source: [`landingpage/`](landingpage/).
+
 ---
 
 ## Services
@@ -296,7 +302,7 @@ Wallet publishes rich custom metrics (`wallet_transactions_total`, reservation a
 
 ## Further reading
 
-- [Documentation index](docs/README.md) (landing preview and API contract)
+- [Integration contracts](docs/INTEGRATION-CONTRACTS.md) (cross-service URLs, internal JWT, settlement flows)
 - Identity: [services/elvo-identity-service/README.md](services/elvo-identity-service/README.md)
 - Wallet: [services/elvo-wallet-service/README.md](services/elvo-wallet-service/README.md)
 - Account management: [services/elvo-account-management-service/README.md](services/elvo-account-management-service/README.md)
