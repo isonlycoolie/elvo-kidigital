@@ -82,3 +82,48 @@ npm start
 npm run lint
 ```
 
+---
+
+## Project structure
+
+```
+landingpage/
+├── public/                          # Static assets (Next.js requirement)
+├── src/
+│   ├── app/                         # Next.js App Router (layout, page, globals)
+│   ├── assets/                      # Imported images, fonts, icons
+│   ├── components/                  # Shared, non-feature UI
+│   │   ├── layout/                  # Header, Footer
+│   │   ├── motion/                  # Reveal, HeroEntrance
+│   │   └── ui/                      # Button, BentoChip
+│   ├── shared/
+│   │   └── feature-banner/          # FeatureBannerContent, Phone, styles
+│   ├── features/                    # One module per landing section
+│   │   ├── index.ts                 # Barrel export for page imports
+│   │   ├── hero/
+│   │   ├── everyday-wallet/
+│   │   ├── product-features/
+│   │   ├── cards/
+│   │   ├── transfer/
+│   │   ├── bills/
+│   │   ├── coming-soon/
+│   │   ├── trusted-advantage/
+│   │   ├── founder-quote/
+│   │   ├── secured-vc/
+│   │   ├── faq/
+│   │   └── contribution/
+│   ├── content/
+│   │   ├── site-copy.ts             # All landing page copy (single source of truth)
+│   │   └── normalize-copy.ts        # Punctuation normalization for copy
+│   ├── lib/                         # Links, scroll helpers, utilities
+│   ├── providers/
+│   ├── contexts/
+│   ├── hooks/
+│   ├── constants/
+│   └── types/
+├── package.json
+├── tsconfig.json                    # @/* → ./src/*
+└── next.config.ts
+```
+
+Import aliases use `@/*` mapped to `./src/*` (e.g. `@/features`, `@/shared/feature-banner`).
