@@ -19,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.elvo.wallet.dto.request.DelegatedWithdrawalTokenCancelRequestDto;
 import com.elvo.wallet.dto.request.DelegatedWithdrawalTokenIssueRequestDto;
+import com.elvo.wallet.dto.request.InternalCreditRequestDto;
 import com.elvo.wallet.dto.request.InternalReservationActionRequestDto;
 import com.elvo.wallet.dto.request.MakerCheckerDecisionRequestDto;
 import com.elvo.wallet.dto.request.ReservationRequestDto;
@@ -34,6 +35,8 @@ import com.elvo.wallet.security.MakerCheckerApprovalService;
 import com.elvo.wallet.service.DelegatedWithdrawalTokenLifecycleService;
 import com.elvo.wallet.service.WalletService;
 import com.elvo.wallet.service.model.ReservationCommand;
+import com.elvo.wallet.service.model.WalletChannel;
+import com.elvo.wallet.service.model.DepositCommand;
 import com.elvo.wallet.service.model.WalletFlowResult;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -92,6 +95,32 @@ public class InternalWalletController {
         Wallet saved = walletRepository.save(wallet);
         AUDIT_LOG.info("internal_wallet_created userId={} walletId={}", userId, saved.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(walletMapper.toWalletResponseDto(saved));
+    }
+
+    @PostMapping("/{userId}/credit")
+    public ResponseEntity<FlowResultResponseDto> credit(
+            @PathVariable UUID userId,
+            @Valid @RequestBody InternalCreditRequestDto request) {
+        Wallet wallet = walletByUser(userId);
+        DepositCommand command = new DepositCommand(
+                wallet.getId(),
+                userId,
+                request.getAmount(),
+                WalletChannel.INTERNAL,
+                request.getIdempotencyKey(),
+                request.getReason() != null ? request.getReason() : "internal-credit",
+                false,
+                null,
+                null,
+                null,
+                null);
+        WalletFlowResult result = walletService.processDeposit(command);
+        AUDIT_LOG.info("internal_wallet_credit userId={} walletId={} amount={} success={}",
+                userId, wallet.getId(), request.getAmount(), result.success());
+        if (!result.success()) {
+            return ResponseEntity.badRequest().body(walletMapper.toFlowResultResponseDto(result));
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(walletMapper.toFlowResultResponseDto(result));
     }
 
     @PostMapping("/{userId}/delegated-withdrawal-tokens")
