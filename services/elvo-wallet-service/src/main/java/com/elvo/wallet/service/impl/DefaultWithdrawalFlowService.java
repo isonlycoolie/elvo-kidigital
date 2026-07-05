@@ -12,7 +12,9 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.elvo.wallet.client.AccountServiceClient;
+import com.elvo.wallet.client.DefaultMobileMoneyDisbursementClient;
 import com.elvo.wallet.client.IdentityServiceClient;
+import com.elvo.wallet.client.MobileMoneyDisbursementClient;
 import com.elvo.wallet.contract.WalletExecutionPolicyContract;
 import com.elvo.wallet.entity.Transaction;
 import com.elvo.wallet.entity.Wallet;
@@ -51,6 +53,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
     private final WalletFraudVelocityService fraudVelocityService;
     private final WalletFieldEncryptionService fieldEncryptionService;
     private final TransactionLifecycleService transactionLifecycleService;
+    private final MobileMoneyDisbursementClient mobileMoneyDisbursementClient;
 
     public DefaultWithdrawalFlowService(WalletRepository walletRepository,
                                         TransactionRepository transactionRepository,
@@ -66,21 +69,11 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
                                         WalletFraudVelocityService fraudVelocityService,
                                         WalletFieldEncryptionService fieldEncryptionService,
                                         TransactionLifecycleService transactionLifecycleService) {
-        this.walletRepository = walletRepository;
-        this.transactionRepository = transactionRepository;
-        this.identityServiceClient = identityServiceClient;
-        this.accountServiceClient = null;
-        this.idempotencyService = idempotencyService;
-        this.ledgerIntegrationService = ledgerIntegrationService;
-        this.limitEnforcementService = limitEnforcementService;
-        this.sagaOrchestrator = sagaOrchestrator;
-        this.eventPublisher = eventPublisher;
-        this.eacReplayProtectionService = eacReplayProtectionService;
-        this.stepUpAuthenticationService = stepUpAuthenticationService;
-        this.transactionSigningChallengeService = transactionSigningChallengeService;
-        this.fraudVelocityService = fraudVelocityService;
-        this.fieldEncryptionService = fieldEncryptionService;
-        this.transactionLifecycleService = transactionLifecycleService;
+        this(walletRepository, transactionRepository, identityServiceClient, null, idempotencyService,
+                ledgerIntegrationService, limitEnforcementService, sagaOrchestrator, eventPublisher,
+                eacReplayProtectionService, stepUpAuthenticationService, transactionSigningChallengeService,
+                fraudVelocityService, fieldEncryptionService, transactionLifecycleService,
+                new DefaultMobileMoneyDisbursementClient(""));
     }
 
     @Autowired
@@ -98,7 +91,8 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
                                         TransactionSigningChallengeService transactionSigningChallengeService,
                                         WalletFraudVelocityService fraudVelocityService,
                                         WalletFieldEncryptionService fieldEncryptionService,
-                                        TransactionLifecycleService transactionLifecycleService) {
+                                        TransactionLifecycleService transactionLifecycleService,
+                                        MobileMoneyDisbursementClient mobileMoneyDisbursementClient) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.identityServiceClient = identityServiceClient;
@@ -114,6 +108,7 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
         this.fraudVelocityService = fraudVelocityService;
         this.fieldEncryptionService = fieldEncryptionService;
         this.transactionLifecycleService = transactionLifecycleService;
+        this.mobileMoneyDisbursementClient = mobileMoneyDisbursementClient;
     }
 
     @Override
@@ -320,6 +315,20 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
             }
             ledgerIntegrationService.recordDoubleEntry("withdrawal", wallet.getId(), command.amount(), transaction.getReference());
 
+            if (requiresMobileMoneyDisbursement(command)) {
+                MobileMoneyDisbursementClient.DisbursementResult disbursementResult = mobileMoneyDisbursementClient.disburse(
+                        command.userId(),
+                        command.targetNumber(),
+                        command.amount(),
+                        resolvedReference);
+                if (!disbursementResult.success()) {
+                    transitionSafely(transaction, Transaction.TransactionStatus.FAILED,
+                            "Mobile-money disbursement failed", "DISBURSEMENT_FAILED", disbursementResult.message());
+                    return failed(command.walletId(), command.idempotencyKey(), userScope, endpointScope, payloadFingerprint,
+                            disbursementResult.message());
+                }
+            }
+
             emitWithdrawalEvent(true, wallet.getId(), transaction.getReference(), command.amount(), null);
             limitEnforcementService.record(wallet.getId(), WalletLimitEnforcementService.FlowType.WITHDRAWAL, command.amount());
 
@@ -409,6 +418,13 @@ public class DefaultWithdrawalFlowService implements WithdrawalFlowService {
                     null,
                     null,
                     "NOT_EVALUATED"));
+    }
+
+    private boolean requiresMobileMoneyDisbursement(WithdrawalCommand command) {
+        if (command.mode() != WithdrawalMode.REGISTERED_NUMBER && command.mode() != WithdrawalMode.OTHER_NUMBER) {
+            return false;
+        }
+        return command.targetNumber() != null && !command.targetNumber().isBlank();
     }
 
     private WalletFlowResult failed(UUID walletId,
