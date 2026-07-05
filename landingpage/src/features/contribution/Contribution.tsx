@@ -50,3 +50,56 @@ export function Contribution() {
 
                 <h2 className={`${featureBanner.title} ${colors.title}`}>
                   Dive in and help build
+                  <br className="hidden lg:block" />
+                  the future of ELVO.
+                </h2>
+
+                <p className={`${featureBanner.description} ${colors.description}`}>
+                  Browse the source, open an issue, and take part in building the
+                  wallet. Fork, contribute, and ship with the community.
+                </p>
+
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                  <Button href={GITHUB_REPO} external variant="dark">
+                    <Star className="h-4 w-4" strokeWidth={2.25} />
+                    Star on Github
+                  </Button>
+                  <Button href={GITHUB_REPO_FORK} external variant="dark">
+                    <GitFork className="h-4 w-4" strokeWidth={2.25} />
+                    Fork the Repo
+                  </Button>
+                </div>
+
+                <p className={`mt-8 text-center lg:text-left ${featureBanner.description} ${colors.description}`}>
+                  Or scan the QR code below
+                </p>
+                <div className="mx-auto mt-3 w-fit lg:mx-0">
+                  <div className="overflow-hidden rounded-xl bg-white/95 p-3">
+                    <div className="relative h-[7rem] w-[7rem]">
+                      <Image
+                        src="/images/contribution/qr-code.svg"
+                        alt="QR code to ELVO Github repository"
+                        fill
+                        className="object-contain"
+                        sizes="112px"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              </Reveal>
+            </div>
+
+            <FeatureBannerPhone
+              src="/images/contribution/device-mockup.svg"
+              alt="ELVO app overview on contribution section"
+              position={colors.phonePosition}
+              fade={colors.phoneFade}
+              className="hidden lg:flex lg:w-[50%] xl:w-[48%]"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
