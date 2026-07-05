@@ -4,9 +4,9 @@ spring:
   config:
     import: optional:classpath:/shared/config-lib.yml
   datasource:
-    url: jdbc:postgresql://localhost:5432/elvo-notification-service
-    username: ${ELVO_DB_USER:elvo}
-    password: ${ELVO_DB_PASSWORD:elvo}
+    url: jdbc:postgresql://${ELVO_DB_HOST:localhost}:${ELVO_DB_PORT:5432}/${ELVO_DB_NAME:notification_db}
+    username: ${ELVO_DB_USER:notification_user}
+    password: ${ELVO_DB_PASSWORD:notification_password}
   jpa:
     hibernate:
       ddl-auto: none
@@ -18,6 +18,9 @@ spring:
   rabbitmq:
     host: ${ELVO_RABBITMQ_HOST:localhost}
     port: ${ELVO_RABBITMQ_PORT:5672}
+
+server:
+  port: ${SERVER_PORT:8085}
 
 management:
   endpoints:
