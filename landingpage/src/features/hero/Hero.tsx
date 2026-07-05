@@ -53,3 +53,58 @@ export function Hero() {
               {hero.subheadlineLines[1]}<br className="hidden md:block" />{" "}
               {hero.subheadlineLines[2]}
             </p>
+            </div>
+
+            {/* CTA Button */}
+            <div className="flex justify-center pt-0 lg:justify-start lg:pt-2">
+              <Button href={GITHUB_REPO} external size="lg">
+                <span>{hero.cta}</span>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Social Proof */}
+            <div className="hidden items-center space-x-4 pt-8 sm:pt-12 md:flex md:pt-28">
+              <div className="flex -space-x-2.5">
+                {heroAvatars.map((avatar, index) => (
+                  <div
+                    key={avatar.alt + index}
+                    className="relative h-9 w-9 overflow-hidden rounded-full border-2 border-[#FAFAFA] bg-slate-300 shadow-sm"
+                    style={{ zIndex: heroAvatars.length - index }}
+                  >
+                    <Image
+                      src={avatar.src}
+                      alt={avatar.alt}
+                      fill
+                      className="object-cover"
+                      sizes="36px"
+                    />
+                  </div>
+                ))}
+              </div>
+              <span className="text-[15px] font-medium text-slate-700/90 tracking-tight">{hero.socialProof}</span>
+            </div>
+          </HeroEntrance>
+
+          {/* Right Image Column */}
+          <HeroEntrance
+            delay={0.1}
+            className="relative flex w-full justify-center lg:mt-0 lg:w-[45%] lg:justify-end"
+          >
+            <div className="relative h-[26rem] w-[15.5rem] max-w-[88vw] transform sm:h-[29.5rem] sm:w-[17.25rem] md:h-[29.5rem] md:w-[19.5rem] lg:h-[34rem] lg:w-[23.5rem] lg:-translate-x-8 lg:translate-y-4 xl:-translate-x-12">
+              <Image 
+                src="/images/hero/Home-mobile-mock.svg" 
+                alt="Elvo App Interface" 
+                fill
+                priority
+                className="object-contain object-top"
+                sizes="(max-width: 768px) 100vw, 50vw"
+              />
+            </div>
+          </HeroEntrance>
+
+        </div>
+      </div>
+    </section>
+  );
+}
