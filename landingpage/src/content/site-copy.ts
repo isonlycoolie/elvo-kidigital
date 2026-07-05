@@ -192,3 +192,19 @@ export const siteCopy = normalizeCopyTree({
       { value: "100%", label: "Payments tracked to status" },
     ],
   },
+
+  securedVc: {
+    chip: "Security Layer",
+    headlineAccent: "Protection",
+    headline: "that moves with your money.",
+    description:
+      "From everyday transfers to larger payments, layered security puts you in control: verification codes, device management, and wallet freeze, with no confusion or guesswork.",
+    imageAlt: "ELVO security and wallet protection",
+  },
+
+  founderQuote: {
+    quote:
+      "We built ELVO because one digital identity should work everywhere, through an app, an agent, or a simple code, not five separate systems.",
+    name: "IsOnlyCoolie",
+    role: "Founder & Engineer",
+  },
