@@ -332,6 +332,34 @@ class DefaultAccountManagementServiceTest {
     }
 
     @Test
+    void syncPostVerificationShouldActivateAccountAndUpgradeKyc() {
+        UUID userId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
+        Account account = new Account();
+        account.setUserId(userId);
+        account.setEan("1234567890128");
+        account.setAccountStatus(Account.AccountStatus.PENDING);
+        account.setKycStatus(Account.KycStatus.UNVERIFIED);
+        setAccountId(account, accountId);
+
+        when(accountRepository.findByUserId(userId)).thenReturn(Optional.of(account));
+        when(accountRepository.save(org.mockito.ArgumentMatchers.any(Account.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.syncPostVerification(new com.elvo.accountmanagement.contract.AccountContracts.VerificationSyncRequest(
+                userId,
+                Account.KycStatus.VERIFIED,
+                "Identity post-verification sync",
+                "req-sync",
+                "corr-sync",
+                "identity-service",
+                "127.0.0.1",
+                "identity"));
+
+        assertThat(response.accountStatus()).isEqualTo(Account.AccountStatus.ACTIVE);
+        assertThat(response.kycStatus()).isEqualTo(Account.KycStatus.VERIFIED);
+    }
+
+    @Test
     void reopenAccountMovesClosedToActiveState() {
         UUID accountId = UUID.randomUUID();
         Account account = new Account();
