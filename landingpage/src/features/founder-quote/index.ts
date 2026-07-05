@@ -1,0 +1,1 @@
+export { FounderQuote } from "./FounderQuote";
