@@ -1,0 +1,11 @@
+#!/bin/sh
+# Reject commit messages containing Cursor-generated trailers.
+
+MSG_FILE="$1"
+
+if grep -qiE 'Co-authored-by:.*Cursor|Made-with:.*Cursor|cursor\.com|Cursor Agent' "$MSG_FILE"; then
+  echo "ERROR: Commit message contains a Cursor trailer. Remove it and try again." >&2
+  exit 1
+fi
+
+exit 0

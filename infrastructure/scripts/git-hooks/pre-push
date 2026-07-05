@@ -1,0 +1,22 @@
+#!/bin/sh
+# Block push when any outgoing commit contains Cursor trailers.
+
+zero="${GIT_OBJECT_DIRECTORY:-.git/objects}"
+remote="$1"
+url="$2"
+
+if [ "$remote" = "" ]; then
+  exit 0
+fi
+
+range="@{u}..HEAD"
+if ! git rev-parse "$range" >/dev/null 2>&1; then
+  range="HEAD"
+fi
+
+if git log "$range" --format=%B | grep -qiE 'Co-authored-by:.*Cursor|Made-with:.*Cursor|cursor\.com|Cursor Agent'; then
+  echo "ERROR: Push blocked. One or more commits contain Cursor trailers." >&2
+  exit 1
+fi
+
+exit 0
