@@ -30,6 +30,7 @@ jobs:
           - elvo-wallet-service
           - elvo-billing-service
           - elvo-account-management-service
+          - elvo-notification-service
 
     steps:
       - name: Checkout
