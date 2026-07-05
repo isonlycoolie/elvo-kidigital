@@ -14,3 +14,28 @@ This repository contains the public-facing landing page for ELVO. It presents th
 
 The page is optimized for clarity and trust: wallet transfers, bill payments, security controls, and upcoming features (agents, family accounts, delegated access) are explained in plain language without over-promising capabilities still in beta.
 
+---
+
+## Documentation
+
+Platform docs live in the monorepo [`docs/`](../docs/) folder:
+
+| Resource | Description |
+|----------|-------------|
+| [docs/README.md](../docs/README.md) | Documentation index with landing preview |
+| [docs/INTEGRATION-CONTRACTS.md](../docs/INTEGRATION-CONTRACTS.md) | Cross-service API integration contract |
+| [docs/landing-hero.png](../docs/landing-hero.png) | Hero section screenshot |
+
+---
+
+## Highlights
+
+| Area | What visitors see |
+|------|-------------------|
+| **Hero** | Product positioning, trust badge, and app preview |
+| **Features** | Unified bill pay, lookup-before-pay, built-in security |
+| **Wallet flows** | Transfer and bills payment showcases |
+| **Trust** | Security layer, cards (waitlist), and everyday wallet story |
+| **FAQ** | Honest answers on wallet, bills, security, and roadmap |
+| **Open source** | Link to the platform repository for contributors |
+
