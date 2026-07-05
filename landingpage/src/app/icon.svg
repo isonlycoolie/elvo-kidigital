@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Elvo">
+  <rect width="32" height="32" rx="8" fill="#FFFFFF" stroke="#E8E8E8" stroke-width="0.75"/>
+  <text
+    x="16"
+    y="16.5"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="24"
+    font-weight="700"
+    fill="#CC1E1E"
+  >e</text>
+</svg>
