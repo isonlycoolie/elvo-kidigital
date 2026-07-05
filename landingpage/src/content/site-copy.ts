@@ -147,3 +147,48 @@ export const siteCopy = normalizeCopyTree({
         "You'll only pay what's shown upfront, with no hidden fees and a clear, reliable payment experience.",
     },
   },
+
+  trustedAdvantage: {
+    sectionTitle: "Discover the",
+    sectionTitleAccent: "trusted",
+    sectionTitleEnd: "advantage",
+    sectionDescription:
+      "ELVO puts you in control with wallet checks that protect every balance: clear limits, transparent rules, zero guesswork.",
+    elvoCard: {
+      chip: "Elvo Card",
+      title: "Spend smart, stay in control",
+      description:
+        "Three card concepts built for how you spend, from everyday use to team accounts. Join the waitlist; cards launch when the wallet is ready.",
+      cta: "Join the waitlist",
+    },
+    sendMoney: {
+      chip: "Send Money",
+      title: "Send money, stay confident",
+      description:
+        "Secure wallet-to-wallet payments within ELVO, checked against your limits before they move.",
+    },
+    balance: {
+      chip: "Balance",
+      title: "See exactly where you stand",
+      description: "Stay in control of your balance, anywhere",
+    },
+    shieldCard: {
+      chip: "Elvo shield Card",
+      title: "Explore the ELVO Shield Card.",
+      description:
+        "A fresh virtual card number for every online purchase, plus freeze-instantly control. On the waitlist; built on the same wallet rules.",
+      cta: "Notify",
+    },
+    promise: {
+      title: "Our",
+      titleAccent: "promise",
+      titleEnd: "in every payment.",
+      description:
+        "Verified accounts, tracked payments, and structure you can see, from signup to settlement, with clarity at every step.",
+    },
+    promiseStats: [
+      { value: "8+", label: "Bill Categories" },
+      { value: "TZS", label: "Native from day one" },
+      { value: "100%", label: "Payments tracked to status" },
+    ],
+  },
