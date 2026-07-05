@@ -8,11 +8,12 @@ import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
 import com.elvo.billing.exception.PaymentValidationException;
+import com.elvo.billing.security.InternalServiceJwtTokenGenerator;
 
 @Service
 public class BillingWalletSettlementService {
@@ -20,15 +21,21 @@ public class BillingWalletSettlementService {
     private static final String SOURCE_SERVICE_HEADER = "X-Source-Service";
 
     private final RestClient restClient;
-    private final String internalAuthToken;
+    private final InternalServiceJwtTokenGenerator tokenGenerator;
     private final String sourceServiceName;
 
     public BillingWalletSettlementService(
-            @Value("${elvo.billing.wallet.base-url:http://localhost:8083}") String walletBaseUrl,
-            @Value("${elvo.billing.wallet.internal-auth-token:}") String internalAuthToken,
+            @Value("${elvo.billing.wallet.base-url:http://localhost:8082}") String walletBaseUrl,
+            InternalServiceJwtTokenGenerator tokenGenerator,
             @Value("${elvo.billing.wallet.source-service:billing-service}") String sourceServiceName) {
-        this.restClient = RestClient.builder().baseUrl(walletBaseUrl).build();
-        this.internalAuthToken = internalAuthToken;
+        this.restClient = RestClient.builder()
+                .baseUrl(walletBaseUrl)
+                .requestFactory(new JdkClientHttpRequestFactory(
+                        java.net.http.HttpClient.newBuilder()
+                                .version(java.net.http.HttpClient.Version.HTTP_1_1)
+                                .build()))
+                .build();
+        this.tokenGenerator = tokenGenerator;
         this.sourceServiceName = sourceServiceName;
     }
 
@@ -47,11 +54,11 @@ public class BillingWalletSettlementService {
                 payload,
                 WalletFlowResult.class);
 
-        if (response == null || !response.success || response.transactionId == null || response.walletId == null) {
-            throw new PaymentValidationException(response == null ? "Wallet reserve failed" : response.message);
+        if (response == null || !response.success() || response.transactionId() == null || response.walletId() == null) {
+            throw new PaymentValidationException(response == null ? "Wallet reserve failed" : response.message());
         }
 
-        return new WalletReservation(response.walletId, response.transactionId);
+        return new WalletReservation(response.walletId(), response.transactionId());
     }
 
     public void confirm(UUID userId, UUID reservationId, String idempotencyKey) {
@@ -64,8 +71,8 @@ public class BillingWalletSettlementService {
                 Map.of("reservationId", reservationId, "idempotencyKey", idempotencyKey),
                 WalletFlowResult.class);
 
-        if (response == null || !response.success) {
-            throw new PaymentValidationException(response == null ? "Wallet confirm failed" : response.message);
+        if (response == null || !response.success()) {
+            throw new PaymentValidationException(response == null ? "Wallet confirm failed" : response.message());
         }
     }
 
@@ -79,8 +86,8 @@ public class BillingWalletSettlementService {
                 Map.of("reservationId", reservationId, "idempotencyKey", idempotencyKey),
                 WalletFlowResult.class);
 
-        if (response == null || !response.success) {
-            throw new PaymentValidationException(response == null ? "Wallet release failed" : response.message);
+        if (response == null || !response.success()) {
+            throw new PaymentValidationException(response == null ? "Wallet release failed" : response.message());
         }
     }
 
@@ -92,19 +99,12 @@ public class BillingWalletSettlementService {
     }
 
     private String buildAuthorizationHeader() {
-        if (!StringUtils.hasText(internalAuthToken)) {
-            throw new PaymentValidationException("Billing wallet internal auth token is not configured");
-        }
-        return "Bearer " + internalAuthToken;
+        return "Bearer " + tokenGenerator.generateToken(sourceServiceName);
     }
 
     public record WalletReservation(UUID walletId, UUID reservationId) {
     }
 
-    private static final class WalletFlowResult {
-        public boolean success;
-        public String message;
-        public UUID walletId;
-        public UUID transactionId;
+    private record WalletFlowResult(boolean success, String message, UUID walletId, UUID transactionId) {
     }
 }
